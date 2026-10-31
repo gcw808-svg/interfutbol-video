@@ -119,6 +119,7 @@ def make_logo(path="logo.png"):
 
 
 def mt_client():
+    import telethon.sync  # noqa: F401 (sinxron rejim)
     from telethon import TelegramClient
     from telethon.sessions import StringSession
     c = TelegramClient(StringSession(), API_ID, API_HASH)
