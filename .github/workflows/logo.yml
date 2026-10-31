@@ -9,13 +9,16 @@ on:
       note:
         required: false
         default: ""
+      msg_id:
+        required: false
+        default: ""
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      - run: pip install pillow
+      - run: pip install pillow telethon && (pip install cryptg || true)
       - name: Ishlov berish
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
@@ -23,4 +26,7 @@ jobs:
           FILE_ID: ${{ inputs.file_id }}
           CHAT_ID: ${{ inputs.chat_id }}
           NOTE: ${{ inputs.note }}
+          MSG_ID: ${{ inputs.msg_id }}
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
         run: python3 process.py
