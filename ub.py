@@ -95,7 +95,9 @@ async def post(job):
         if not await c.is_user_authorized():
             raise Exception("hisob ulanishi bekor qilingan (qayta /ulanish kerak)")
         ch = j["channel"]
-        if j.get("photo"):
+        if j.get("edit"):
+            m = await c.edit_message(ch, int(j["edit"]), j["html"], parse_mode="html", link_preview=bool(j.get("video")))
+        elif j.get("photo"):
             f = io.BytesIO(http(j["photo"], headers={"user-agent": "InterFutbolUB"}, timeout=60))
             f.name = "photo.jpg"
             m = await c.send_file(ch, f, caption=j["html"], parse_mode="html")
