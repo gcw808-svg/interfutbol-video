@@ -6,6 +6,9 @@ KEY = os.environ.get("GEMINI_KEY", "")
 CHAT = os.environ["CHAT_ID"]
 FID = os.environ["FILE_ID"]
 NOTE = os.environ.get("NOTE", "")
+MSG_ID = int(os.environ.get("MSG_ID") or 0)
+API_ID = int(os.environ.get("TG_API_ID") or 0)
+API_HASH = os.environ.get("TG_API_HASH", "")
 MODELS = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite"]
 KB = {"inline_keyboard": [[{"text": "✅ Chop etish", "callback_data": "ucpub"}],
                           [{"text": "✏️ Tahrirlash", "callback_data": "ucedit"}, {"text": "❌ Bekor qilish", "callback_data": "ucskip"}]]}
@@ -115,13 +118,58 @@ def make_logo(path="logo.png"):
     img.resize((220, 220), Image.LANCZOS).save(path)
 
 
+def mt_client():
+    from telethon import TelegramClient
+    from telethon.sessions import StringSession
+    c = TelegramClient(StringSession(), API_ID, API_HASH)
+    c.start(bot_token=BOT)
+    return c
+
+
+def mt_download():
+    # katta videolar (2 GB gacha) to'liq Telegram protokoli orqali yuklanadi
+    c = mt_client()
+    try:
+        m = c.get_messages(int(CHAT), ids=MSG_ID)
+        if not m or not m.media:
+            return False
+        c.download_media(m, file="in.mp4")
+        return os.path.exists("in.mp4")
+    finally:
+        c.disconnect()
+
+
+def mt_send(caption, html, w, h, dur):
+    from telethon import Button
+    from telethon.tl.types import DocumentAttributeVideo
+    c = mt_client()
+    try:
+        btn = [[Button.inline("✅ Chop etish", b"ucpub")], [Button.inline("✏️ Tahrirlash", b"ucedit"), Button.inline("❌ Bekor qilish", b"ucskip")]]
+        c.send_file(int(CHAT), "out.mp4", caption=caption, parse_mode="html" if html else None, buttons=btn,
+                    supports_streaming=True, attributes=[DocumentAttributeVideo(dur, w, h, supports_streaming=True)])
+        return True
+    finally:
+        c.disconnect()
+
+
 def main():
     make_logo()
-    f = tg("getFile", file_id=FID)
-    if not f.get("ok"):
-        say("⚠️ Videoni yuklab bo'lmadi (20 MB dan katta bo'lishi mumkin).")
-        return
-    urllib.request.urlretrieve(f"https://api.telegram.org/file/bot{BOT}/{f['result']['file_path']}", "in.mp4")
+    use_mt = bool(API_ID and API_HASH and MSG_ID)
+    if use_mt:
+        try:
+            ok = mt_download()
+        except Exception as e:
+            print("mt_download", e)
+            ok = False
+        if not ok:
+            say("⚠️ Videoni yuklab bo'lmadi.")
+            return
+    else:
+        f = tg("getFile", file_id=FID)
+        if not f.get("ok"):
+            say("⚠️ Videoni yuklab bo'lmadi (20 MB dan katta bo'lishi mumkin).")
+            return
+        urllib.request.urlretrieve(f"https://api.telegram.org/file/bot{BOT}/{f['result']['file_path']}", "in.mp4")
     pr = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height:stream_side_data=rotation:stream_tags=rotate",
                          "-of", "json", "in.mp4"], capture_output=True, text=True)
     s0 = (json.loads(pr.stdout or "{}").get("streams") or [{}])[0]
@@ -154,6 +202,20 @@ def main():
     pj = json.loads(probe.stdout or "{}")
     st = (pj.get("streams") or [{}])[0]
     dur = int(float((pj.get("format") or {}).get("duration") or 0))
+    if use_mt:
+        try:
+            mt_send(caption, True, int(st.get("width", 0)), int(st.get("height", 0)), dur)
+            return
+        except Exception as e:
+            print("mt_send html", e)
+            try:
+                plain = re.sub(r"<[^>]+>", "", caption).replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
+                mt_send(plain, False, int(st.get("width", 0)), int(st.get("height", 0)), dur)
+                return
+            except Exception as e2:
+                print("mt_send", e2)
+                say("⚠️ Tayyor videoni yuborib bo'lmadi.")
+                return
     args = ["curl", "-sS", "-F", f"chat_id={CHAT}", "-F", "video=@out.mp4", "-F", "supports_streaming=true",
             "-F", f"width={st.get('width', 0)}", "-F", f"height={st.get('height', 0)}", "-F", f"duration={dur}",
             "--form-string", f"reply_markup={json.dumps(KB)}"]
