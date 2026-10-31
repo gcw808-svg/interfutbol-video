@@ -1,0 +1,26 @@
+name: logo
+on:
+  workflow_dispatch:
+    inputs:
+      file_id:
+        required: true
+      chat_id:
+        required: true
+      note:
+        required: false
+        default: ""
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install pillow
+      - name: Ishlov berish
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          GEMINI_KEY: ${{ secrets.GEMINI_KEY }}
+          FILE_ID: ${{ inputs.file_id }}
+          CHAT_ID: ${{ inputs.chat_id }}
+          NOTE: ${{ inputs.note }}
+        run: python3 process.py
