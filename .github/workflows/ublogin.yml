@@ -1,0 +1,20 @@
+name: ublogin
+on:
+  workflow_dispatch:
+    inputs:
+      chat_id:
+        required: true
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install telethon qrcode pillow
+      - name: Ulanish
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+          CHAT_ID: ${{ inputs.chat_id }}
+        run: python3 ub.py login
