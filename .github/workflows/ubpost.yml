@@ -1,0 +1,20 @@
+name: ubpost
+on:
+  workflow_dispatch:
+    inputs:
+      job:
+        required: true
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install telethon && (pip install cryptg || true)
+      - name: Chiqarish
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+          JOB: ${{ inputs.job }}
+        run: python3 ub.py post
