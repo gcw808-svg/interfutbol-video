@@ -9,9 +9,37 @@ NOTE = os.environ.get("NOTE", "")
 MSG_ID = int(os.environ.get("MSG_ID") or 0)
 API_ID = int(os.environ.get("TG_API_ID") or 0)
 API_HASH = os.environ.get("TG_API_HASH", "")
-MODELS = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite"]
+MODELS = ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
 KB = {"inline_keyboard": [[{"text": "✅ Chop etish", "callback_data": "ucpub"}],
                           [{"text": "✏️ Tahrirlash", "callback_data": "ucedit"}, {"text": "❌ Bekor qilish", "callback_data": "ucskip"}]]}
+
+
+# yangi o'zbek lotin alifbosi (2026): O' > Ö, G' > Ğ, Sh > Ş, Ch > Ç. Teglar, havolalar, heshteglar,
+# ⟦...⟧ ichidagi original nomlar va chet tilidagi so'zlar o'zgarmaydi
+NA_KEEP = re.compile(r"^(Manchester|Michael|Mitchell|Richarlison|Sancho|Chiesa|Shaw|Ashley|Charlton|Chalobah|Chilwell|Kimmich|Fletcher|Richards|Rashford|Champions|Chiellini|Sheffield|Shakhtar|Chicharito|Shearer|Schick|Sesko)$")
+NA_FOREIGN = re.compile(r"c(?!h)|w|ea|ou|th|ph|ck|ee|oo|ae|[àáâãäåæèéêëìíîïñòóôõøùúûüýÿœß]", re.I)
+AP = "['‘’ʻʼ`]"
+
+
+def na_word(m):
+    w = m.group(0)
+    if NA_FOREIGN.search(w) or NA_KEEP.match(w):
+        return w
+    for a, b in ((r"O" + AP, "Ö"), (r"o" + AP, "ö"), (r"G" + AP, "Ğ"), (r"g" + AP, "ğ"),
+                 (r"S[Hh]", "Ş"), (r"sh", "ş"), (r"C[Hh]", "Ç"), (r"ch", "ç")):
+        w = re.sub(a, b, w)
+    return w
+
+
+def new_alpha(t):
+    parts = re.split(r"(<[^>]*>|https?://[^\s<]+|@\w+|⟦[^⟧]*⟧|#[^\W]+)", t or "")
+    out = []
+    for i, p in enumerate(parts):
+        if i % 2:
+            out.append(p[1:-1] if p.startswith("⟦") else p)
+        else:
+            out.append(re.sub(r"[^\W\d_'‘’ʻʼ`]+(?:['‘’ʻʼ`][^\W\d_'‘’ʻʼ`]*)*|['‘’ʻʼ`]", na_word, p).replace("⟦", "").replace("⟧", ""))
+    return "".join(out)
 
 
 def tg(method, **params):
@@ -42,7 +70,7 @@ Bo'sh qator.
 2–4 ta qisqa gap: videoda nima bo'layotgani, kim nima deyapti (gaplarning mazmunini qisqa yetkaz).
 Bo'sh qator.
 2–3 ta heshteg.
-Qoidalar: faqat videoda ko'rgan va eshitganingni yoz, o'ylab topma. Klub va o'yinchi nomlarini o'zbekcha qabul qilingan shaklda yoz. Faqat <b> tegidan foydalan. "VIDEO" so'zini, 🎬, 🗓, 🏟 belgilarini yozma. Post 700 belgidan oshmasin. Faqat tayyor post matnini qaytar."""
+Qoidalar: faqat videoda ko'rgan va eshitganingni yoz, o'ylab topma. Futbol klublari, terma jamoalar, futbolchilar va murabbiylar nomlarini ORIGINAL holida, rasmiy lotin yozuvidagidek yoz (Chelsea, Manchester United, Cristiano Ronaldo, Pep Guardiola) — o'zbekchalashtirma. Har bir shunday nomni ⟦ ⟧ ichiga ol: ⟦Chelsea⟧. Heshteglarda nomni qavssiz yoz: #Chelsea. Faqat <b> tegidan foydalan. "VIDEO" so'zini, 🎬, 🗓, 🏟 belgilarini yozma. Post 700 belgidan oshmasin. Faqat tayyor post matnini qaytar."""
 
 
 def gemini_caption(path):
@@ -192,7 +220,7 @@ def main():
         return
     caption = ""
     try:
-        caption = clean(gemini_caption("in.mp4"))
+        caption = new_alpha(clean(gemini_caption("in.mp4")))
     except Exception as e:
         print("caption", e)
     if not caption:
