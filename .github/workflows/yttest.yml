@@ -1,0 +1,9 @@
+name: yttest
+on:
+  workflow_dispatch:
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - run: pip install -U yt-dlp
+      - run: yt-dlp -f "b[ext=mp4][height<=720]/b" -o v.mp4 https://www.youtube.com/watch?v=j-OdeXgGm9s && ls -la v.mp4
