@@ -176,10 +176,34 @@ def draw_scorers(im, d, j, kind, y, h, data):
     d.text((1010, y + h // 2), str(r["goals"]), font=font("black", 32), fill=WHITE, anchor="mm")
 
 
+# ---------- barcha klub va ligalar katalogi ----------
+def catalog_blocks(j):
+    blocks = []
+    for g in j["groups"]:
+        blocks.append(("ghead", 64, g["title"]))
+        it = g["items"]
+        for i in range(0, len(it), 3):
+            blocks.append(("grow", 64, it[i:i + 3]))
+    return blocks
+
+
+def draw_catalog(im, d, j, kind, y, h, data):
+    if kind == "ghead":
+        d.text((48, y + 36), data.upper(), font=font("black", 28), fill=WHITE, anchor="lm")
+        d.line([48, y + h - 6, Wd - 48, y + h - 6], fill=(255, 255, 255, 40), width=2)
+        return
+    for i, n in enumerate(data):
+        x = 32 + i * 340
+        d.rounded_rectangle([x, y + 4, x + 328, y + h - 4], radius=12, fill=ROW_BG)
+        paste_logo(im, lg(j, n, 40), x + 34, y + h // 2)
+        f = name_font(n, 22)
+        d.text((x + 64, y + h // 2), clip(d, n, f, 255), font=f, fill=WHITE, anchor="lm")
+
+
 def render_pages(j):
     kind = j["kind"]
-    blocks = {"standings": standings_blocks, "matches": matches_blocks, "scorers": scorers_blocks}[kind](j)
-    draw = {"standings": draw_standings, "matches": draw_matches, "scorers": draw_scorers}[kind]
+    blocks = {"standings": standings_blocks, "matches": matches_blocks, "scorers": scorers_blocks, "catalog": catalog_blocks}[kind](j)
+    draw = {"standings": draw_standings, "matches": draw_matches, "scorers": draw_scorers, "catalog": draw_catalog}[kind]
     # iloji bo'lsa bitta rasm; sig'masa ro'yxat 2 yoki 3 ta teng qismga bo'linadi
     total = sum(b[1] for b in blocks)
     k = max(1, -(-total // MAX_H))
