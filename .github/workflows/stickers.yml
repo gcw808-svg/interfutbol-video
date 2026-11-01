@@ -1,0 +1,14 @@
+name: stickers
+on:
+  workflow_dispatch:
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install pillow requests
+      - name: Emoji to'plami
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        run: python3 stickers.py
