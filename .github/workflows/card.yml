@@ -11,6 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: (sudo apt-get update -qq > /dev/null 2>&1; sudo apt-get install -y -qq fonts-inter > /dev/null 2>&1 || true) && pip install pillow
+      - run: mkdir -p fonts && cd fonts && npm pack -q @fontsource/oswald@5.3.0 @fontsource/cinzel@5.3.0 @fontsource/bebas-neue@5.3.0 && for f in *.tgz; do mkdir -p ${f%.tgz} && tar xzf $f -C ${f%.tgz}; done || true
       - name: Kartochka
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
