@@ -323,6 +323,106 @@ def render_glass(j, k=1):
     return im
 
 
+FONT_DIRS = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts"), os.environ.get("FONT_DIR", "")]
+
+
+def xfont(name, size, text=""):
+    # qo'shimcha shriftlar (Oswald, Cinzel, Bebas Neue); lotin-1 dan tashqari harf bo'lsa Inter ishlatiladi
+    if any(ord(ch) > 0xFF for ch in text):
+        return font("black", size)
+    for dr in FONT_DIRS:
+        if dr:
+            fs = glob.glob(os.path.join(dr, "**", name), recursive=True)
+            if fs:
+                return ImageFont.truetype(fs[0], size)
+    return font("black", size)
+
+
+def xfit(name, text, maxw, start, minsize=22, spacing=0):
+    d = ImageDraw.Draw(Image.new("RGB", (4, 4)))
+    s = start
+    while s > minsize:
+        f = xfont(name, s, text)
+        if d.textlength(text, font=f) + spacing * len(text) <= maxw:
+            return f
+        s -= 2
+    return xfont(name, minsize, text)
+
+
+def spaced(d, xy, text, f, fill, spacing, anchor="mm"):
+    # harflar orasini kengaytirib yozish
+    w = sum(d.textlength(ch, font=f) for ch in text) + spacing * (len(text) - 1)
+    x = xy[0] - w / 2
+    for ch in text:
+        d.text((x, xy[1]), ch, font=f, fill=fill, anchor="lm")
+        x += d.textlength(ch, font=f) + spacing
+
+
+def lum(c):
+    return 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]
+
+
+def club_name(im, cx, y, name, col, mode, box=None):
+    # klub nomi klub rangi va uslubiga moslab
+    d = ImageDraw.Draw(im, "RGBA")
+    t = name.upper()
+    txt = (14, 18, 26) if lum(col) > 170 else WHITE
+    if mode == 1:
+        f = xfit("oswald-latin-700-normal.woff", t, 330, 40)
+        w = d.textlength(t, font=f)
+        d.rounded_rectangle([cx - w / 2 - 26, y - 30, cx + w / 2 + 26, y + 30], radius=30, fill=col + (255,), outline=(255, 255, 255, 90), width=2)
+        d.text((cx, y), t, font=f, fill=txt, anchor="mm")
+    elif mode == 2:
+        f = xfit("oswald-latin-700-normal.woff", t, 360, 52)
+        d.text((cx, y - 4), t, font=f, fill=WHITE, anchor="mm")
+        d.rounded_rectangle([cx - 46, y + 30, cx + 46, y + 37], radius=4, fill=col + (255,))
+    elif mode == 3:
+        sp = 4 if len(t) <= 12 else 1
+        f = xfit("cinzel-latin-700-normal.woff", t, 350, 40, minsize=26, spacing=sp)
+        w = sum(d.textlength(ch, font=f) for ch in t) + sp * (len(t) - 1)
+        spaced(d, (cx, y), t, f, WHITE, sp)
+        for sx in ((-1, 1) if w < 270 else ()):
+            x0 = cx + sx * (w / 2 + 16)
+            d.line([x0, y, x0 + sx * 34, y], fill=col + (255,) if lum(col) > 60 else (255, 255, 255, 160), width=3)
+    else:
+        x0, y0, x1, y1 = box
+        strip = Image.new("RGBA", im.size, (0, 0, 0, 0))
+        sd = ImageDraw.Draw(strip)
+        sd.rounded_rectangle([x0, y1 - 78, x1, y1], radius=36, fill=col + (255,))
+        sd.rectangle([x0, y1 - 78, x1, y1 - 40], fill=col + (255,))
+        im.paste(strip, (0, 0), strip)
+        d = ImageDraw.Draw(im, "RGBA")
+        f = xfit("bebas-neue-latin-400-normal.woff", t, x1 - x0 - 50, 50, spacing=2)
+        spaced(d, (cx, y1 - 38), t, f, txt, 2)
+
+
+def render_glass3(j, mode=1):
+    # shisha 3: ikki alohida panel, katta liga logotipi, klub nomlari klub rangida
+    Wd, Hd = 1280, 720
+    hl, al = get_logo(j.get("homeLogo"), 200), get_logo(j.get("awayLogo"), 200)
+    c1 = main_color(hl) if hl else (30, 60, 140)
+    c2 = main_color(al) if al else (140, 30, 40)
+    im = glass_bg(c1, c2)
+    boxes = ([60, 170, 470, 590], [Wd - 470, 170, Wd - 60, 590])
+    for bx in boxes:
+        glass(im, bx)
+    league_top(im, j, 200, 118)
+    a, b = j["score"].split(":")
+    d = ImageDraw.Draw(im, "RGBA")
+    for bx, lg_, name, col in ((boxes[0], hl, j["home"], c1), (boxes[1], al, j["away"], c2)):
+        cx = (bx[0] + bx[2]) // 2
+        ly = 345 if mode == 4 else 355
+        if lg_:
+            paste_glow(im, lg_, cx - lg_.width // 2, ly - lg_.height // 2, 110, 20)
+        club_name(im, cx, 515, name, col, mode, bx)
+    d = ImageDraw.Draw(im, "RGBA")
+    d.text((Wd // 2, 375), f"{a} - {b}", font=font("black", 120), fill=WHITE, anchor="mm")
+    d.text((Wd // 2, 478), "\u00d6YIN YAKUNLANDI", font=font("bold", 22), fill=(230, 235, 240), anchor="mm")
+    lg = logo(74, False)
+    im.paste(lg, (Wd // 2 - 37, 622), lg)
+    return im
+
+
 def render_light(j):
     # uslub 3: oq, minimal, gazeta uslubi
     Wd, Hd = 1280, 720
@@ -355,7 +455,9 @@ def render_light(j):
 def render(j):
     st = j.get("style") or "dark"
     if st != "dark" and j.get("score") and j.get("home") and j.get("away"):
-        if st.startswith("glass"):
+        if st.startswith("g3n"):
+            im = render_glass3(j, int(st[3:] or 1))
+        elif st.startswith("glass"):
             im = render_glass(j, int(st[5:] or 1))
         elif st.startswith("split"):
             im = render_split(j, int(st[5:] or 1))
