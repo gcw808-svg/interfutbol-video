@@ -18,14 +18,15 @@ def font(weight, size):
     return ImageFont.load_default()
 
 
-def logo(size):
+def logo(size, bg=True):
     K = 4
     S = 220 * K
     img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    d.rounded_rectangle([0, 0, S - 1, S - 1], radius=36 * K, fill=(20, 22, 30, 230))
+    if bg:
+        d.rounded_rectangle([0, 0, S - 1, S - 1], radius=36 * K, fill=(20, 22, 30, 230))
     x0, y0, x1, y1 = 175, 103, 1065, 1044
-    pad = 34 * K
+    pad = (34 if bg else 6) * K
     sc = min((S - 2 * pad) / (x1 - x0), (S - 2 * pad) / (y1 - y0))
     ox = (S - (x1 - x0) * sc) / 2 - x0 * sc
     oy = (S - (y1 - y0) * sc) / 2 - y0 * sc
@@ -151,42 +152,103 @@ def main_color(lg):
     return best
 
 
-def render_split(j):
-    # uslub 2: jamoalar ranglarida qiya bo'lingan fon
+def whiten(lg):
+    # to'q rangli logotip to'q fonda ko'rinishi uchun oq (monoxrom) variantda
+    w = Image.new("RGBA", lg.size, (255, 255, 255, 0))
+    w.putalpha(lg.split()[3])
+    return w
+
+
+def shade_v(im, top=90, bottom=200):
+    Wd, Hd = im.size
+    sh = Image.new("RGBA", (Wd, Hd), (0, 0, 0, 0))
+    sd = ImageDraw.Draw(sh)
+    for y in range(Hd):
+        sd.line([0, y, Wd, y], fill=(5, 8, 14, int(top + (bottom - top) * y / Hd)))
+    im.paste(sh, (0, 0), sh)
+
+
+def deep(c, k=0.55):
+    return tuple(int(v * k) for v in c)
+
+
+def render_split(j, v=1):
+    # uslub 2 oilasi: jamoalar ranglari; v=1 qiya, 2 tik, 3 suv belgisi, 4 shisha panel, 5 yon chiziqlar
     Wd, Hd = 1280, 720
     hl, al = get_logo(j.get("homeLogo"), 230), get_logo(j.get("awayLogo"), 230)
     c1 = main_color(hl) if hl else (30, 60, 140)
     c2 = main_color(al) if al else (140, 30, 40)
     im = Image.new("RGB", (Wd, Hd), c1)
     d = ImageDraw.Draw(im, "RGBA")
-    d.polygon([(Wd // 2 + 110, 0), (Wd, 0), (Wd, Hd), (Wd // 2 - 110, Hd)], fill=c2 + (255,))
-    shade = Image.new("RGBA", (Wd, Hd), (0, 0, 0, 0))
-    sd = ImageDraw.Draw(shade)
-    for y in range(Hd):
-        sd.line([0, y, Wd, y], fill=(5, 8, 14, int(90 + 110 * y / Hd)))
-    im.paste(shade, (0, 0), shade)
+    if v == 1:
+        d.polygon([(Wd // 2 + 110, 0), (Wd, 0), (Wd, Hd), (Wd // 2 - 110, Hd)], fill=c2 + (255,))
+        shade_v(im)
+        d = ImageDraw.Draw(im, "RGBA")
+        d.line([(Wd // 2 + 110, 0), (Wd // 2 - 110, Hd)], fill=(255, 255, 255, 60), width=4)
+    elif v == 2:
+        px = im.load()
+        for x in range(Wd):
+            t = min(1, max(0, (x - Wd * 0.42) / (Wd * 0.16)))
+            col = tuple(int(c1[i] * (1 - t) + c2[i] * t) for i in range(3))
+            for y in range(Hd):
+                px[x, y] = col
+        shade_v(im, 110, 210)
+    elif v == 3:
+        d.rectangle([Wd // 2, 0, Wd, Hd], fill=c2 + (255,))
+        for lg_, cx in ((hl, 120), (al, Wd - 120)):
+            if lg_:
+                big = lg_.resize((lg_.width * 3, lg_.height * 3), Image.LANCZOS)
+                a = big.split()[3].point(lambda p: p * 22 // 255)
+                big.putalpha(a)
+                im.paste(big, (cx - big.width // 2, Hd // 2 - big.height // 2), big)
+        shade_v(im, 100, 200)
+    elif v == 4:
+        d.rectangle([Wd // 2, 0, Wd, Hd], fill=c2 + (255,))
+        im = im.filter(ImageFilter.GaussianBlur(60))
+        shade_v(im, 80, 170)
+        panel = Image.new("RGBA", (Wd, Hd), (0, 0, 0, 0))
+        pd = ImageDraw.Draw(panel)
+        pd.rounded_rectangle([60, 160, Wd - 60, 570], radius=36, fill=(255, 255, 255, 26), outline=(255, 255, 255, 60), width=2)
+        im.paste(panel, (0, 0), panel)
+    else:
+        im = Image.new("RGB", (Wd, Hd), (12, 15, 22))
+        d = ImageDraw.Draw(im, "RGBA")
+        for cx, c in ((250, c1), (Wd - 250, c2)):
+            gl = Image.new("RGBA", (Wd, Hd), (0, 0, 0, 0))
+            ImageDraw.Draw(gl).ellipse([cx - 230, 330 - 230, cx + 230, 330 + 230], fill=c + (150,))
+            gl = gl.filter(ImageFilter.GaussianBlur(70))
+            im.paste(gl, (0, 0), gl)
+        d = ImageDraw.Draw(im, "RGBA")
+        d.rectangle([0, 0, 14, Hd], fill=c1 + (255,))
+        d.rectangle([Wd - 14, 0, Wd, Hd], fill=c2 + (255,))
     d = ImageDraw.Draw(im, "RGBA")
-    d.line([(Wd // 2 + 110, 0), (Wd // 2 - 110, Hd)], fill=(255, 255, 255, 60), width=4)
-    league = (j.get("league") or "").upper()
-    ll = get_logo(j.get("leagueLogo"), 64)
-    top = 66
+    ll = get_logo(j.get("leagueLogo"), 104)
     if ll:
-        paste_league(im, ll, Wd // 2 - ll.width // 2, top - ll.height // 2, 190, 14)
-        top += 66
-    if league:
-        d.text((Wd // 2, top + 6), league, font=font("bold", 26), fill=(230, 235, 240), anchor="mm")
+        if is_dark(ll):
+            ll = whiten(ll)
+        im.paste(ll, (Wd // 2 - ll.width // 2, 80 - ll.height // 2), ll)
     for colx, lg_, name in ((250, hl, j["home"]), (Wd - 250, al, j["away"])):
         if lg_:
-            paste_glow(im, lg_, colx - lg_.width // 2, 330 - lg_.height // 2, 120, 22)
+            paste_glow(im, lg_, colx - lg_.width // 2, 340 - lg_.height // 2, 120, 22)
         nf = fit(d, name.upper(), "black", 400, 44)
-        d.text((colx, 500), name.upper(), font=nf, fill=WHITE, anchor="mm")
+        d.text((colx, 510), name.upper(), font=nf, fill=WHITE, anchor="mm")
     a, b = j["score"].split(":")
-    d.rounded_rectangle([Wd // 2 - 150, 255, Wd // 2 + 150, 405], radius=26, fill=(255, 255, 255, 240))
-    d.text((Wd // 2, 330), f"{a} : {b}", font=font("black", 112), fill=(12, 16, 24), anchor="mm")
-    d.text((Wd // 2, 440), "ÖYIN YAKUNLANDI", font=font("bold", 26), fill=(235, 240, 245), anchor="mm")
-    lg = logo(80)
-    im.paste(lg, (Wd - 60 - 80, Hd - 60 - 80 + 20), lg)
-    d.text((60, Hd - 50), "@Inter_Futbol_TV", font=font("med", 26), fill=(220, 226, 232), anchor="lm")
+    if v in (1, 3):
+        d.rounded_rectangle([Wd // 2 - 150, 265, Wd // 2 + 150, 415], radius=26, fill=(255, 255, 255, 240))
+        d.text((Wd // 2, 340), f"{a} : {b}", font=font("black", 112), fill=(12, 16, 24), anchor="mm")
+    elif v == 2:
+        d.text((Wd // 2, 340), f"{a}:{b}", font=font("black", 150), fill=WHITE, anchor="mm")
+    elif v == 4:
+        d.text((Wd // 2, 340), f"{a} - {b}", font=font("black", 130), fill=WHITE, anchor="mm")
+    else:
+        tf = font("black", 120)
+        for x, txt in ((Wd // 2 - 142, a), (Wd // 2 + 32, b)):
+            d.rounded_rectangle([x, 265, x + 110, 415], radius=18, fill=(255, 255, 255, 235))
+            d.text((x + 55, 336), txt, font=tf, fill=(12, 16, 24), anchor="mm")
+        d.text((Wd // 2, 334), ":", font=font("black", 90), fill=WHITE, anchor="mm")
+    d.text((Wd // 2, 450), "\u00d6YIN YAKUNLANDI", font=font("bold", 24), fill=(225, 230, 236), anchor="mm")
+    lg = logo(78, False)
+    im.paste(lg, (Wd // 2 - 39, 600), lg)
     return im
 
 
@@ -216,14 +278,16 @@ def render_light(j):
     d.text((Wd // 2, 350), f"{a}-{b}", font=font("black", 150), fill=(14, 20, 30), anchor="mm")
     d.rounded_rectangle([Wd // 2 - 120, 452, Wd // 2 + 120, 492], radius=20, fill=GREEN + (255,))
     d.text((Wd // 2, 472), "YAKUNLANDI", font=font("bold", 24), fill=WHITE, anchor="mm")
-    d.text((Wd // 2, Hd - 46), "@Inter_Futbol_TV", font=font("med", 26), fill=(90, 100, 112), anchor="mm")
     return im
 
 
 def render(j):
     st = j.get("style") or "dark"
     if st != "dark" and j.get("score") and j.get("home") and j.get("away"):
-        im = render_split(j) if st == "split" else render_light(j)
+        if st.startswith("split"):
+            im = render_split(j, int(st[5:] or 1))
+        else:
+            im = render_light(j)
         buf = io.BytesIO()
         im.save(buf, "PNG", optimize=True)
         return buf.getvalue()
@@ -293,7 +357,6 @@ def render(j):
             d.text((96, y + i * lh), ln, font=f, fill=WHITE)
     lg = logo(96)
     im.paste(lg, (Wd - 60 - 96, 40), lg)
-    d.text((Wd - 60, Hd - 50), "@Inter_Futbol_TV", font=font("med", 28), fill=(200, 208, 216), anchor="rm")
     buf = io.BytesIO()
     im.save(buf, "PNG", optimize=True)
     return buf.getvalue()
