@@ -362,64 +362,100 @@ def lum(c):
     return 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]
 
 
-def club_name(im, cx, y, name, col, mode, box=None):
-    # klub nomi klub rangi va uslubiga moslab
+def wrap_spaced(d, text, f, maxw, sp=0):
+    # so'zlarni qatorlarga bo'lish (shrift o'lchami o'zgarmaydi)
+    W_ = lambda t: sum(d.textlength(ch, font=f) for ch in t) + sp * max(0, len(t) - 1)
+    lines, cur = [], ""
+    for w in text.replace("-", "- ").split():
+        t = (cur + (" " if cur and not cur.endswith("-") else "") + w) if cur else w
+        if W_(t) <= maxw or not cur:
+            cur = t
+        else:
+            lines.append(cur)
+            cur = w
+    if cur:
+        lines.append(cur)
+    return lines[:3], W_
+
+
+NAME_FONT = {1: ("oswald-latin-700-normal.woff", 38, 0, 46), 2: ("oswald-latin-700-normal.woff", 40, 0, 46),
+             3: ("cinzel-latin-700-normal.woff", 28, 3, 36), 4: ("bebas-neue-latin-400-normal.woff", 42, 2, 42)}
+
+
+def club_name(im, cx, top, name, col, mode, box):
+    # klub nomi: hamma klublarda bir xil o'lchamdagi shrift, kerak bo'lsa 2-3 qatorga bo'linadi
     d = ImageDraw.Draw(im, "RGBA")
     t = name.upper()
+    fname, size, sp, lh = NAME_FONT[mode]
+    f = xfont(fname, size, t)
     txt = (14, 18, 26) if lum(col) > 170 else WHITE
-    if mode == 1:
-        f = xfit("oswald-latin-700-normal.woff", t, 330, 40)
-        w = d.textlength(t, font=f)
-        d.rounded_rectangle([cx - w / 2 - 26, y - 30, cx + w / 2 + 26, y + 30], radius=30, fill=col + (255,), outline=(255, 255, 255, 90), width=2)
-        d.text((cx, y), t, font=f, fill=txt, anchor="mm")
-    elif mode == 2:
-        f = xfit("oswald-latin-700-normal.woff", t, 360, 52)
-        d.text((cx, y - 4), t, font=f, fill=WHITE, anchor="mm")
-        d.rounded_rectangle([cx - 46, y + 30, cx + 46, y + 37], radius=4, fill=col + (255,))
-    elif mode == 3:
-        sp = 4 if len(t) <= 12 else 1
-        f = xfit("cinzel-latin-700-normal.woff", t, 350, 40, minsize=26, spacing=sp)
-        w = sum(d.textlength(ch, font=f) for ch in t) + sp * (len(t) - 1)
-        spaced(d, (cx, y), t, f, WHITE, sp)
-        for sx in ((-1, 1) if w < 270 else ()):
-            x0 = cx + sx * (w / 2 + 16)
-            d.line([x0, y, x0 + sx * 34, y], fill=col + (255,) if lum(col) > 60 else (255, 255, 255, 160), width=3)
-    else:
-        x0, y0, x1, y1 = box
+    x0, y0, x1, y1 = box
+    lines, W_ = wrap_spaced(d, t, f, (x1 - x0) - 90, sp)
+    n = len(lines)
+    if mode == 4:
+        sh = n * lh + 34
         strip = Image.new("RGBA", im.size, (0, 0, 0, 0))
         sd = ImageDraw.Draw(strip)
-        sd.rounded_rectangle([x0, y1 - 78, x1, y1], radius=36, fill=col + (255,))
-        sd.rectangle([x0, y1 - 78, x1, y1 - 40], fill=col + (255,))
+        sd.rounded_rectangle([x0, y1 - sh, x1, y1], radius=36, fill=col + (255,))
+        sd.rectangle([x0, y1 - sh, x1, y1 - 40], fill=col + (255,))
         im.paste(strip, (0, 0), strip)
         d = ImageDraw.Draw(im, "RGBA")
-        f = xfit("bebas-neue-latin-400-normal.woff", t, x1 - x0 - 50, 50, spacing=2)
-        spaced(d, (cx, y1 - 38), t, f, txt, 2)
+        ys = y1 - sh / 2 - (n - 1) * lh / 2
+        for i, ln in enumerate(lines):
+            spaced(d, (cx, ys + i * lh), ln, f, txt, sp)
+        return
+    yc = top + 50
+    ys = yc - (n - 1) * lh / 2
+    if mode == 1:
+        w = max(W_(ln) for ln in lines)
+        d.rounded_rectangle([cx - w / 2 - 24, ys - lh / 2 - 6, cx + w / 2 + 24, ys + (n - 1) * lh + lh / 2 + 6], radius=26, fill=col + (255,), outline=(255, 255, 255, 90), width=2)
+        for i, ln in enumerate(lines):
+            d.text((cx, ys + i * lh), ln, font=f, fill=txt, anchor="mm")
+    elif mode == 2:
+        for i, ln in enumerate(lines):
+            d.text((cx, ys + i * lh), ln, font=f, fill=WHITE, anchor="mm")
+        yb = ys + (n - 1) * lh + lh / 2 + 6
+        d.rounded_rectangle([cx - 46, yb, cx + 46, yb + 7], radius=4, fill=col + (255,))
+    else:
+        mw = (x1 - x0) - 40
+        for i, ln in enumerate(lines):
+            spaced(d, (cx, ys + i * lh), ln, f, WHITE, sp if W_(ln) <= mw else 0)
+        lc = col + (255,) if lum(col) > 60 else (255, 255, 255, 160)
+        for i, ln in enumerate(lines):
+            w = W_(ln)
+            if n == 1 and w < 270:
+                for sx in (-1, 1):
+                    xa = cx + sx * (w / 2 + 16)
+                    d.line([xa, ys, xa + sx * 34, ys], fill=lc, width=3)
 
 
 def render_glass3(j, mode=1):
     # shisha 3: ikki alohida panel, katta liga logotipi, klub nomlari klub rangida
     Wd, Hd = 1280, 720
-    hl, al = get_logo(j.get("homeLogo"), 200), get_logo(j.get("awayLogo"), 200)
+    hl, al = get_logo(j.get("homeLogo"), 180), get_logo(j.get("awayLogo"), 180)
     c1 = main_color(hl) if hl else (30, 60, 140)
     c2 = main_color(al) if al else (140, 30, 40)
     im = glass_bg(c1, c2)
-    boxes = ([60, 170, 470, 590], [Wd - 470, 170, Wd - 60, 590])
+    boxes = ([60, 170, 470, 600], [Wd - 470, 170, Wd - 60, 600])
     for bx in boxes:
         glass(im, bx)
     league_top(im, j, 200, 118)
     a, b = j["score"].split(":")
-    d = ImageDraw.Draw(im, "RGBA")
     for bx, lg_, name, col in ((boxes[0], hl, j["home"], c1), (boxes[1], al, j["away"], c2)):
         cx = (bx[0] + bx[2]) // 2
-        ly = 345 if mode == 4 else 355
         if lg_:
-            paste_glow(im, lg_, cx - lg_.width // 2, ly - lg_.height // 2, 110, 20)
-        club_name(im, cx, 515, name, col, mode, bx)
+            x_, y_ = cx - lg_.width // 2, 320 - lg_.height // 2
+            if is_dark(lg_):
+                paste_glow(im, lg_, x_, y_, 255, 8)
+                paste_glow(im, lg_, x_, y_, 210, 22)
+            else:
+                paste_glow(im, lg_, x_, y_, 110, 20)
+        club_name(im, cx, 440, name, col, mode, bx)
     d = ImageDraw.Draw(im, "RGBA")
     d.text((Wd // 2, 375), f"{a} - {b}", font=font("black", 120), fill=WHITE, anchor="mm")
     d.text((Wd // 2, 478), "\u00d6YIN YAKUNLANDI", font=font("bold", 22), fill=(230, 235, 240), anchor="mm")
     lg = logo(74, False)
-    im.paste(lg, (Wd // 2 - 37, 622), lg)
+    im.paste(lg, (Wd // 2 - 37, 626), lg)
     return im
 
 
