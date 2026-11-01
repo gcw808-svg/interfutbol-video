@@ -252,6 +252,77 @@ def render_split(j, v=1):
     return im
 
 
+def glass_bg(c1, c2, Wd=1280, Hd=720):
+    im = Image.new("RGB", (Wd, Hd), c1)
+    ImageDraw.Draw(im).rectangle([Wd // 2, 0, Wd, Hd], fill=c2)
+    im = im.filter(ImageFilter.GaussianBlur(60))
+    shade_v(im, 80, 170)
+    return im
+
+
+def glass(im, box, alpha=26, line=60, r=36, white=False):
+    p = Image.new("RGBA", im.size, (0, 0, 0, 0))
+    ImageDraw.Draw(p).rounded_rectangle(box, radius=r, fill=(255, 255, 255, alpha), outline=(255, 255, 255, line), width=2)
+    if white:
+        sh = Image.new("RGBA", im.size, (0, 0, 0, 0))
+        ImageDraw.Draw(sh).rounded_rectangle([box[0], box[1] + 10, box[2], box[3] + 14], radius=r, fill=(0, 0, 0, 90))
+        sh = sh.filter(ImageFilter.GaussianBlur(14))
+        im.paste(sh, (0, 0), sh)
+    im.paste(p, (0, 0), p)
+
+
+def league_top(im, j, size=150, y=86):
+    # liga logotipi asl ranglarida, fonsiz; to'q bo'lsa orqasida kuchli yumshoq yorug'lik
+    ll = get_logo(j.get("leagueLogo"), size)
+    if ll:
+        x0, y0 = im.width // 2 - ll.width // 2, y - ll.height // 2
+        if is_dark(ll):
+            paste_glow(im, ll, x0, y0, 255, 10)
+            paste_glow(im, ll, x0, y0, 200, 26)
+        else:
+            paste_glow(im, ll, x0, y0, 90, 16)
+
+
+def render_glass(j, k=1):
+    # 4-variant oilasi: xiralashtirilgan jamoa ranglari + shisha panel
+    Wd, Hd = 1280, 720
+    hl, al = get_logo(j.get("homeLogo"), 210), get_logo(j.get("awayLogo"), 210)
+    c1 = main_color(hl) if hl else (30, 60, 140)
+    c2 = main_color(al) if al else (140, 30, 40)
+    im = glass_bg(c1, c2)
+    a, b = j["score"].split(":")
+    dark_txt = (14, 18, 26)
+    if k == 1:
+        glass(im, [60, 180, Wd - 60, 575])
+    elif k == 2:
+        glass(im, [Wd // 2 - 175, 230, Wd // 2 + 175, 500])
+    elif k == 3:
+        glass(im, [60, 180, 470, 575])
+        glass(im, [Wd - 470, 180, Wd - 60, 575])
+    else:
+        glass(im, [60, 180, Wd - 60, 575], alpha=225, line=255, white=True)
+    league_top(im, j)
+    d = ImageDraw.Draw(im, "RGBA")
+    for colx, lg_, name in ((265, hl, j["home"]), (Wd - 265, al, j["away"])):
+        if lg_:
+            if k == 4:
+                im.paste(lg_, (colx - lg_.width // 2, 350 - lg_.height // 2), lg_)
+            else:
+                paste_glow(im, lg_, colx - lg_.width // 2, 350 - lg_.height // 2, 110, 20)
+        nf = fit(d, name.upper(), "black", 380, 40)
+        d.text((colx, 515), name.upper(), font=nf, fill=dark_txt if k == 4 else WHITE, anchor="mm")
+    tc = dark_txt if k == 4 else WHITE
+    d.text((Wd // 2, 350), f"{a} - {b}", font=font("black", 130), fill=tc, anchor="mm")
+    if k == 4:
+        d.rounded_rectangle([Wd // 2 - 120, 448, Wd // 2 + 120, 488], radius=20, fill=GREEN + (255,))
+        d.text((Wd // 2, 468), "\u00d6YIN YAKUNLANDI", font=font("bold", 22), fill=WHITE, anchor="mm")
+    else:
+        d.text((Wd // 2, 462), "\u00d6YIN YAKUNLANDI", font=font("bold", 24), fill=(230, 235, 240), anchor="mm")
+    lg = logo(78, False)
+    im.paste(lg, (Wd // 2 - 39, 615), lg)
+    return im
+
+
 def render_light(j):
     # uslub 3: oq, minimal, gazeta uslubi
     Wd, Hd = 1280, 720
@@ -284,7 +355,9 @@ def render_light(j):
 def render(j):
     st = j.get("style") or "dark"
     if st != "dark" and j.get("score") and j.get("home") and j.get("away"):
-        if st.startswith("split"):
+        if st.startswith("glass"):
+            im = render_glass(j, int(st[5:] or 1))
+        elif st.startswith("split"):
             im = render_split(j, int(st[5:] or 1))
         else:
             im = render_light(j)
