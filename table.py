@@ -120,7 +120,7 @@ def draw_standings(im, d, j, kind, y, h, data):
 # ---------- natijalar / o'yinlar ----------
 def matches_blocks(j):
     blocks = []
-    multi = len({g["day"] for g in j["groups"]}) > 1
+    multi = len({g["day"] for g in j["groups"]}) > 1 or bool(j.get("showDay"))
     for g in j["groups"]:
         blocks.append(("mhead", 70, {"comp": g["comp"], "day": g["day"] if multi else ""}))
         for m in g["items"]:
