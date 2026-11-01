@@ -110,6 +110,27 @@ def paste_glow(im, lg, x, y, strength=110, radius=18):
     im.paste(lg, (x, y), lg)
 
 
+def is_dark(lg):
+    sm = lg.copy()
+    sm.thumbnail((48, 48))
+    px = [(r, g, b) for r, g, b, a in sm.getdata() if a > 200]
+    if not px:
+        return False
+    return sum(0.299 * r + 0.587 * g + 0.114 * b for r, g, b in px) / len(px) < 75
+
+
+def paste_league(im, lg, x, y, strength=120, radius=12):
+    # to'q rangli liga logotipi (masalan Premier League) to'q fonda yo'qolmasligi uchun oq doira ustiga qo'yiladi
+    if is_dark(lg):
+        d = ImageDraw.Draw(im, "RGBA")
+        cx, cy = x + lg.width / 2, y + lg.height / 2
+        r = max(lg.width, lg.height) / 2 + 12
+        d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(245, 247, 250, 255))
+        im.paste(lg, (x, y), lg)
+    else:
+        paste_glow(im, lg, x, y, strength, radius)
+
+
 def main_color(lg):
     # logotipning asosiy (eng to'yingan, ko'p uchraydigan) rangi
     sm = lg.copy()
@@ -148,10 +169,10 @@ def render_split(j):
     d.line([(Wd // 2 + 110, 0), (Wd // 2 - 110, Hd)], fill=(255, 255, 255, 60), width=4)
     league = (j.get("league") or "").upper()
     ll = get_logo(j.get("leagueLogo"), 64)
-    top = 70
+    top = 66
     if ll:
-        paste_glow(im, ll, Wd // 2 - ll.width // 2, top - ll.height // 2 + 4, 190, 14)
-        top += 52
+        paste_league(im, ll, Wd // 2 - ll.width // 2, top - ll.height // 2, 190, 14)
+        top += 66
     if league:
         d.text((Wd // 2, top + 6), league, font=font("bold", 26), fill=(230, 235, 240), anchor="mm")
     for colx, lg_, name in ((250, hl, j["home"]), (Wd - 250, al, j["away"])):
@@ -177,11 +198,11 @@ def render_light(j):
     d.rectangle([0, 0, Wd, 120], fill=(14, 20, 30, 255))
     d.rectangle([0, 120, Wd, 128], fill=GREEN + (255,))
     league = (j.get("league") or "").upper()
-    ll = get_logo(j.get("leagueLogo"), 70)
-    x = 60
+    ll = get_logo(j.get("leagueLogo"), 64)
+    x = 72
     if ll:
-        paste_glow(im, ll, x, 60 - ll.height // 2, 120, 10)
-        x += ll.width + 24
+        paste_league(im, ll, x, 60 - ll.height // 2, 120, 10)
+        x += ll.width + 34
     d.text((x, 60), league or "NATIJA", font=font("black", 34), fill=WHITE, anchor="lm")
     lg = logo(84)
     im.paste(lg, (Wd - 60 - 84, 18), lg)
@@ -213,7 +234,7 @@ def render(j):
     lx = 60
     ll = get_logo(j.get("leagueLogo"), 70)
     if ll:
-        paste_glow(im, ll, 60 + (90 - ll.width) // 2, 81 - ll.height // 2)
+        paste_league(im, ll, 60 + (90 - ll.width) // 2, 81 - ll.height // 2)
         lx = 166
     if league:
         f = font("bold", 30)
