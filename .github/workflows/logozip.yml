@@ -1,0 +1,21 @@
+name: logozip
+on:
+  workflow_dispatch:
+    inputs:
+      file_id:
+        required: true
+      chat_id:
+        required: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install pillow requests cairosvg
+      - name: Logotiplarni o'rnatish
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          FILE_ID: ${{ inputs.file_id }}
+          CHAT_ID: ${{ inputs.chat_id }}
+        run: python3 logozip.py
