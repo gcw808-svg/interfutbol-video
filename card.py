@@ -81,17 +81,58 @@ def wrap(d, text, f, maxw):
     return lines
 
 
+def get_logo(url, size):
+    if not url:
+        return None
+    try:
+        req = urllib.request.Request(url, headers={"user-agent": "InterFutbolCard"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            im = Image.open(io.BytesIO(r.read())).convert("RGBA")
+        bb = im.getbbox()
+        if bb:
+            im = im.crop(bb)
+        im.thumbnail((size, size), Image.LANCZOS)
+        return im
+    except Exception as e:
+        print("logo", e)
+        return None
+
+
 def render(j):
     Wd, Hd = 1280, 720
     im = background(Wd, Hd)
     d = ImageDraw.Draw(im, "RGBA")
     league = (j.get("league") or "").upper()
+    lx = 60
+    ll = get_logo(j.get("leagueLogo"), 70)
+    if ll:
+        d.rounded_rectangle([60, 46, 60 + 90, 116], radius=18, fill=(245, 247, 250, 255))
+        im.paste(ll, (60 + (90 - ll.width) // 2, 81 - ll.height // 2), ll)
+        lx = 166
     if league:
         f = font("bold", 30)
         tw = d.textlength(league, font=f)
-        d.rounded_rectangle([60, 56, 60 + tw + 44, 106], radius=25, fill=GREEN + (255,))
-        d.text((82, 81), league, font=f, fill=(10, 20, 12), anchor="lm")
-    if j.get("score") and j.get("home") and j.get("away"):
+        d.rounded_rectangle([lx, 56, lx + tw + 44, 106], radius=25, fill=GREEN + (255,))
+        d.text((lx + 22, 81), league, font=f, fill=(10, 20, 12), anchor="lm")
+    hl, al = get_logo(j.get("homeLogo"), 190), get_logo(j.get("awayLogo"), 190)
+    if j.get("score") and j.get("home") and j.get("away") and (hl or al):
+        a, b = j["score"].split(":")
+        cx, cy = Wd // 2, Hd // 2 + 10
+        tf = font("black", 130)
+        cw, ch = 125, 170
+        for x, txt in ((cx - 18 - cw * len(a), a), (cx + 18, b)):
+            wbox = cw * len(txt)
+            d.rounded_rectangle([x, cy - ch // 2, x + wbox, cy + ch // 2], radius=20, fill=(18, 22, 30, 255))
+            d.rectangle([x, cy + ch // 2 - 12, x + wbox, cy + ch // 2], fill=GREEN + (255,))
+            d.text((x + wbox / 2, cy - 4), txt, font=tf, fill=WHITE, anchor="mm")
+        d.text((cx, cy - 6), ":", font=font("black", 96), fill=WHITE, anchor="mm")
+        for colx, lg_, name in ((250, hl, j["home"]), (Wd - 250, al, j["away"])):
+            if lg_:
+                im.paste(lg_, (colx - lg_.width // 2, cy - 40 - lg_.height // 2 - 30), lg_)
+            nf = fit(d, name.upper(), "black", 380, 46)
+            d.text((colx, cy + 120), name.upper(), font=nf, fill=WHITE, anchor="mm")
+        d.text((cx, cy + ch // 2 + 50), "ÖYIN YAKUNLANDI", font=font("bold", 28), fill=(180, 190, 200), anchor="mm")
+    elif j.get("score") and j.get("home") and j.get("away"):
         a, b = j["score"].split(":")
         # tablo
         tf = font("black", 150)
