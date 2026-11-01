@@ -7,7 +7,7 @@ from card import font, xfont, get_logo, paste_glow, is_dark, logo, WHITE, GREEN,
 Wd = 1080
 GREY = (150, 160, 172)
 ROW_BG = (255, 255, 255, 12)
-MAX_H = 1900
+MAX_H = 2400  # bitta rasmdagi ro'yxat qismining eng katta balandligi
 
 
 def wapi(path, data=None, ctype="application/json"):
@@ -180,12 +180,17 @@ def render_pages(j):
     kind = j["kind"]
     blocks = {"standings": standings_blocks, "matches": matches_blocks, "scorers": scorers_blocks}[kind](j)
     draw = {"standings": draw_standings, "matches": draw_matches, "scorers": draw_scorers}[kind]
+    # iloji bo'lsa bitta rasm; sig'masa ro'yxat 2 yoki 3 ta teng qismga bo'linadi
+    total = sum(b[1] for b in blocks)
+    k = max(1, -(-total // MAX_H))
+    target = total / k
     pages, cur, hsum = [], [], 0
-    for b in blocks:
-        if cur and hsum + b[1] > MAX_H - 300:
+    for i, b in enumerate(blocks):
+        heads = ("ghead", "shead", "mhead", "chead")
+        if cur and len(pages) < k - 1 and hsum + b[1] / 2 > target and cur[-1][0] not in heads:
             pages.append(cur)
             cur, hsum = [], 0
-            if b[0] in ("srow",):  # yangi sahifada ham ustun sarlavhasi bo'lsin
+            if b[0] == "srow":  # yangi qismda ham ustun sarlavhasi bo'lsin
                 cur.append(("shead", 44, j["L"]))
                 hsum += 44
         cur.append(b)
