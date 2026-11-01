@@ -1,4 +1,5 @@
 # Inter Futbol: rasm topilmagan yangilik uchun mavzuga mos kartochka (1280x720)
+# Natija bo'lsa: shisha uslubi (jamoa ranglari, ikki panel, klub nomi ostida klub rangidagi chiziq)
 import glob, hashlib, io, json, os, urllib.request
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
@@ -7,6 +8,9 @@ W = "https://inter-futbol-bot.gcw808.workers.dev"
 KEY = hashlib.sha256(("ub-" + BOT).encode()).hexdigest()[:40]
 GREEN = (91, 182, 55)
 WHITE = (245, 247, 250)
+FONT_DIRS = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts"), os.environ.get("FONT_DIR", "")]
+NAME_FONT = ("oswald-latin-700-normal.woff", 40, 46)
+
 
 
 def font(weight, size):
@@ -152,13 +156,6 @@ def main_color(lg):
     return best
 
 
-def whiten(lg):
-    # to'q rangli logotip to'q fonda ko'rinishi uchun oq (monoxrom) variantda
-    w = Image.new("RGBA", lg.size, (255, 255, 255, 0))
-    w.putalpha(lg.split()[3])
-    return w
-
-
 def shade_v(im, top=90, bottom=200):
     Wd, Hd = im.size
     sh = Image.new("RGBA", (Wd, Hd), (0, 0, 0, 0))
@@ -166,90 +163,6 @@ def shade_v(im, top=90, bottom=200):
     for y in range(Hd):
         sd.line([0, y, Wd, y], fill=(5, 8, 14, int(top + (bottom - top) * y / Hd)))
     im.paste(sh, (0, 0), sh)
-
-
-def deep(c, k=0.55):
-    return tuple(int(v * k) for v in c)
-
-
-def render_split(j, v=1):
-    # uslub 2 oilasi: jamoalar ranglari; v=1 qiya, 2 tik, 3 suv belgisi, 4 shisha panel, 5 yon chiziqlar
-    Wd, Hd = 1280, 720
-    hl, al = get_logo(j.get("homeLogo"), 230), get_logo(j.get("awayLogo"), 230)
-    c1 = main_color(hl) if hl else (30, 60, 140)
-    c2 = main_color(al) if al else (140, 30, 40)
-    im = Image.new("RGB", (Wd, Hd), c1)
-    d = ImageDraw.Draw(im, "RGBA")
-    if v == 1:
-        d.polygon([(Wd // 2 + 110, 0), (Wd, 0), (Wd, Hd), (Wd // 2 - 110, Hd)], fill=c2 + (255,))
-        shade_v(im)
-        d = ImageDraw.Draw(im, "RGBA")
-        d.line([(Wd // 2 + 110, 0), (Wd // 2 - 110, Hd)], fill=(255, 255, 255, 60), width=4)
-    elif v == 2:
-        px = im.load()
-        for x in range(Wd):
-            t = min(1, max(0, (x - Wd * 0.42) / (Wd * 0.16)))
-            col = tuple(int(c1[i] * (1 - t) + c2[i] * t) for i in range(3))
-            for y in range(Hd):
-                px[x, y] = col
-        shade_v(im, 110, 210)
-    elif v == 3:
-        d.rectangle([Wd // 2, 0, Wd, Hd], fill=c2 + (255,))
-        for lg_, cx in ((hl, 120), (al, Wd - 120)):
-            if lg_:
-                big = lg_.resize((lg_.width * 3, lg_.height * 3), Image.LANCZOS)
-                a = big.split()[3].point(lambda p: p * 22 // 255)
-                big.putalpha(a)
-                im.paste(big, (cx - big.width // 2, Hd // 2 - big.height // 2), big)
-        shade_v(im, 100, 200)
-    elif v == 4:
-        d.rectangle([Wd // 2, 0, Wd, Hd], fill=c2 + (255,))
-        im = im.filter(ImageFilter.GaussianBlur(60))
-        shade_v(im, 80, 170)
-        panel = Image.new("RGBA", (Wd, Hd), (0, 0, 0, 0))
-        pd = ImageDraw.Draw(panel)
-        pd.rounded_rectangle([60, 160, Wd - 60, 570], radius=36, fill=(255, 255, 255, 26), outline=(255, 255, 255, 60), width=2)
-        im.paste(panel, (0, 0), panel)
-    else:
-        im = Image.new("RGB", (Wd, Hd), (12, 15, 22))
-        d = ImageDraw.Draw(im, "RGBA")
-        for cx, c in ((250, c1), (Wd - 250, c2)):
-            gl = Image.new("RGBA", (Wd, Hd), (0, 0, 0, 0))
-            ImageDraw.Draw(gl).ellipse([cx - 230, 330 - 230, cx + 230, 330 + 230], fill=c + (150,))
-            gl = gl.filter(ImageFilter.GaussianBlur(70))
-            im.paste(gl, (0, 0), gl)
-        d = ImageDraw.Draw(im, "RGBA")
-        d.rectangle([0, 0, 14, Hd], fill=c1 + (255,))
-        d.rectangle([Wd - 14, 0, Wd, Hd], fill=c2 + (255,))
-    d = ImageDraw.Draw(im, "RGBA")
-    ll = get_logo(j.get("leagueLogo"), 104)
-    if ll:
-        if is_dark(ll):
-            ll = whiten(ll)
-        im.paste(ll, (Wd // 2 - ll.width // 2, 80 - ll.height // 2), ll)
-    for colx, lg_, name in ((250, hl, j["home"]), (Wd - 250, al, j["away"])):
-        if lg_:
-            paste_glow(im, lg_, colx - lg_.width // 2, 340 - lg_.height // 2, 120, 22)
-        nf = fit(d, name.upper(), "black", 400, 44)
-        d.text((colx, 510), name.upper(), font=nf, fill=WHITE, anchor="mm")
-    a, b = j["score"].split(":")
-    if v in (1, 3):
-        d.rounded_rectangle([Wd // 2 - 150, 265, Wd // 2 + 150, 415], radius=26, fill=(255, 255, 255, 240))
-        d.text((Wd // 2, 340), f"{a} : {b}", font=font("black", 112), fill=(12, 16, 24), anchor="mm")
-    elif v == 2:
-        d.text((Wd // 2, 340), f"{a}:{b}", font=font("black", 150), fill=WHITE, anchor="mm")
-    elif v == 4:
-        d.text((Wd // 2, 340), f"{a} - {b}", font=font("black", 130), fill=WHITE, anchor="mm")
-    else:
-        tf = font("black", 120)
-        for x, txt in ((Wd // 2 - 142, a), (Wd // 2 + 32, b)):
-            d.rounded_rectangle([x, 265, x + 110, 415], radius=18, fill=(255, 255, 255, 235))
-            d.text((x + 55, 336), txt, font=tf, fill=(12, 16, 24), anchor="mm")
-        d.text((Wd // 2, 334), ":", font=font("black", 90), fill=WHITE, anchor="mm")
-    d.text((Wd // 2, 450), "\u00d6YIN YAKUNLANDI", font=font("bold", 24), fill=(225, 230, 236), anchor="mm")
-    lg = logo(78, False)
-    im.paste(lg, (Wd // 2 - 39, 600), lg)
-    return im
 
 
 def glass_bg(c1, c2, Wd=1280, Hd=720):
@@ -283,49 +196,6 @@ def league_top(im, j, size=150, y=86):
             paste_glow(im, ll, x0, y0, 90, 16)
 
 
-def render_glass(j, k=1):
-    # 4-variant oilasi: xiralashtirilgan jamoa ranglari + shisha panel
-    Wd, Hd = 1280, 720
-    hl, al = get_logo(j.get("homeLogo"), 210), get_logo(j.get("awayLogo"), 210)
-    c1 = main_color(hl) if hl else (30, 60, 140)
-    c2 = main_color(al) if al else (140, 30, 40)
-    im = glass_bg(c1, c2)
-    a, b = j["score"].split(":")
-    dark_txt = (14, 18, 26)
-    if k == 1:
-        glass(im, [60, 180, Wd - 60, 575])
-    elif k == 2:
-        glass(im, [Wd // 2 - 175, 230, Wd // 2 + 175, 500])
-    elif k == 3:
-        glass(im, [60, 180, 470, 575])
-        glass(im, [Wd - 470, 180, Wd - 60, 575])
-    else:
-        glass(im, [60, 180, Wd - 60, 575], alpha=225, line=255, white=True)
-    league_top(im, j)
-    d = ImageDraw.Draw(im, "RGBA")
-    for colx, lg_, name in ((265, hl, j["home"]), (Wd - 265, al, j["away"])):
-        if lg_:
-            if k == 4:
-                im.paste(lg_, (colx - lg_.width // 2, 350 - lg_.height // 2), lg_)
-            else:
-                paste_glow(im, lg_, colx - lg_.width // 2, 350 - lg_.height // 2, 110, 20)
-        nf = fit(d, name.upper(), "black", 380, 40)
-        d.text((colx, 515), name.upper(), font=nf, fill=dark_txt if k == 4 else WHITE, anchor="mm")
-    tc = dark_txt if k == 4 else WHITE
-    d.text((Wd // 2, 350), f"{a} - {b}", font=font("black", 130), fill=tc, anchor="mm")
-    if k == 4:
-        d.rounded_rectangle([Wd // 2 - 120, 448, Wd // 2 + 120, 488], radius=20, fill=GREEN + (255,))
-        d.text((Wd // 2, 468), "\u00d6YIN YAKUNLANDI", font=font("bold", 22), fill=WHITE, anchor="mm")
-    else:
-        d.text((Wd // 2, 462), "\u00d6YIN YAKUNLANDI", font=font("bold", 24), fill=(230, 235, 240), anchor="mm")
-    lg = logo(78, False)
-    im.paste(lg, (Wd // 2 - 39, 615), lg)
-    return im
-
-
-FONT_DIRS = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts"), os.environ.get("FONT_DIR", "")]
-
-
 def xfont(name, size, text=""):
     # qo'shimcha shriftlar (Oswald, Cinzel, Bebas Neue); lotin-1 dan tashqari harf bo'lsa Inter ishlatiladi
     if any(ord(ch) > 0xFF for ch in text):
@@ -336,30 +206,6 @@ def xfont(name, size, text=""):
             if fs:
                 return ImageFont.truetype(fs[0], size)
     return font("black", size)
-
-
-def xfit(name, text, maxw, start, minsize=22, spacing=0):
-    d = ImageDraw.Draw(Image.new("RGB", (4, 4)))
-    s = start
-    while s > minsize:
-        f = xfont(name, s, text)
-        if d.textlength(text, font=f) + spacing * len(text) <= maxw:
-            return f
-        s -= 2
-    return xfont(name, minsize, text)
-
-
-def spaced(d, xy, text, f, fill, spacing, anchor="mm"):
-    # harflar orasini kengaytirib yozish
-    w = sum(d.textlength(ch, font=f) for ch in text) + spacing * (len(text) - 1)
-    x = xy[0] - w / 2
-    for ch in text:
-        d.text((x, xy[1]), ch, font=f, fill=fill, anchor="lm")
-        x += d.textlength(ch, font=f) + spacing
-
-
-def lum(c):
-    return 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]
 
 
 def wrap_spaced(d, text, f, maxw, sp=0):
@@ -378,58 +224,27 @@ def wrap_spaced(d, text, f, maxw, sp=0):
     return lines[:3], W_
 
 
-NAME_FONT = {1: ("oswald-latin-700-normal.woff", 38, 0, 46), 2: ("oswald-latin-700-normal.woff", 40, 0, 46),
-             3: ("cinzel-latin-700-normal.woff", 28, 3, 36), 4: ("bebas-neue-latin-400-normal.woff", 42, 2, 42)}
+def lum(c):
+    return 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]
 
 
-def club_name(im, cx, top, name, col, mode, box):
-    # klub nomi: hamma klublarda bir xil o'lchamdagi shrift, kerak bo'lsa 2-3 qatorga bo'linadi
+def club_name(im, cx, top, name, col, box):
+    # klub nomi: hamma klublarda bir xil o'lchamdagi shrift, uzun bo'lsa 2-3 qatorga bo'linadi; ostida klub rangidagi chiziq
     d = ImageDraw.Draw(im, "RGBA")
     t = name.upper()
-    fname, size, sp, lh = NAME_FONT[mode]
+    fname, size, lh = NAME_FONT
     f = xfont(fname, size, t)
-    txt = (14, 18, 26) if lum(col) > 170 else WHITE
     x0, y0, x1, y1 = box
-    lines, W_ = wrap_spaced(d, t, f, (x1 - x0) - 90, sp)
+    lines, W_ = wrap_spaced(d, t, f, (x1 - x0) - 90)
     n = len(lines)
-    if mode == 4:
-        sh = n * lh + 34
-        strip = Image.new("RGBA", im.size, (0, 0, 0, 0))
-        sd = ImageDraw.Draw(strip)
-        sd.rounded_rectangle([x0, y1 - sh, x1, y1], radius=36, fill=col + (255,))
-        sd.rectangle([x0, y1 - sh, x1, y1 - 40], fill=col + (255,))
-        im.paste(strip, (0, 0), strip)
-        d = ImageDraw.Draw(im, "RGBA")
-        ys = y1 - sh / 2 - (n - 1) * lh / 2
-        for i, ln in enumerate(lines):
-            spaced(d, (cx, ys + i * lh), ln, f, txt, sp)
-        return
-    yc = top + 50
-    ys = yc - (n - 1) * lh / 2
-    if mode == 1:
-        w = max(W_(ln) for ln in lines)
-        d.rounded_rectangle([cx - w / 2 - 24, ys - lh / 2 - 6, cx + w / 2 + 24, ys + (n - 1) * lh + lh / 2 + 6], radius=26, fill=col + (255,), outline=(255, 255, 255, 90), width=2)
-        for i, ln in enumerate(lines):
-            d.text((cx, ys + i * lh), ln, font=f, fill=txt, anchor="mm")
-    elif mode == 2:
-        for i, ln in enumerate(lines):
-            d.text((cx, ys + i * lh), ln, font=f, fill=WHITE, anchor="mm")
-        yb = ys + (n - 1) * lh + lh / 2 + 6
-        d.rounded_rectangle([cx - 46, yb, cx + 46, yb + 7], radius=4, fill=col + (255,))
-    else:
-        mw = (x1 - x0) - 40
-        for i, ln in enumerate(lines):
-            spaced(d, (cx, ys + i * lh), ln, f, WHITE, sp if W_(ln) <= mw else 0)
-        lc = col + (255,) if lum(col) > 60 else (255, 255, 255, 160)
-        for i, ln in enumerate(lines):
-            w = W_(ln)
-            if n == 1 and w < 270:
-                for sx in (-1, 1):
-                    xa = cx + sx * (w / 2 + 16)
-                    d.line([xa, ys, xa + sx * 34, ys], fill=lc, width=3)
+    ys = top + 50 - (n - 1) * lh / 2
+    for i, ln in enumerate(lines):
+        d.text((cx, ys + i * lh), ln, font=f, fill=WHITE, anchor="mm")
+    yb = ys + (n - 1) * lh + lh / 2 + 6
+    d.rounded_rectangle([cx - 46, yb, cx + 46, yb + 7], radius=4, fill=col + (255,))
 
 
-def render_glass3(j, mode=1):
+def render_card(j):
     # shisha 3: ikki alohida panel, katta liga logotipi, klub nomlari klub rangida
     Wd, Hd = 1280, 720
     hl, al = get_logo(j.get("homeLogo"), 180), get_logo(j.get("awayLogo"), 180)
@@ -450,7 +265,7 @@ def render_glass3(j, mode=1):
                 paste_glow(im, lg_, x_, y_, 210, 22)
             else:
                 paste_glow(im, lg_, x_, y_, 110, 20)
-        club_name(im, cx, 440, name, col, mode, bx)
+        club_name(im, cx, 440, name, col, bx)
     d = ImageDraw.Draw(im, "RGBA")
     d.text((Wd // 2, 375), f"{a} - {b}", font=font("black", 120), fill=WHITE, anchor="mm")
     d.text((Wd // 2, 478), "\u00d6YIN YAKUNLANDI", font=font("bold", 22), fill=(230, 235, 240), anchor="mm")
@@ -459,46 +274,9 @@ def render_glass3(j, mode=1):
     return im
 
 
-def render_light(j):
-    # uslub 3: oq, minimal, gazeta uslubi
-    Wd, Hd = 1280, 720
-    im = Image.new("RGB", (Wd, Hd), (246, 247, 249))
-    d = ImageDraw.Draw(im, "RGBA")
-    d.rectangle([0, 0, Wd, 120], fill=(14, 20, 30, 255))
-    d.rectangle([0, 120, Wd, 128], fill=GREEN + (255,))
-    league = (j.get("league") or "").upper()
-    ll = get_logo(j.get("leagueLogo"), 64)
-    x = 72
-    if ll:
-        paste_league(im, ll, x, 60 - ll.height // 2, 120, 10)
-        x += ll.width + 34
-    d.text((x, 60), league or "NATIJA", font=font("black", 34), fill=WHITE, anchor="lm")
-    lg = logo(84)
-    im.paste(lg, (Wd - 60 - 84, 18), lg)
-    hl, al = get_logo(j.get("homeLogo"), 220), get_logo(j.get("awayLogo"), 220)
-    for colx, lg_, name in ((270, hl, j["home"]), (Wd - 270, al, j["away"])):
-        if lg_:
-            im.paste(lg_, (colx - lg_.width // 2, 360 - lg_.height // 2), lg_)
-        nf = fit(d, name.upper(), "black", 420, 42)
-        d.text((colx, 535), name.upper(), font=nf, fill=(14, 20, 30), anchor="mm")
-    a, b = j["score"].split(":")
-    d.text((Wd // 2, 350), f"{a}-{b}", font=font("black", 150), fill=(14, 20, 30), anchor="mm")
-    d.rounded_rectangle([Wd // 2 - 120, 452, Wd // 2 + 120, 492], radius=20, fill=GREEN + (255,))
-    d.text((Wd // 2, 472), "YAKUNLANDI", font=font("bold", 24), fill=WHITE, anchor="mm")
-    return im
-
-
 def render(j):
-    st = j.get("style") or "dark"
-    if st != "dark" and j.get("score") and j.get("home") and j.get("away"):
-        if st.startswith("g3n"):
-            im = render_glass3(j, int(st[3:] or 1))
-        elif st.startswith("glass"):
-            im = render_glass(j, int(st[5:] or 1))
-        elif st.startswith("split"):
-            im = render_split(j, int(st[5:] or 1))
-        else:
-            im = render_light(j)
+    if j.get("score") and j.get("home") and j.get("away"):
+        im = render_card(j)
         buf = io.BytesIO()
         im.save(buf, "PNG", optimize=True)
         return buf.getvalue()
@@ -516,56 +294,17 @@ def render(j):
         tw = d.textlength(league, font=f)
         d.rounded_rectangle([lx, 56, lx + tw + 44, 106], radius=25, fill=GREEN + (255,))
         d.text((lx + 22, 81), league, font=f, fill=(10, 20, 12), anchor="lm")
-    hl, al = get_logo(j.get("homeLogo"), 190), get_logo(j.get("awayLogo"), 190)
-    if j.get("score") and j.get("home") and j.get("away") and (hl or al):
-        a, b = j["score"].split(":")
-        cx, cy = Wd // 2, Hd // 2 + 10
-        tf = font("black", 130)
-        cw, ch = 125, 170
-        for x, txt in ((cx - 18 - cw * len(a), a), (cx + 18, b)):
-            wbox = cw * len(txt)
-            d.rounded_rectangle([x, cy - ch // 2, x + wbox, cy + ch // 2], radius=20, fill=(18, 22, 30, 255))
-            d.rectangle([x, cy + ch // 2 - 12, x + wbox, cy + ch // 2], fill=GREEN + (255,))
-            d.text((x + wbox / 2, cy - 4), txt, font=tf, fill=WHITE, anchor="mm")
-        d.text((cx, cy - 6), ":", font=font("black", 96), fill=WHITE, anchor="mm")
-        for colx, lg_, name in ((250, hl, j["home"]), (Wd - 250, al, j["away"])):
-            if lg_:
-                paste_glow(im, lg_, colx - lg_.width // 2, cy - 40 - lg_.height // 2 - 30)
-            nf = fit(d, name.upper(), "black", 380, 46)
-            d.text((colx, cy + 120), name.upper(), font=nf, fill=WHITE, anchor="mm")
-        d.text((cx, cy + ch // 2 + 50), "ÖYIN YAKUNLANDI", font=font("bold", 28), fill=(180, 190, 200), anchor="mm")
-    elif j.get("score") and j.get("home") and j.get("away"):
-        a, b = j["score"].split(":")
-        # tablo
-        tf = font("black", 150)
-        cw, ch = 150, 200
-        cx, cy = Wd // 2, Hd // 2 - 10
-        boxes = [(cx - 20 - cw * len(a), a), (cx + 20, b)]
-        for x, txt in boxes:
-            wbox = cw * len(txt)
-            d.rounded_rectangle([x, cy - ch // 2, x + wbox, cy + ch // 2], radius=22, fill=(18, 22, 30, 255))
-            d.rectangle([x, cy + ch // 2 - 14, x + wbox, cy + ch // 2], fill=GREEN + (255,))
-            d.text((x + wbox / 2, cy - 4), txt, font=tf, fill=WHITE, anchor="mm")
-        d.text((cx, cy - 6), ":", font=font("black", 110), fill=WHITE, anchor="mm")
-        left_edge = cx - 20 - cw * len(a) - 40
-        right_edge = cx + 20 + cw * len(b) + 40
-        nf_l = fit(d, j["home"].upper(), "black", left_edge - 60, 64)
-        nf_r = fit(d, j["away"].upper(), "black", Wd - 60 - right_edge, 64)
-        d.text((left_edge, cy), j["home"].upper(), font=nf_l, fill=WHITE, anchor="rm")
-        d.text((right_edge, cy), j["away"].upper(), font=nf_r, fill=WHITE, anchor="lm")
-        d.text((cx, cy + ch // 2 + 50), "ÖYIN YAKUNLANDI", font=font("bold", 30), fill=(180, 190, 200), anchor="mm")
-    else:
-        title = j.get("title") or "Inter Futbol"
-        f = font("black", 64)
-        lines = wrap(d, title, f, Wd - 160)
-        if len(lines) > 4:
-            f = font("black", 52)
-            lines = wrap(d, title, f, Wd - 160)[:5]
-        lh = int(f.size * 1.18)
-        y = Hd // 2 - lh * len(lines) // 2 + 10
-        d.rectangle([60, y + 6, 70, y + lh * len(lines) - 14], fill=GREEN + (255,))
-        for i, ln in enumerate(lines):
-            d.text((96, y + i * lh), ln, font=f, fill=WHITE)
+    title = j.get("title") or "Inter Futbol"
+    f = font("black", 64)
+    lines = wrap(d, title, f, Wd - 160)
+    if len(lines) > 4:
+        f = font("black", 52)
+        lines = wrap(d, title, f, Wd - 160)[:5]
+    lh = int(f.size * 1.18)
+    y = Hd // 2 - lh * len(lines) // 2 + 10
+    d.rectangle([60, y + 6, 70, y + lh * len(lines) - 14], fill=GREEN + (255,))
+    for i, ln in enumerate(lines):
+        d.text((96, y + i * lh), ln, font=f, fill=WHITE)
     lg = logo(96)
     im.paste(lg, (Wd - 60 - 96, 40), lg)
     buf = io.BytesIO()
@@ -578,14 +317,9 @@ def wapi(path, data=None, ctype="application/json"):
     with urllib.request.urlopen(req, timeout=60) as r:
         return json.loads(r.read() or b"{}")
 
-
 if __name__ == "__main__":
     job = os.environ.get("JOB")
     if job:
         j = wapi("/ub/cjob?id=" + job)
         if j:
             wapi("/ub/card?id=" + job, render(j), "image/png")
-    else:
-        open("t1.png", "wb").write(render({"title": "Barcelona Alavesni 6:1 hisobida yengdi", "home": "Barcelona", "away": "Alavés", "score": "6:1", "league": "LaLiga"}))
-        open("t2.png", "wb").write(render({"title": "Rodri Real örniga Barcelonani tanladi", "league": "LaLiga"}))
-        open("t3.png", "wb").write(render({"title": "Manchester United Chelseaga qarşi öyinda mağlub böldi", "home": "Chelsea", "away": "Manchester United", "score": "2:0", "league": "Premier League"}))
