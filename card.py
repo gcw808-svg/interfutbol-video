@@ -98,7 +98,114 @@ def get_logo(url, size):
         return None
 
 
+def paste_glow(im, lg, x, y, strength=110, radius=18):
+    # to'q fonda ham aniq ko'rinishi uchun logotip ortida yumshoq oq yorug'lik
+    pad = radius * 2
+    mask = Image.new("L", (lg.width + pad * 2, lg.height + pad * 2), 0)
+    mask.paste(lg.split()[3], (pad, pad))
+    mask = mask.filter(ImageFilter.GaussianBlur(radius)).point(lambda v: min(255, v * strength // 255))
+    glow = Image.new("RGBA", mask.size, (255, 255, 255, 0))
+    glow.putalpha(mask)
+    im.paste(glow, (x - pad, y - pad), glow)
+    im.paste(lg, (x, y), lg)
+
+
+def main_color(lg):
+    # logotipning asosiy (eng to'yingan, ko'p uchraydigan) rangi
+    sm = lg.copy()
+    sm.thumbnail((64, 64))
+    best, score = (40, 60, 120), -1
+    cnt = {}
+    for r, g, b, a in sm.getdata():
+        if a < 200:
+            continue
+        mx, mn = max(r, g, b), min(r, g, b)
+        if mx < 40 or (mx - mn) < 40:
+            continue
+        k = (r // 32, g // 32, b // 32)
+        cnt[k] = cnt.get(k, 0) + 1 + (mx - mn) / 255
+    if cnt:
+        k = max(cnt, key=cnt.get)
+        best = (k[0] * 32 + 16, k[1] * 32 + 16, k[2] * 32 + 16)
+    return best
+
+
+def render_split(j):
+    # uslub 2: jamoalar ranglarida qiya bo'lingan fon
+    Wd, Hd = 1280, 720
+    hl, al = get_logo(j.get("homeLogo"), 230), get_logo(j.get("awayLogo"), 230)
+    c1 = main_color(hl) if hl else (30, 60, 140)
+    c2 = main_color(al) if al else (140, 30, 40)
+    im = Image.new("RGB", (Wd, Hd), c1)
+    d = ImageDraw.Draw(im, "RGBA")
+    d.polygon([(Wd // 2 + 110, 0), (Wd, 0), (Wd, Hd), (Wd // 2 - 110, Hd)], fill=c2 + (255,))
+    shade = Image.new("RGBA", (Wd, Hd), (0, 0, 0, 0))
+    sd = ImageDraw.Draw(shade)
+    for y in range(Hd):
+        sd.line([0, y, Wd, y], fill=(5, 8, 14, int(90 + 110 * y / Hd)))
+    im.paste(shade, (0, 0), shade)
+    d = ImageDraw.Draw(im, "RGBA")
+    d.line([(Wd // 2 + 110, 0), (Wd // 2 - 110, Hd)], fill=(255, 255, 255, 60), width=4)
+    league = (j.get("league") or "").upper()
+    ll = get_logo(j.get("leagueLogo"), 64)
+    top = 70
+    if ll:
+        paste_glow(im, ll, Wd // 2 - ll.width // 2, top - ll.height // 2 + 4, 190, 14)
+        top += 52
+    if league:
+        d.text((Wd // 2, top + 6), league, font=font("bold", 26), fill=(230, 235, 240), anchor="mm")
+    for colx, lg_, name in ((250, hl, j["home"]), (Wd - 250, al, j["away"])):
+        if lg_:
+            paste_glow(im, lg_, colx - lg_.width // 2, 330 - lg_.height // 2, 120, 22)
+        nf = fit(d, name.upper(), "black", 400, 44)
+        d.text((colx, 500), name.upper(), font=nf, fill=WHITE, anchor="mm")
+    a, b = j["score"].split(":")
+    d.rounded_rectangle([Wd // 2 - 150, 255, Wd // 2 + 150, 405], radius=26, fill=(255, 255, 255, 240))
+    d.text((Wd // 2, 330), f"{a} : {b}", font=font("black", 112), fill=(12, 16, 24), anchor="mm")
+    d.text((Wd // 2, 440), "ÖYIN YAKUNLANDI", font=font("bold", 26), fill=(235, 240, 245), anchor="mm")
+    lg = logo(80)
+    im.paste(lg, (Wd - 60 - 80, Hd - 60 - 80 + 20), lg)
+    d.text((60, Hd - 50), "@Inter_Futbol_TV", font=font("med", 26), fill=(220, 226, 232), anchor="lm")
+    return im
+
+
+def render_light(j):
+    # uslub 3: oq, minimal, gazeta uslubi
+    Wd, Hd = 1280, 720
+    im = Image.new("RGB", (Wd, Hd), (246, 247, 249))
+    d = ImageDraw.Draw(im, "RGBA")
+    d.rectangle([0, 0, Wd, 120], fill=(14, 20, 30, 255))
+    d.rectangle([0, 120, Wd, 128], fill=GREEN + (255,))
+    league = (j.get("league") or "").upper()
+    ll = get_logo(j.get("leagueLogo"), 70)
+    x = 60
+    if ll:
+        paste_glow(im, ll, x, 60 - ll.height // 2, 120, 10)
+        x += ll.width + 24
+    d.text((x, 60), league or "NATIJA", font=font("black", 34), fill=WHITE, anchor="lm")
+    lg = logo(84)
+    im.paste(lg, (Wd - 60 - 84, 18), lg)
+    hl, al = get_logo(j.get("homeLogo"), 220), get_logo(j.get("awayLogo"), 220)
+    for colx, lg_, name in ((270, hl, j["home"]), (Wd - 270, al, j["away"])):
+        if lg_:
+            im.paste(lg_, (colx - lg_.width // 2, 360 - lg_.height // 2), lg_)
+        nf = fit(d, name.upper(), "black", 420, 42)
+        d.text((colx, 535), name.upper(), font=nf, fill=(14, 20, 30), anchor="mm")
+    a, b = j["score"].split(":")
+    d.text((Wd // 2, 350), f"{a}-{b}", font=font("black", 150), fill=(14, 20, 30), anchor="mm")
+    d.rounded_rectangle([Wd // 2 - 120, 452, Wd // 2 + 120, 492], radius=20, fill=GREEN + (255,))
+    d.text((Wd // 2, 472), "YAKUNLANDI", font=font("bold", 24), fill=WHITE, anchor="mm")
+    d.text((Wd // 2, Hd - 46), "@Inter_Futbol_TV", font=font("med", 26), fill=(90, 100, 112), anchor="mm")
+    return im
+
+
 def render(j):
+    st = j.get("style") or "dark"
+    if st != "dark" and j.get("score") and j.get("home") and j.get("away"):
+        im = render_split(j) if st == "split" else render_light(j)
+        buf = io.BytesIO()
+        im.save(buf, "PNG", optimize=True)
+        return buf.getvalue()
     Wd, Hd = 1280, 720
     im = background(Wd, Hd)
     d = ImageDraw.Draw(im, "RGBA")
@@ -106,8 +213,7 @@ def render(j):
     lx = 60
     ll = get_logo(j.get("leagueLogo"), 70)
     if ll:
-        d.rounded_rectangle([60, 46, 60 + 90, 116], radius=18, fill=(245, 247, 250, 255))
-        im.paste(ll, (60 + (90 - ll.width) // 2, 81 - ll.height // 2), ll)
+        paste_glow(im, ll, 60 + (90 - ll.width) // 2, 81 - ll.height // 2)
         lx = 166
     if league:
         f = font("bold", 30)
@@ -128,7 +234,7 @@ def render(j):
         d.text((cx, cy - 6), ":", font=font("black", 96), fill=WHITE, anchor="mm")
         for colx, lg_, name in ((250, hl, j["home"]), (Wd - 250, al, j["away"])):
             if lg_:
-                im.paste(lg_, (colx - lg_.width // 2, cy - 40 - lg_.height // 2 - 30), lg_)
+                paste_glow(im, lg_, colx - lg_.width // 2, cy - 40 - lg_.height // 2 - 30)
             nf = fit(d, name.upper(), "black", 380, 46)
             d.text((colx, cy + 120), name.upper(), font=nf, fill=WHITE, anchor="mm")
         d.text((cx, cy + ch // 2 + 50), "ÖYIN YAKUNLANDI", font=font("bold", 28), fill=(180, 190, 200), anchor="mm")
