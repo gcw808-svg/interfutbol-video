@@ -57,6 +57,8 @@ modal_ok = bool(os.environ.get("MODAL_TOKEN_ID") and os.environ.get("MODAL_TOKEN
 if kaggle_ok:
     rc, out = run(f"kaggle kernels status {KERNEL}")
     low = out.lower()
+    if rc != 0 or "traceback" in low:
+        print("Kaggle holatini bilib bo'lmadi — xavfsizlik uchun hech narsa ishga tushirilmaydi"); sys.exit(1)
     if "running" in low or "queued" in low:
         print("Kaggle'da ishlayapti"); sys.exit(0)
 if modal_ok:
