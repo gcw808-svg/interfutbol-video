@@ -23,7 +23,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -q "kaggle>=1.8" modal huggingface_hub
+      - run: pip install -q "kaggle>=1.8" six modal huggingface_hub
       - name: Boshqaruvchi
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
