@@ -23,10 +23,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      # 1) Tez yo'l: Modal videokartasida (1-2 daqiqa)
+      # 1) Tez yo'l: Modal videokartasida (1-2 daqiqa). Modal'ga karta qo'shilgach
+      #    repo o'zgaruvchisi MODAL_GPU=1 qilinadi; ungacha bu qadam o'tkazib yuboriladi.
       - name: Diktor (GPU)
         id: gpu
-        if: env.MODAL_TOKEN_ID != ''
+        if: env.MODAL_TOKEN_ID != '' && vars.MODAL_GPU == '1'
         continue-on-error: true
         run: |
           pip install -q modal
