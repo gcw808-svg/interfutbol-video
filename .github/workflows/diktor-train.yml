@@ -1,0 +1,38 @@
+name: diktor-train
+on:
+  workflow_dispatch:
+    inputs:
+      run:
+        description: "O'qitish nomi (masalan run4)"
+        default: run4
+      epochs:
+        description: "Epochlar soni"
+        default: "100"
+      prefer:
+        description: "auto | kaggle | modal"
+        default: auto
+  schedule:
+    - cron: "17,47 * * * *"
+concurrency: diktor-train
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -q "kaggle>=1.8" modal huggingface_hub
+      - name: Boshqaruvchi
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          IN_RUN: ${{ inputs.run }}
+          IN_EPOCHS: ${{ inputs.epochs }}
+          IN_PREFER: ${{ inputs.prefer }}
+        run: |
+          if [ -z "$HF_TOKEN" ]; then echo "HF_TOKEN sozlanmagan"; exit 0; fi
+          python diktor_orch.py
