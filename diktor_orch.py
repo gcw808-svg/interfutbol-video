@@ -70,6 +70,23 @@ if modal_ok:
     except Exception as e:
         print("modal ro'yxat xato", e)
 
+# --- Kaggle'dagi oxirgi tugagan o'qitish modelini botga ulash (Hugging Face'ga ko'chirish)
+def publish_kaggle_output():
+    prev = ctl.get("kaggle_prev_run", "run3")
+    target = f"{prev}/inter_diktor.safetensors"
+    if api.file_exists(repo, target): return
+    d = tempfile.mkdtemp()
+    run(f'kaggle kernels output {KERNEL} -p {d} --file-pattern "inter_diktor[.]safetensors$"')
+    for root, _, fs in os.walk(d):
+        if "inter_diktor.safetensors" in fs:
+            api.upload_file(path_or_fileobj=os.path.join(root, "inter_diktor.safetensors"), path_in_repo=target, repo_id=repo, commit_message=f"{prev} modeli")
+            note(f"📦 {prev} modeli botdagi diktorga ulandi.")
+            return
+    print("Kaggle natijasida model topilmadi")
+if kaggle_ok:
+    try: publish_kaggle_output()
+    except Exception as e: print("model ko'chirish xato:", e)
+
 # --- ishga tushirish
 def kaggle_gpu_left():
     """Kaggle'dagi qolgan GPU soati (bilib bo'lmasa None)."""
@@ -116,6 +133,7 @@ for plat in order:
         ok, out = launch_kaggle()
         if ok:
             left, _ = kaggle_gpu_left()
+            ctl["kaggle_prev_run"] = RUN; write_control(ctl)
             note(f"▶️ {RUN} Kaggle'da ishga tushirildi" + (f" (GPU vaqtidan {left:.1f} soat qoldi)." if left is not None else ".")); sys.exit(0)
         note("ℹ️ Kaggle'da ishga tushmadi" + (" (GPU vaqti tugagan)" if "quota" in out.lower() else "") + " — keyingi variant sinab ko'riladi.")
     if plat == "modal" and modal_ok:
