@@ -37,8 +37,10 @@ def write_control(c):
     api.upload_file(path_or_fileobj=json.dumps(c).encode(), path_in_repo="control.json", repo_id=repo, commit_message="control")
 
 if EVENT == "workflow_dispatch":
-    ctl = {"run": os.environ.get("IN_RUN") or "run4", "epochs": int(os.environ.get("IN_EPOCHS") or 100),
-           "prefer": os.environ.get("IN_PREFER") or "auto", "active": True}
+    prev = read_control() or {}
+    ctl = {k: prev[k] for k in ("kaggle_prev_run",) if k in prev}
+    ctl.update({"run": os.environ.get("IN_RUN") or "run4", "epochs": int(os.environ.get("IN_EPOCHS") or 100),
+                "prefer": os.environ.get("IN_PREFER") or "auto", "active": True})
     write_control(ctl)
     note(f"🔁 {ctl['run']} o'qitishi kuzatuvga olindi ({ctl['epochs']} epoch, afzal: {ctl['prefer']}).")
 else:
@@ -86,6 +88,12 @@ def publish_kaggle_output():
 if kaggle_ok:
     try: publish_kaggle_output()
     except Exception as e: print("model ko'chirish xato:", e)
+    # Kaggle'da tugagan o'qitish modeli HF'ga ko'chirilgan bo'lsa — bu o'qitish tugagan hisoblanadi
+    # (HF'ga saqlash ishlamagan holatda ham qayta boshidan ishga tushirib GPU vaqtini isrof qilmaslik uchun).
+    if ctl.get("kaggle_prev_run") == RUN and api.file_exists(repo, f"{RUN}/inter_diktor.safetensors"):
+        api.upload_file(path_or_fileobj=b"done", path_in_repo=f"{RUN}/DONE", repo_id=repo, commit_message="tugadi")
+        ctl["active"] = False; write_control(ctl)
+        note(f"✅ {RUN} o'qitishi tugadi, yangi model botdagi diktorga ulandi."); sys.exit(0)
 
 # --- ishga tushirish
 def kaggle_gpu_left():
