@@ -71,7 +71,20 @@ if modal_ok:
         print("modal ro'yxat xato", e)
 
 # --- ishga tushirish
+def kaggle_gpu_left():
+    """Kaggle'dagi qolgan GPU soati (bilib bo'lmasa None)."""
+    rc, out = run("kaggle quota -v")
+    for line in out.splitlines():
+        parts = [x.strip() for x in line.split(",")]
+        if parts and parts[0].upper() == "GPU" and len(parts) >= 3:
+            try: return float(parts[2].rstrip("h")), (parts[4] if len(parts) > 4 else "")
+            except ValueError: pass
+    return None, ""
+
 def launch_kaggle():
+    left, refresh = kaggle_gpu_left()
+    if left is not None and left < 1.0:
+        return False, f"quota: {left:.1f} soat qoldi, yangilanish: {refresh}"
     d = tempfile.mkdtemp()
     cell = (f'!curl -s -A "Mozilla/5.0" "{W}/dsget?k={K}&n=script" -o run.py && '
             f'DIKTOR_RUN={RUN} DIKTOR_EPOCHS={ctl["epochs"]} python run.py')
@@ -102,7 +115,8 @@ for plat in order:
     if plat == "kaggle" and kaggle_ok:
         ok, out = launch_kaggle()
         if ok:
-            note(f"▶️ {RUN} Kaggle'da ishga tushirildi."); sys.exit(0)
+            left, _ = kaggle_gpu_left()
+            note(f"▶️ {RUN} Kaggle'da ishga tushirildi" + (f" (GPU vaqtidan {left:.1f} soat qoldi)." if left is not None else ".")); sys.exit(0)
         note("ℹ️ Kaggle'da ishga tushmadi" + (" (GPU vaqti tugagan)" if "quota" in out.lower() else "") + " — keyingi variant sinab ko'riladi.")
     if plat == "modal" and modal_ok:
         ok, out = launch_modal()
