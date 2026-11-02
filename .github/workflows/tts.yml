@@ -11,23 +11,39 @@ jobs:
   run:
     runs-on: ubuntu-latest
     timeout-minutes: 150
+    env:
+      BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+      JOB: ${{ inputs.job }}
+      MOOD: ${{ inputs.mood }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      # 1) Tez yo'l: Modal videokartasida (1-2 daqiqa)
+      - name: Diktor (GPU)
+        id: gpu
+        if: env.MODAL_TOKEN_ID != ''
+        continue-on-error: true
+        run: |
+          pip install -q modal
+          modal secret create inter-tts BOT_TOKEN="$BOT_TOKEN" HF_TOKEN="$HF_TOKEN" --force > /dev/null
+          modal run modal_tts.py --job "$JOB" --mood "$MOOD"
+      # 2) Zaxira yo'l: GitHub protsessorida (sekin)
       - uses: actions/cache@v4
+        if: steps.gpu.outcome != 'success'
         with:
           path: |
             ~/.cache/pip
             ~/.cache/huggingface
           key: tts-v1
-      - run: sudo apt-get update -qq > /dev/null 2>&1; sudo apt-get install -y -qq ffmpeg > /dev/null 2>&1 || true
-      - run: pip install -q torch torchaudio --index-url https://download.pytorch.org/whl/cpu && pip install -q f5-tts soundfile requests
-      - name: Diktor
-        env:
-          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          JOB: ${{ inputs.job }}
-          MOOD: ${{ inputs.mood }}
+      - if: steps.gpu.outcome != 'success'
+        run: sudo apt-get update -qq > /dev/null 2>&1; sudo apt-get install -y -qq ffmpeg > /dev/null 2>&1 || true
+      - if: steps.gpu.outcome != 'success'
+        run: pip install -q torch torchaudio --index-url https://download.pytorch.org/whl/cpu && pip install -q f5-tts soundfile requests
+      - name: Diktor (CPU)
+        if: steps.gpu.outcome != 'success'
         run: python3 tts.py
