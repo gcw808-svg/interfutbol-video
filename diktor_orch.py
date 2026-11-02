@@ -107,4 +107,7 @@ for plat in order:
         if ok:
             note(f"▶️ {RUN} Modal'da ishga tushirildi."); sys.exit(0)
         note("⚠️ Modal'da ham ishga tushmadi: " + out[-200:])
-note("⚠️ Bo'sh GPU topilmadi, 30 daqiqadan keyin yana urinib ko'raman.")
+if kaggle_ok or modal_ok:
+    note("⚠️ Bo'sh GPU topilmadi, 30 daqiqadan keyin yana urinib ko'raman.")
+else:
+    print("Kaggle/Modal kalitlari hali sozlanmagan")
