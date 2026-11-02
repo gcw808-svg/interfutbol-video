@@ -28,9 +28,32 @@ def clean(t):
     t = re.sub(r"https?://\S+", "", t)
     t = re.sub(r"[\U0001F000-\U0001FFFF☀-➿️#*_~`<>\[\]|]", " ", t)
     t = t.replace("ʻ", "'").replace("‘", "'").replace("’", "'").replace("ʼ", "'").replace("`", "'")
+    t = re.sub(r"\b[A-Z']{4,}\b", lambda m: m.group(0).capitalize(), t)  # KATTA HARFLI so'zlar
     t = norm(t)
     t = re.sub(r"[«»“”\"]", "", t)
     return re.sub(r"\s+", " ", t).strip()
+
+CYR = {"а":"a","б":"b","в":"v","г":"g","д":"d","ж":"j","з":"z","и":"i","й":"y","к":"k","л":"l","м":"m","н":"n","о":"o","п":"p","р":"r","с":"s","т":"t","у":"u","ф":"f","х":"x","ц":"s","ч":"ch","ш":"sh","щ":"sh","ъ":"'","ь":"","ы":"i","э":"e","ю":"yu","я":"ya","ё":"yo","ў":"o'","қ":"q","ғ":"g'","ҳ":"h"}
+def cyr2lat(t):
+    # o'zbek kirill yozuvini lotinga o'girish (model faqat lotin harflarini taniydi)
+    out = []
+    for i, ch in enumerate(t):
+        lo = ch.lower()
+        if lo == "е":
+            prev = t[i - 1].lower() if i else " "
+            r = "ye" if (not prev.isalpha() or prev in "аеёиоуэюяўъь") else "e"
+        elif lo == "ц":
+            prev = t[i - 1].lower() if i else " "
+            r = "ts" if prev in "аеиоуэўюя" else "s"
+        elif lo in CYR:
+            r = CYR[lo]
+        else:
+            out.append(ch); continue
+        if ch != lo and r:  # bosh harf
+            nxt = t[i + 1] if i + 1 < len(t) else " "
+            r = r.upper() if (nxt.isupper() and len(r) > 1) else r[:1].upper() + r[1:]
+        out.append(r)
+    return "".join(out)
 
 def apply_lex(t, lex):
     # talaffuz lug'ati: "Napoli = Napli" -> Napolining -> Naplining (qo'shimchalar saqlanadi)
@@ -83,7 +106,7 @@ def main():
         lex = requests.get(W + "/ub/ttslex", headers=H, timeout=30).json() or {}
     except Exception:
         lex = {}
-    parts = chunks(clean(apply_lex(text, lex)))
+    parts = chunks(clean(apply_lex(cyr2lat(text), lex)))
     NFE = 32 if len(text) <= 400 else 16  # qisqa matnda sifat yuqoriroq
     sr_out, audio = 24000, []
     gap = np.zeros(int(0.35 * 24000), dtype=np.float32)
