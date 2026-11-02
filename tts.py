@@ -32,6 +32,13 @@ def clean(t):
     t = re.sub(r"[«»“”\"]", "", t)
     return re.sub(r"\s+", " ", t).strip()
 
+def apply_lex(t, lex):
+    # talaffuz lug'ati: "Napoli = Napli" -> Napolining -> Naplining (qo'shimchalar saqlanadi)
+    for k in sorted(lex, key=len, reverse=True):
+        v = lex[k]
+        t = re.sub(r"(?i)(?<![\w'])" + re.escape(k), lambda m: (v[:1].upper() + v[1:]) if m.group(0)[:1].isupper() else v, t)
+    return t
+
 def chunks(t, mx=170):
     sents = re.split(r"(?<=[.!?…])\s+", t)
     out, cur = [], ""
@@ -72,7 +79,11 @@ def main():
         ckpt = hf_hub_download("mrmuminov/f5-tts-uzbek", "model.safetensors")
     vocab = hf_hub_download("mrmuminov/f5-tts-uzbek", "vocab.txt")
     tts = F5TTS(model="F5TTS_v1_Base", ckpt_file=ckpt, vocab_file=vocab, device="cpu")
-    parts = chunks(clean(text))
+    try:
+        lex = requests.get(W + "/ub/ttslex", headers=H, timeout=30).json() or {}
+    except Exception:
+        lex = {}
+    parts = chunks(clean(apply_lex(text, lex)))
     NFE = 32 if len(text) <= 400 else 16  # qisqa matnda sifat yuqoriroq
     sr_out, audio = 24000, []
     gap = np.zeros(int(0.35 * 24000), dtype=np.float32)
