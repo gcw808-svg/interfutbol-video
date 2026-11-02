@@ -1,0 +1,21 @@
+name: montaj
+on:
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Vazifa nomi (worker'dagi dsp:<job>)"
+        default: imgjob
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Multfilm rasmlari
+        env:
+          GEMINI_KEY: ${{ secrets.GEMINI_KEY }}
+          IMGJOB: ${{ inputs.job }}
+        run: python gimg.py
