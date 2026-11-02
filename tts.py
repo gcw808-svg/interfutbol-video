@@ -56,14 +56,28 @@ def main():
     t0 = time.time()
     from huggingface_hub import hf_hub_download
     from f5_tts.api import F5TTS
-    ckpt = hf_hub_download("mrmuminov/f5-tts-uzbek", "model.safetensors")
+    ckpt, mname = None, "asosiy model"
+    tok = os.environ.get("HF_TOKEN")
+    if tok:  # Bahtiyor aka ovozida o'qitilgan eng so'nggi model (Hugging Face yopiq ombori)
+        try:
+            from huggingface_hub import HfApi
+            api = HfApi(token=tok); repo = api.whoami()["name"] + "/inter-diktor"
+            fs = [f for f in api.list_repo_files(repo) if f.endswith("/inter_diktor.safetensors")]
+            if fs:
+                fs.sort(key=lambda f: int(re.sub(r"\D", "", f.split("/")[0]) or 0))
+                ckpt = hf_hub_download(repo, fs[-1], token=tok); mname = fs[-1].split("/")[0]
+        except Exception as e:
+            print("o'qitilgan model topilmadi:", e, flush=True)
+    if not ckpt:
+        ckpt = hf_hub_download("mrmuminov/f5-tts-uzbek", "model.safetensors")
     vocab = hf_hub_download("mrmuminov/f5-tts-uzbek", "vocab.txt")
     tts = F5TTS(model="F5TTS_v1_Base", ckpt_file=ckpt, vocab_file=vocab, device="cpu")
     parts = chunks(clean(text))
+    NFE = 32 if len(text) <= 400 else 16  # qisqa matnda sifat yuqoriroq
     sr_out, audio = 24000, []
     gap = np.zeros(int(0.35 * 24000), dtype=np.float32)
     for i, c in enumerate(parts):
-        wav, sr_out, _ = tts.infer(ref_file="ref.wav", ref_text=REFS[MOOD], gen_text=c, nfe_step=16, remove_silence=False, speed=0.95)
+        wav, sr_out, _ = tts.infer(ref_file="ref.wav", ref_text=REFS[MOOD], gen_text=c, nfe_step=NFE, remove_silence=False, speed=0.95)
         audio += [np.asarray(wav, dtype=np.float32), gap]
         print(f"{i+1}/{len(parts)} tayyor, {time.time()-t0:.0f}s", flush=True)
     full = np.concatenate(audio)
@@ -71,7 +85,7 @@ def main():
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", "diktor.wav", "-af", "loudnorm=I=-16:TP=-1.5", "-c:a", "libmp3lame", "-b:a", "128k", "diktor.mp3"], check=True)
     cap = text if len(text) <= 900 else text[:897] + "…"
     with open("diktor.mp3", "rb") as f:
-        r = requests.post(API + "sendAudio", data={"chat_id": chat, "caption": cap, "title": "Inter Futbol diktor", "performer": "Inter Futbol"}, files={"audio": ("diktor.mp3", f, "audio/mpeg")}, timeout=120).json()
+        r = requests.post(API + "sendAudio", data={"chat_id": chat, "caption": cap, "title": f"Inter Futbol diktor ({mname})", "performer": "Inter Futbol"}, files={"audio": ("diktor.mp3", f, "audio/mpeg")}, timeout=120).json()
     if not r.get("ok"): say(chat, "⚠️ Audioni yuborib bo'lmadi: " + str(r.get("description")))
 
 if __name__ == "__main__":
