@@ -101,7 +101,7 @@ def main():
     if not ckpt:
         ckpt = hf_hub_download("mrmuminov/f5-tts-uzbek", "model.safetensors")
     vocab = hf_hub_download("mrmuminov/f5-tts-uzbek", "vocab.txt")
-    tts = F5TTS(model="F5TTS_v1_Base", ckpt_file=ckpt, vocab_file=vocab, device="cpu")
+    tts = F5TTS(model="F5TTS_v1_Base", ckpt_file=ckpt, vocab_file=vocab, device="cuda" if torch.cuda.is_available() else "cpu")
     try:
         lex = requests.get(W + "/ub/ttslex", headers=H, timeout=30).json() or {}
     except Exception:
