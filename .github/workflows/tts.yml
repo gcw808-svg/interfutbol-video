@@ -1,0 +1,32 @@
+name: tts
+on:
+  workflow_dispatch:
+    inputs:
+      job:
+        required: true
+      mood:
+        required: false
+        default: oddiy
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/huggingface
+          key: tts-v1
+      - run: sudo apt-get update -qq > /dev/null 2>&1; sudo apt-get install -y -qq ffmpeg > /dev/null 2>&1 || true
+      - run: pip install -q torch torchaudio --index-url https://download.pytorch.org/whl/cpu && pip install -q f5-tts soundfile requests
+      - name: Diktor
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          JOB: ${{ inputs.job }}
+          MOOD: ${{ inputs.mood }}
+        run: python3 tts.py
