@@ -107,7 +107,7 @@ def main():
     except Exception:
         lex = {}
     parts = chunks(clean(apply_lex(cyr2lat(text), lex)))
-    NFE = 32 if len(text) <= 400 else 16  # qisqa matnda sifat yuqoriroq
+    NFE = int(os.environ.get("DIKTOR_NFE", "16"))  # CPU'da tezlik uchun 16; GPU'da 32
     sr_out, audio = 24000, []
     gap = np.zeros(int(0.35 * 24000), dtype=np.float32)
     for i, c in enumerate(parts):
