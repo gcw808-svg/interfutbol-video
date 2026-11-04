@@ -225,7 +225,7 @@ def render_pages(j):
     for i, pg in enumerate(pages):
         h = 182 + sum(b[1] for b in pg) + 130
         im = background(h)
-        sub = f"{i + 1}/{len(pages)}" if len(pages) > 1 else ""
+        sub = f"{i + 1}/{len(pages)}" if len(pages) > 1 else j.get("sub", "")
         y = header(im, j, sub)
         d = ImageDraw.Draw(im, "RGBA")
         for k, bh, data in pg:
