@@ -90,9 +90,16 @@ def get_logo(url, size):
     if not url:
         return None
     try:
-        req = urllib.request.Request(url, headers={"user-agent": "InterFutbolCard"})
-        with urllib.request.urlopen(req, timeout=30) as r:
-            im = Image.open(io.BytesIO(r.read())).convert("RGBA")
+        # 3 marta urinish: logotip yuklanmay qolsa kartochka xunuk chiqmasin
+        for k in range(3):
+            try:
+                req = urllib.request.Request(url, headers={"user-agent": "InterFutbolCard"})
+                with urllib.request.urlopen(req, timeout=30) as r:
+                    im = Image.open(io.BytesIO(r.read())).convert("RGBA")
+                break
+            except Exception:
+                if k == 2:
+                    raise
         bb = im.getbbox()
         if bb:
             im = im.crop(bb)
@@ -237,8 +244,8 @@ def club_name(im, cx, top, name, col, box):
     d.rounded_rectangle([cx - 46, yb, cx + 46, yb + 7], radius=4, fill=col + (255,))
 
 
-def render_card(j):
-    # shisha 3: ikki alohida panel, katta liga logotipi, klub nomlari klub rangida
+def render_card_plain(j):
+    # gol bo'lmasa (0:0) — oddiy shisha kartochka; ikki alohida panel, katta liga logotipi, klub nomlari klub rangida
     Wd, Hd = 1280, 720
     hl, al = get_logo(j.get("homeLogo"), 180), get_logo(j.get("awayLogo"), 180)
     c1 = main_color(hl) if hl else (30, 60, 140)
@@ -264,6 +271,62 @@ def render_card(j):
     d.text((Wd // 2, 478), "\u00d6YIN YAKUNLANDI", font=font("bold", 22), fill=(230, 235, 240), anchor="mm")
     lg = logo(74, False)
     im.paste(lg, (Wd // 2 - 37, 626), lg)
+    return im
+
+
+def ball(d, cx, cy, r):
+    # gol belgisi: oq to'p, o'rtasida to'q beshburchak
+    d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=WHITE + (255,))
+    d.regular_polygon((cx, cy, r * 0.42), 5, rotation=0, fill=(20, 24, 32, 255))
+
+
+def render_card(j):
+    # 1-variant (2026-yil 5-noyabr): ikki shisha panel; har panelda logotip, klub nomi va shu klub gollari (ism oq, daqiqa yashil)
+    hg, ag = j.get("hg") or [], j.get("ag") or []
+    if not (hg or ag):
+        return render_card_plain(j)
+    Wd, Hd = 1280, 720
+    hl, al = get_logo(j.get("homeLogo"), 140), get_logo(j.get("awayLogo"), 140)
+    c1 = main_color(hl) if hl else (30, 60, 140)
+    c2 = main_color(al) if al else (140, 30, 40)
+    im = glass_bg(c1, c2)
+    boxes = ([50, 150, 500, 650], [Wd - 500, 150, Wd - 50, 650])
+    for bx in boxes:
+        glass(im, bx)
+    league_top(im, j, 140, 80)
+    d = ImageDraw.Draw(im, "RGBA")
+    lines = [n + " " + ", ".join(m) for n, m in hg + ag]
+    n = max(len(hg), len(ag))
+    s = 26 if n <= 3 else 23 if n <= 5 else 20
+    f = font("bold", s)
+    while s > 16 and any(d.textlength(t, font=f) + 30 > 450 - 70 for t in lines):
+        s -= 1
+        f = font("bold", s)
+    lh = min(s + 14, 165 / max(n, 1))
+    for bx, lg_, name, col, gs in ((boxes[0], hl, j["home"], c1, hg), (boxes[1], al, j["away"], c2, ag)):
+        cx = (bx[0] + bx[2]) // 2
+        if lg_:
+            x_, y_ = cx - lg_.width // 2, 250 - lg_.height // 2
+            if is_dark(lg_):
+                paste_glow(im, lg_, x_, y_, 255, 8)
+                paste_glow(im, lg_, x_, y_, 210, 22)
+            else:
+                paste_glow(im, lg_, x_, y_, 110, 20)
+        club_name(im, cx, 320, name, col, bx)
+        d = ImageDraw.Draw(im, "RGBA")
+        for i, (p, ms) in enumerate(gs):
+            y = 470 + i * lh
+            t1, t2 = p + " ", ", ".join(ms)
+            w = d.textlength(t1 + t2, font=f) + 30
+            x = cx - w / 2
+            ball(d, x + 9, y, 9)
+            d.text((x + 30, y), t1, font=f, fill=WHITE, anchor="lm")
+            d.text((x + 30 + d.textlength(t1, font=f), y), t2, font=f, fill=GREEN, anchor="lm")
+    a, b = j["score"].split(":")
+    d.text((Wd // 2, 330), f"{a} - {b}", font=font("black", 120), fill=WHITE, anchor="mm")
+    d.text((Wd // 2, 430), "ÖYIN YAKUNLANDI", font=font("bold", 22), fill=(230, 235, 240), anchor="mm")
+    lg = logo(64, False)
+    im.paste(lg, (Wd // 2 - 32, 600), lg)
     return im
 
 
