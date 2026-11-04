@@ -120,13 +120,29 @@ def plain(s):
     return re.sub(r"\s+", " ", H.unescape(re.sub(r"<[^>]+>", "", s or ""))).strip()
 
 
+def title_words(s):
+    import re
+    t = plain(s).lower()
+    for a, b in (("ö", "o"), ("ğ", "g"), ("ş", "sh"), ("ç", "ch")):
+        t = t.replace(a, b)
+    t = re.sub(r"['‘’ʻʼ`]", "", t)
+    return {w for w in re.split(r"\W+", t) if len(w) > 3}
+
+
+def same_title(a, b):
+    # bir yangilik boshqacha yozilgan bo'lsa ham tanish uchun: sarlavhalardagi umumiy so'zlar solishtiriladi
+    A, B = title_words(a), title_words(b)
+    n = len(A & B)
+    return n >= 4 and n / min(len(A), len(B)) >= 0.7
+
+
 async def already_posted(c, ch, html):
     # takror chiqmasin: kanalning oxirgi 15 xabarida xuddi shu sarlavha bo'lsa, qayta yubormaydi
     head = plain(html.split("\n")[0])[:60]
     if len(head) < 15:
         return None
     async for m in c.iter_messages(ch, limit=15):
-        if plain(m.raw_text or "").startswith(head[:40]):
+        if plain(m.raw_text or "").startswith(head[:40]) or same_title(html.split("\n")[0], (m.raw_text or "").split("\n")[0]):
             return m.id
     return None
 
