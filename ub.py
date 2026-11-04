@@ -178,7 +178,12 @@ async def post(job):
                 done({"id": job, "ok": True, "msg_id": dup, "dup": True})
                 return
         if j.get("edit"):
-            m = await c.edit_message(ch, int(j["edit"]), j["html"], parse_mode="html", link_preview=bool(j.get("video")))
+            # editPhoto bo'lsa — post rasmi ham almashtiriladi (masalan natija kartochkasi yangi dizaynda)
+            ef = None
+            if j.get("editPhoto"):
+                ef = io.BytesIO(http(j["editPhoto"], headers={"user-agent": "InterFutbolUB"}, timeout=60))
+                ef.name = "photo.jpg"
+            m = await c.edit_message(ch, int(j["edit"]), j["html"], parse_mode="html", link_preview=bool(j.get("video")), file=ef)
         elif j.get("photo"):
             f = io.BytesIO(http(j["photo"], headers={"user-agent": "InterFutbolUB"}, timeout=60))
             f.name = "photo.jpg"
