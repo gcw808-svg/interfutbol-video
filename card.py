@@ -185,15 +185,8 @@ def glass(im, box, alpha=26, line=60, r=36, white=False):
 
 
 def league_top(im, j, size=150, y=86):
-    # liga logotipi asl ranglarida, fonsiz; to'q bo'lsa orqasida kuchli yumshoq yorug'lik
-    ll = get_logo(j.get("leagueLogo"), size)
-    if ll:
-        x0, y0 = im.width // 2 - ll.width // 2, y - ll.height // 2
-        if is_dark(ll):
-            paste_glow(im, ll, x0, y0, 255, 10)
-            paste_glow(im, ll, x0, y0, 200, 26)
-        else:
-            paste_glow(im, ll, x0, y0, 90, 16)
+    # liga logotipi fonsiz (league_mark qoidasi bo'yicha)
+    paste_league_free(im, j, size, im.width // 2, y)
 
 
 def xfont(name, size, text=""):
@@ -274,39 +267,95 @@ def render_card(j):
     return im
 
 
+def league_mark(ll, name=""):
+    # liga logotipi FONSIZ: Premier League asl rangida (orqasida yengil nur bilan), boshqa to'q logotiplarning to'q qismlari oqqa aylanadi
+    ll = ll.convert("RGBA")
+    if "premier" in (name or "").lower():
+        return ll, True
+    if not is_dark(ll):
+        return ll, False
+    px = ll.load()
+    for yy in range(ll.height):
+        for xx in range(ll.width):
+            r, g, b, a = px[xx, yy]
+            if a:
+                mx, mn = max(r, g, b) / 255, min(r, g, b) / 255
+                if (mx + mn) / 2 < 0.33:
+                    px[xx, yy] = (245, 247, 250, a)
+    return ll, False
+
+
+def paste_league_free(im, j, size, cx, cy):
+    ll = get_logo(j.get("leagueLogo"), size)
+    if not ll:
+        return
+    ll, glow_ = league_mark(ll, j.get("league") or "")
+    x0, y0 = int(cx - ll.width / 2), int(cy - ll.height / 2)
+    if glow_:
+        paste_glow(im, ll, x0, y0, 230, 16)
+    else:
+        im.paste(ll, (x0, y0), ll)
+
+
+def render_news(j):
+    # surat topilmagan yangilik: chapda klub logotiplari (asosiy klub rangida), o'ngda yirik sarlavha, tepada liga, pastda iF
+    Wd, Hd = 1280, 720
+    NAVY = (10, 14, 22)
+    hl = get_logo(j.get("homeLogo"), 520)
+    al = get_logo(j.get("awayLogo"), 130)
+    c1 = main_color(hl) if hl else (40, 70, 60)
+    im = Image.new("RGB", (Wd, Hd), NAVY)
+    d = ImageDraw.Draw(im, "RGBA")
+    for x in range(560):
+        t = x / 560
+        d.line([x, 0, x, Hd], fill=tuple(int(c1[i] * 0.6 * (1 - t) + NAVY[i] * t) for i in range(3)))
+    if hl:
+        faint = hl.copy()
+        faint.putalpha(faint.split()[3].point(lambda v: v * 22 // 100))
+        im.paste(faint, (-90, (Hd - faint.height) // 2), faint)
+        main = hl.copy()
+        main.thumbnail((180, 180), Image.LANCZOS)
+        cy = 250 if al else Hd // 2
+        x_, y_ = 190 - main.width // 2, cy - main.height // 2
+        if is_dark(main):
+            paste_glow(im, main, x_, y_, 230, 14)
+        else:
+            paste_glow(im, main, x_, y_, 80, 16)
+        if al:
+            x_, y_ = 190 - al.width // 2, 470 - al.height // 2
+            if is_dark(al):
+                paste_glow(im, al, x_, y_, 230, 12)
+            else:
+                paste_glow(im, al, x_, y_, 80, 14)
+    else:
+        big = logo(220, False)
+        im.paste(big, (190 - 110, Hd // 2 - 110), big)
+    d = ImageDraw.Draw(im, "RGBA")
+    d.rectangle([560, 150, 566, 570], fill=GREEN + (255,))
+    title = j.get("title") or "Inter Futbol"
+    f = font("black", 54)
+    lines = wrap(d, title, f, 620)
+    if len(lines) > 5:
+        f = font("black", 44)
+        lines = wrap(d, title, f, 620)[:6]
+    lh = int(f.size * 1.22)
+    y = (Hd - lh * len(lines)) / 2
+    for ln in lines:
+        d.text((610, y), ln, font=f, fill=WHITE)
+        y += lh
+    paste_league_free(im, j, 120, Wd - 100, 95)
+    lg = logo(56, False)
+    im.paste(lg, (Wd - 70 - 28, Hd - 60 - 28), lg)
+    return im
+
+
 def render(j):
     if j.get("score") and j.get("home") and j.get("away"):
         im = render_card(j)
         buf = io.BytesIO()
         im.save(buf, "PNG", optimize=True)
         return buf.getvalue()
-    Wd, Hd = 1280, 720
-    im = background(Wd, Hd)
-    d = ImageDraw.Draw(im, "RGBA")
-    league = (j.get("league") or "").upper()
-    lx = 60
-    ll = get_logo(j.get("leagueLogo"), 70)
-    if ll:
-        paste_league(im, ll, 60 + (90 - ll.width) // 2, 81 - ll.height // 2)
-        lx = 166
-    if league:
-        f = font("bold", 30)
-        tw = d.textlength(league, font=f)
-        d.rounded_rectangle([lx, 56, lx + tw + 44, 106], radius=25, fill=GREEN + (255,))
-        d.text((lx + 22, 81), league, font=f, fill=(10, 20, 12), anchor="lm")
-    title = j.get("title") or "Inter Futbol"
-    f = font("black", 64)
-    lines = wrap(d, title, f, Wd - 160)
-    if len(lines) > 4:
-        f = font("black", 52)
-        lines = wrap(d, title, f, Wd - 160)[:5]
-    lh = int(f.size * 1.18)
-    y = Hd // 2 - lh * len(lines) // 2 + 10
-    d.rectangle([60, y + 6, 70, y + lh * len(lines) - 14], fill=GREEN + (255,))
-    for i, ln in enumerate(lines):
-        d.text((96, y + i * lh), ln, font=f, fill=WHITE)
-    lg = logo(96)
-    im.paste(lg, (Wd - 60 - 96, 40), lg)
+    im = render_news(j)
     buf = io.BytesIO()
     im.save(buf, "PNG", optimize=True)
     return buf.getvalue()
