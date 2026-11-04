@@ -280,10 +280,17 @@ def ball(d, cx, cy, r):
     d.regular_polygon((cx, cy, r * 0.42), 5, rotation=0, fill=(20, 24, 32, 255))
 
 
+def redcard(d, cx, cy):
+    # qizil kartochka belgisi
+    d.rounded_rectangle([cx - 7, cy - 10, cx + 7, cy + 10], radius=2, fill=(226, 48, 48, 255))
+
+
 def render_card(j):
-    # 1-variant (2026-yil 5-noyabr): ikki shisha panel; har panelda logotip, klub nomi va shu klub gollari (ism oq, daqiqa yashil)
-    hg, ag = j.get("hg") or [], j.get("ag") or []
-    if not (hg or ag):
+    # 1-variant (2026-yil 5-noyabr): ikki shisha panel; har panelda logotip, klub nomi, shu klub gollari (ism oq, daqiqa yashil) va qizil kartochkalari
+    # qatorlar: gollar ("g") va qizil kartochkalar ("r")
+    hrows = [("g", n, ms) for n, ms in (j.get("hg") or [])] + [("r", n, [m]) for n, m in (j.get("hr") or [])]
+    arows = [("g", n, ms) for n, ms in (j.get("ag") or [])] + [("r", n, [m]) for n, m in (j.get("ar") or [])]
+    if not (hrows or arows):
         return render_card_plain(j)
     Wd, Hd = 1280, 720
     hl, al = get_logo(j.get("homeLogo"), 140), get_logo(j.get("awayLogo"), 140)
@@ -295,15 +302,15 @@ def render_card(j):
         glass(im, bx)
     league_top(im, j, 140, 80)
     d = ImageDraw.Draw(im, "RGBA")
-    lines = [n + " " + ", ".join(m) for n, m in hg + ag]
-    n = max(len(hg), len(ag))
+    lines = [n + " " + ", ".join(m) for _, n, m in hrows + arows]
+    n = max(len(hrows), len(arows))
     s = 26 if n <= 3 else 23 if n <= 5 else 20
     f = font("bold", s)
     while s > 16 and any(d.textlength(t, font=f) + 30 > 450 - 70 for t in lines):
         s -= 1
         f = font("bold", s)
     lh = min(s + 14, 165 / max(n, 1))
-    for bx, lg_, name, col, gs in ((boxes[0], hl, j["home"], c1, hg), (boxes[1], al, j["away"], c2, ag)):
+    for bx, lg_, name, col, gs in ((boxes[0], hl, j["home"], c1, hrows), (boxes[1], al, j["away"], c2, arows)):
         cx = (bx[0] + bx[2]) // 2
         if lg_:
             x_, y_ = cx - lg_.width // 2, 250 - lg_.height // 2
@@ -314,20 +321,24 @@ def render_card(j):
                 paste_glow(im, lg_, x_, y_, 110, 20)
         club_name(im, cx, 320, name, col, bx)
         d = ImageDraw.Draw(im, "RGBA")
-        for i, (p, ms) in enumerate(gs):
+        for i, (kind, p, ms) in enumerate(gs):
             y = 470 + i * lh
             t1, t2 = p + " ", ", ".join(ms)
             w = d.textlength(t1 + t2, font=f) + 30
             x = cx - w / 2
-            ball(d, x + 9, y, 9)
+            if kind == "r":
+                redcard(d, x + 9, y)
+            else:
+                ball(d, x + 9, y, 9)
             d.text((x + 30, y), t1, font=f, fill=WHITE, anchor="lm")
-            d.text((x + 30 + d.textlength(t1, font=f), y), t2, font=f, fill=GREEN, anchor="lm")
+            d.text((x + 30 + d.textlength(t1, font=f), y), t2, font=f, fill=GREEN if kind == "g" else (235, 120, 120), anchor="lm")
     a, b = j["score"].split(":")
     d.text((Wd // 2, 330), f"{a} - {b}", font=font("black", 120), fill=WHITE, anchor="mm")
     d.text((Wd // 2, 430), "ÖYIN YAKUNLANDI", font=font("bold", 22), fill=(230, 235, 240), anchor="mm")
     lg = logo(64, False)
     im.paste(lg, (Wd // 2 - 32, 600), lg)
     return im
+
 
 
 def league_mark(ll, name=""):
