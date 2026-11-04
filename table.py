@@ -39,6 +39,25 @@ def paste_logo(im, l, cx, cy):
         im.paste(l, (x, y), l)
 
 
+def paste_comp(im, l, cx, cy, name=""):
+    # turnir logotipi fonsiz: Premier League asl rangida yengil nur bilan, boshqa to'q logotiplarning to'q qismlari oqqa aylanadi
+    if not l:
+        return
+    l = l.copy().convert("RGBA")
+    x, y = int(cx - l.width / 2), int(cy - l.height / 2)
+    if "premier" in (name or "").lower():
+        paste_glow(im, l, x, y, 230, 6)
+        return
+    if is_dark(l):
+        px = l.load()
+        for yy in range(l.height):
+            for xx in range(l.width):
+                r, g, b, a = px[xx, yy]
+                if a and (max(r, g, b) + min(r, g, b)) / 510 < 0.33:
+                    px[xx, yy] = (245, 247, 250, a)
+    im.paste(l, (x, y), l)
+
+
 def name_font(text, size):
     return xfont("oswald-latin-700-normal.woff", size, text)
 
@@ -130,7 +149,7 @@ def matches_blocks(j):
 
 def draw_matches(im, d, j, kind, y, h, data):
     if kind == "mhead":
-        paste_logo(im, lg(j, data["comp"], 40), 72, y + 38)
+        paste_comp(im, lg(j, data["comp"], 40), 72, y + 38, data["comp"])
         d.text((108, y + 38), data["comp"], font=font("black", 30), fill=WHITE, anchor="lm")
         if data["day"]:
             d.text((Wd - 48, y + 38), data["day"], font=font("bold", 22), fill=GREY, anchor="rm")
