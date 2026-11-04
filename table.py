@@ -124,7 +124,11 @@ def draw_standings(im, d, j, kind, y, h, data):
             d.text((x, y + 24), data[k], font=font("bold", 20), fill=GREY, anchor="mm")
     else:
         r = data
-        if r["p"] % 2:
+        if r.get("hl"):
+            # bizning klublar (kanal kuzatadigan klublar) yashil rang bilan ajratiladi
+            d.rounded_rectangle([28, y + 3, Wd - 28, y + h - 3], radius=10, fill=GREEN + (52,))
+            d.rounded_rectangle([28, y + 3, 35, y + h - 3], radius=3, fill=GREEN + (255,))
+        elif r["p"] % 2:
             d.rounded_rectangle([28, y + 3, Wd - 28, y + h - 3], radius=10, fill=ROW_BG)
         d.text((86, y + h // 2), str(r["p"]), font=font("bold", 24), fill=GREY, anchor="rm")
         paste_logo(im, lg(j, r["n"], 36), 130, y + h // 2)
@@ -261,6 +265,12 @@ if __name__ == "__main__":
     job = os.environ.get("JOB")
     j = wapi("/ub/tjob?id=" + job)
     if j:
-        pages = render_pages(j)
+        if j.get("multi"):
+            # bir nechta liga jadvali bitta albom uchun: har biri alohida rasm
+            pages = []
+            for sj in j["multi"]:
+                pages += render_pages({**sj, "logos": j.get("logos") or {}, "L": j["L"]})
+        else:
+            pages = render_pages(j)
         for i, png in enumerate(pages):
             wapi(f"/ub/timg?id={job}&last={1 if i == len(pages) - 1 else 0}", png, "image/png")
