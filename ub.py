@@ -105,6 +105,32 @@ def story_canvas(raw):
     return out.getvalue()
 
 
+def done(body):
+    # natijani botga yetkazish: tarmoq xatosida 4 marta qayta urinadi
+    for i in range(4):
+        try:
+            return wapi("/ub/done", body)
+        except Exception as e:
+            print("done xato", e)
+            time.sleep(5 * (i + 1))
+
+
+def plain(s):
+    import re, html as H
+    return re.sub(r"\s+", " ", H.unescape(re.sub(r"<[^>]+>", "", s or ""))).strip()
+
+
+async def already_posted(c, ch, html):
+    # takror chiqmasin: kanalning oxirgi 15 xabarida xuddi shu sarlavha bo'lsa, qayta yubormaydi
+    head = plain(html.split("\n")[0])[:60]
+    if len(head) < 15:
+        return None
+    async for m in c.iter_messages(ch, limit=15):
+        if plain(m.raw_text or "").startswith(head[:40]):
+            return m.id
+    return None
+
+
 async def post(job):
     from telethon import TelegramClient
     from telethon.sessions import StringSession
@@ -126,8 +152,15 @@ async def post(job):
             r = await c(SendStoryRequest(peer=peer, media=InputMediaUploadedPhoto(file=up), privacy_rules=[InputPrivacyValueAllowAll()], period=86400))
             sid = next((u.id for u in (getattr(r, "updates", None) or []) if type(u).__name__ == "UpdateStoryID"), 0)
             await c.disconnect()
-            wapi("/ub/done", {"id": job, "ok": True, "msg_id": 0, "story": sid})
+            done({"id": job, "ok": True, "msg_id": 0, "story": sid})
             return
+        if not j.get("edit") and not j.get("story"):
+            dup = await already_posted(c, ch, j["html"])
+            if dup:
+                await c.disconnect()
+                print("takror post, yuborilmadi", dup)
+                done({"id": job, "ok": True, "msg_id": dup, "dup": True})
+                return
         if j.get("edit"):
             m = await c.edit_message(ch, int(j["edit"]), j["html"], parse_mode="html", link_preview=bool(j.get("video")))
         elif j.get("photo"):
@@ -137,10 +170,13 @@ async def post(job):
         else:
             m = await c.send_message(ch, j["html"], parse_mode="html", link_preview=bool(j.get("video")))
         await c.disconnect()
-        wapi("/ub/done", {"id": job, "ok": True, "msg_id": m.id})
+        posted = m.id
     except Exception as e:
         print("xato", e)
-        wapi("/ub/done", {"id": job, "ok": False, "err": str(e)[:300]})
+        done({"id": job, "ok": False, "err": str(e)[:300]})
+        return
+    # post chiqdi — endi faqat muvaffaqiyat haqida xabar beriladi (xato deb qayta yuborilmaydi)
+    done({"id": job, "ok": True, "msg_id": posted})
 
 
 if __name__ == "__main__":
