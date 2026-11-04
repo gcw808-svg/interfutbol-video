@@ -83,11 +83,33 @@ async def login(chat):
     await c.disconnect()
 
 
+def story_canvas(raw):
+    # istoriya uchun 1080x1920 (9:16) tuval: brend foni, rasm markazda
+    try:
+        from PIL import Image
+    except ImportError:
+        os.system("pip install -q pillow")
+        from PIL import Image
+    im = Image.open(io.BytesIO(raw)).convert("RGB")
+    W_, H_ = 1080, 1920
+    bg = Image.new("RGB", (W_, H_), (10, 14, 22))
+    w = 1040
+    h = int(im.height * w / im.width)
+    if h > 1800:
+        h = 1800
+        w = int(im.width * h / im.height)
+    im = im.resize((w, h), Image.LANCZOS)
+    bg.paste(im, ((W_ - w) // 2, (H_ - h) // 2))
+    out = io.BytesIO()
+    bg.save(out, "JPEG", quality=93)
+    return out.getvalue()
+
+
 async def post(job):
     from telethon import TelegramClient
     from telethon.sessions import StringSession
     j = wapi("/ub/job?id=" + job)
-    if not j.get("html"):
+    if not j.get("html") and not j.get("story"):
         return
     try:
         c = TelegramClient(StringSession(j["session"]), API_ID, API_HASH)
@@ -95,6 +117,17 @@ async def post(job):
         if not await c.is_user_authorized():
             raise Exception("hisob ulanishi bekor qilingan (qayta /ulanish kerak)")
         ch = j["channel"]
+        if j.get("story"):
+            from telethon.tl.functions.stories import SendStoryRequest
+            from telethon.tl.types import InputMediaUploadedPhoto, InputPrivacyValueAllowAll
+            img = story_canvas(http(j["story"], headers={"user-agent": "InterFutbolUB"}, timeout=60))
+            up = await c.upload_file(img, file_name="story.jpg")
+            peer = await c.get_input_entity(ch)
+            r = await c(SendStoryRequest(peer=peer, media=InputMediaUploadedPhoto(file=up), privacy_rules=[InputPrivacyValueAllowAll()], period=86400))
+            sid = next((u.id for u in (getattr(r, "updates", None) or []) if type(u).__name__ == "UpdateStoryID"), 0)
+            await c.disconnect()
+            wapi("/ub/done", {"id": job, "ok": True, "msg_id": 0, "story": sid})
+            return
         if j.get("edit"):
             m = await c.edit_message(ch, int(j["edit"]), j["html"], parse_mode="html", link_preview=bool(j.get("video")))
         elif j.get("photo"):
