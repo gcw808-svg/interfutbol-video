@@ -1,0 +1,25 @@
+name: modalcard
+# zaxira kartochka chizuvchini Modal'ga joylash (card.py o'zgarganda qayta ishga tushiriladi)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["card.py", "modal_card.py"]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -q modal fastapi
+      - name: deploy
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        run: |
+          KEY=$(python -c "import hashlib,os;print(hashlib.sha256(('ub-'+os.environ['BOT_TOKEN']).encode()).hexdigest()[:40])")
+          modal secret create inter-card CARD_KEY=$KEY --force > /dev/null
+          modal deploy modal_card.py
