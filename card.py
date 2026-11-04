@@ -341,6 +341,89 @@ def render_card(j):
 
 
 
+def lineup_order(L):
+    # tartib: darvozabon, himoyachilar, yarim himoyachilar, hujumchilar
+    def g(p):
+        p = (p or "").upper()
+        if p.startswith("G"):
+            return 0
+        if "B" in p or p.startswith("CD") or p.startswith("D") and not p.startswith("DM"):
+            return 1
+        if "M" in p:
+            return 2
+        return 3
+    def side(p):
+        # o'ngdan chapga: RB, CD-R, CD, CD-L, LB (yarim himoya va hujumda ham shunday)
+        p = (p or "").upper()
+        if p.startswith("R"):
+            return 0
+        if p.endswith("-R"):
+            return 1
+        if p.endswith("-L"):
+            return 3
+        if p.startswith("L"):
+            return 4
+        return 2
+    return sorted(L, key=lambda x: (g(x[2] if len(x) > 2 else ""), side(x[2] if len(x) > 2 else "")))
+
+
+def render_lineup(j):
+    # asosiy tarkiblar kartochkasi: ikki shisha panel (logotip, nom, sxema, 11 futbolchi), o'rtada liga, sana va vaqt
+    Wd, Hd = 1280, 720
+    hl, al = get_logo(j.get("homeLogo"), 96), get_logo(j.get("awayLogo"), 96)
+    c1 = main_color(hl) if hl else (30, 60, 140)
+    c2 = main_color(al) if al else (140, 30, 40)
+    im = glass_bg(c1, c2)
+    boxes = ([40, 40, 470, 680], [Wd - 470, 40, Wd - 40, 680])
+    for bx in boxes:
+        glass(im, bx)
+    paste_league_free(im, j, 120, Wd // 2, 120)
+    d = ImageDraw.Draw(im, "RGBA")
+    d.text((Wd // 2, 236), "ASOSIY", font=font("black", 34), fill=WHITE, anchor="mm")
+    d.text((Wd // 2, 276), "TARKIBLAR", font=font("black", 34), fill=WHITE, anchor="mm")
+    d.rounded_rectangle([Wd // 2 - 40, 304, Wd // 2 + 40, 310], radius=3, fill=GREEN + (255,))
+    if j.get("time"):
+        d.text((Wd // 2, 372), j["time"], font=font("black", 64), fill=WHITE, anchor="mm")
+        d.text((Wd // 2, 420), "Toşkent vaqti", font=font("bold", 20), fill=(220, 226, 232), anchor="mm")
+    if j.get("date"):
+        d.text((Wd // 2, 456), j["date"], font=font("bold", 20), fill=(220, 226, 232), anchor="mm")
+    lg = logo(64, False)
+    im.paste(lg, (Wd // 2 - 32, 596), lg)
+    for bx, lg_, name, col, L, fm in ((boxes[0], hl, j["home"], c1, j.get("hl") or [], j.get("hf")), (boxes[1], al, j["away"], c2, j.get("al") or [], j.get("af"))):
+        cx = (bx[0] + bx[2]) // 2
+        if lg_:
+            x_, y_ = cx - lg_.width // 2, 100 - lg_.height // 2
+            if is_dark(lg_):
+                paste_glow(im, lg_, x_, y_, 255, 8)
+                paste_glow(im, lg_, x_, y_, 210, 18)
+            else:
+                paste_glow(im, lg_, x_, y_, 110, 16)
+        d = ImageDraw.Draw(im, "RGBA")
+        t = name.upper()
+        f = xfont(NAME_FONT[0], 34, t)
+        while d.textlength(t, font=f) > (bx[2] - bx[0]) - 60 and f.size > 22:
+            f = xfont(NAME_FONT[0], f.size - 2, t)
+        d.text((cx, 178), t, font=f, fill=WHITE, anchor="mm")
+        if fm:
+            d.text((cx, 214), fm, font=font("bold", 22), fill=GREEN, anchor="mm")
+        d.line([bx[0] + 30, 240, bx[2] - 30, 240], fill=(255, 255, 255, 50), width=2)
+        rows = lineup_order(L)[:11]
+        fs = 23
+        fn = font("bold", fs)
+        fnum = font("black", fs)
+        while fs > 16 and any(d.textlength(r[1], font=fn) > (bx[2] - bx[0]) - 120 for r in rows):
+            fs -= 1
+            fn, fnum = font("bold", fs), font("black", fs)
+        lh = 38
+        y0 = 268
+        for i, r in enumerate(rows):
+            y = y0 + i * lh
+            d.text((bx[0] + 70, y), str(r[0] or ""), font=fnum, fill=GREEN, anchor="rm")
+            d.text((bx[0] + 88, y), r[1], font=fn, fill=WHITE, anchor="lm")
+    return im
+
+
+
 def league_mark(ll, name=""):
     # liga logotipi FONSIZ: Premier League asl rangida (orqasida yengil nur bilan), boshqa to'q logotiplarning to'q qismlari oqqa aylanadi
     ll = ll.convert("RGBA")
@@ -424,6 +507,11 @@ def render_news(j):
 
 
 def render(j):
+    if j.get("lineup"):
+        im = render_lineup(j)
+        buf = io.BytesIO()
+        im.save(buf, "PNG", optimize=True)
+        return buf.getvalue()
     if j.get("score") and j.get("home") and j.get("away"):
         im = render_card(j)
         buf = io.BytesIO()
