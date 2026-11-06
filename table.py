@@ -1,6 +1,6 @@
 # Inter Futbol: natijalar, turnir jadvali va to'purarlar ro'yxatini rasmga chizish (1080 kenglik)
-import io, json, os, urllib.request
-from PIL import Image, ImageDraw
+import io, json, os, time, urllib.request
+from PIL import Image, ImageDraw, ImageFilter
 import card
 from card import font, xfont, get_logo, paste_glow, is_dark, logo, WHITE, GREEN, W, KEY
 
@@ -223,6 +223,117 @@ def draw_catalog(im, d, j, kind, y, h, data):
         d.text((x + 64, y + h // 2), clip(d, n, f, 255), font=f, fill=WHITE, anchor="lm")
 
 
+# ---------- istoriya: o'yinlar jadvali (tik 1080x1920, 2026-yil 7-noyabr tasdiqlangan "1-variant") ----------
+SW, SH = 1080, 1920
+S_TOP, S_BOTTOM = 230, 1670  # Telegram/Instagram tugmalari yopmaydigan xavfsiz qism
+S_ROW, S_HDR = 92, 70
+
+
+def _sfont(w, s):
+    return font(w, s)
+
+
+def _sbg():
+    im = Image.new("RGB", (SW, SH), (10, 14, 22))
+    gl = Image.new("RGBA", (SW, SH), (0, 0, 0, 0))
+    g = ImageDraw.Draw(gl)
+    g.ellipse([SW // 2 - 900, -650, SW // 2 + 900, 520], fill=(91, 182, 55, 34))
+    g.ellipse([SW - 500, SH - 420, SW + 500, SH + 420], fill=(91, 182, 55, 22))
+    gl = gl.filter(ImageFilter.GaussianBlur(160))
+    im.paste(gl, (0, 0), gl)
+    return im
+
+
+def _sday(day):
+    # "2026-yil 8-noyabr" -> "8-noyabr"
+    return day.split("yil", 1)[-1].strip() if "yil" in day else day
+
+
+def story_pages(j):
+    # turnirlar bo'yicha birlashtiriladi (bir turnir ikki kunga bo'lingan bo'lsa ham bitta guruh)
+    days = [g["day"] for g in j["groups"] for _ in g["items"] if g.get("day")]
+    main_day = max(set(days), key=days.count) if days else ""
+    comps, order = {}, []
+    for g in j["groups"]:
+        if g["comp"] not in comps:
+            comps[g["comp"]] = []
+            order.append(g["comp"])
+        for m in g["items"]:
+            comps[g["comp"]].append((m, "" if (g.get("day") or main_day) == main_day else _sday(g["day"])))
+    first_top = S_TOP + 270
+    pages, cur, used = [], [], 0
+    rest = [(c, comps[c]) for c in order]
+    while rest:
+        cap = S_BOTTOM - first_top
+        used, cur = 0, []
+        for c, ms in rest[:]:
+            h = S_HDR + S_ROW * len(ms)
+            if used + h <= cap:
+                cur.append((c, ms))
+                used += h
+                rest.remove((c, ms))
+        if not cur:
+            # bitta turnirning o'zi sig'masa, bo'lib yuboriladi
+            c, ms = rest[0]
+            k = max(1, (cap - S_HDR) // S_ROW)
+            cur = [(c, ms[:k])]
+            rest[0] = (c, ms[k:])
+        pages.append(cur)
+    return pages, main_day
+
+
+def render_story(j):
+    pages, main_day = story_pages(j)
+    out = []
+    for pi, pg in enumerate(pages, 1):
+        im = _sbg()
+        d = ImageDraw.Draw(im, "RGBA")
+        x0 = 60
+        d.text((x0, S_TOP), "ÖYINLAR", font=_sfont("black", 84), fill=WHITE, anchor="lt")
+        d.text((x0, S_TOP + 94), "JADVALI", font=_sfont("black", 84), fill=GREEN, anchor="lt")
+        sub = ((main_day + " · ") if main_day else "") + "Toşkent vaqti bilan"
+        d.text((x0, S_TOP + 200), sub, font=_sfont("bold", 34), fill=(168, 179, 194), anchor="lm")
+        d.rounded_rectangle([x0, S_TOP + 246, x0 + 140, S_TOP + 252], radius=3, fill=GREEN + (255,))
+        if len(pages) > 1:
+            t = f"{pi}/{len(pages)}"
+            f = _sfont("black", 30)
+            w = d.textlength(t, font=f) + 44
+            d.rounded_rectangle([SW - 60 - w, S_TOP + 10, SW - 60, S_TOP + 62], radius=26, fill=WHITE + (255,))
+            d.text((SW - 60 - w / 2, S_TOP + 36), t, font=f, fill=(10, 14, 22), anchor="mm")
+        y = S_TOP + 270
+        for comp, ms in pg:
+            paste_comp(im, lg(j, comp, 46), x0 + 23, y + 36, comp)
+            d = ImageDraw.Draw(im, "RGBA")
+            d.text((x0 + 62, y + 36), comp.upper(), font=_sfont("black", 30), fill=(221, 227, 234), anchor="lm")
+            y += S_HDR
+            for m, nd in ms:
+                top_, bot_ = y + 7, y + S_ROW - 7
+                cy = (top_ + bot_) // 2
+                d.rounded_rectangle([x0, top_, SW - x0, bot_], radius=18, fill=(255, 255, 255, 14), outline=(255, 255, 255, 20), width=1)
+                cx = SW // 2
+                pw = 146
+                d.rounded_rectangle([cx - pw // 2, cy - 30, cx + pw // 2, cy + 30], radius=12, fill=GREEN + (255,))
+                tt = m.get("s") or m.get("t") or ""
+                if nd:
+                    d.text((cx, cy - 7), tt, font=_sfont("black", 34), fill=(10, 14, 22), anchor="mm")
+                    d.text((cx, cy + 19), nd, font=_sfont("black", 15), fill=(10, 14, 22), anchor="mm")
+                else:
+                    d.text((cx, cy), tt, font=_sfont("black", 38), fill=(10, 14, 22), anchor="mm")
+                paste_logo(im, lg(j, m["h"], 50), cx - pw // 2 - 36, cy)
+                paste_logo(im, lg(j, m["a"], 50), cx + pw // 2 + 36, cy)
+                d = ImageDraw.Draw(im, "RGBA")
+                fn = _sfont("bold", 30)
+                d.text((cx - pw // 2 - 72, cy), clip(d, m["h"], fn, 300), font=fn, fill=WHITE, anchor="rm")
+                d.text((cx + pw // 2 + 72, cy), clip(d, m["a"], fn, 300), font=fn, fill=WHITE, anchor="lm")
+                y += S_ROW
+        l = logo(86, False)
+        im.paste(l, (SW // 2 - 43, SH - 150 - 86), l)
+        buf = io.BytesIO()
+        im.convert("RGB").save(buf, "JPEG", quality=92)
+        out.append(buf.getvalue())
+    return out
+
+
 def render_pages(j):
     kind = j["kind"]
     blocks = {"standings": standings_blocks, "matches": matches_blocks, "scorers": scorers_blocks, "catalog": catalog_blocks}[kind](j)
@@ -272,5 +383,14 @@ if __name__ == "__main__":
                 pages += render_pages({**sj, "logos": j.get("logos") or {}, "L": j["L"]})
         else:
             pages = render_pages(j)
+        if j.get("story") and j.get("kind") == "matches" and not j.get("multi"):
+            # tik istoriya (Telegram + Instagram): oddiy rasmdan oldin yuboriladi
+            try:
+                for i, jpg in enumerate(render_story(j)):
+                    if i:
+                        time.sleep(45)  # Telegram istoriyalari tartibi buzilmasin
+                    wapi(f"/ub/simg?id={job}&n={i}", jpg, "image/jpeg")
+            except Exception as e:
+                print("istoriya xato", e)
         for i, png in enumerate(pages):
             wapi(f"/ub/timg?id={job}&last={1 if i == len(pages) - 1 else 0}", png, "image/png")
