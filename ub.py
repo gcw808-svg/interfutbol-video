@@ -156,13 +156,19 @@ async def post(job):
     from telethon import TelegramClient
     from telethon.sessions import StringSession
     j = wapi("/ub/job?id=" + job)
-    if not j.get("html") and not j.get("story"):
+    if not j.get("html") and not j.get("story") and not j.get("check"):
         return
     try:
         c = TelegramClient(StringSession(j["session"]), API_ID, API_HASH)
         await c.connect()
         if not await c.is_user_authorized():
             raise Exception("hisob ulanishi bekor qilingan (qayta /ulanish kerak)")
+        if j.get("check"):
+            # kunlik tekshiruv: hisob ishlayaptimi (har kuni ulanish Telegramga hisob "faol" ekanini ham bildiradi)
+            me = await c.get_me()
+            await c.disconnect()
+            done({"id": job, "ok": True, "check": 1, "me": getattr(me, "id", 0)})
+            return
         ch = j["channel"]
         if j.get("story"):
             from telethon.tl.functions.stories import SendStoryRequest
