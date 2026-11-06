@@ -637,6 +637,13 @@ if __name__ == "__main__":
             if j.get("story") and j.get("score") and j.get("home") and j.get("away"):
                 # tik natija istoriyasi (Telegram + Instagram), faqat top o'yinlar
                 try:
-                    wapi("/ub/simg?id=" + job, render_story_result(j), "image/jpeg")
+                    sj = render_story_result(j)
+                    for k in range(3):  # tarmoq xatosida 3 marta urinadi
+                        try:
+                            wapi("/ub/simg?id=" + job, sj, "image/jpeg")
+                            break
+                        except Exception as e:
+                            print("istoriya qayta", k, e)
+                            __import__("time").sleep(10)
                 except Exception as e:
                     print("istoriya xato", e)
