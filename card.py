@@ -602,7 +602,7 @@ def render_story_result(j):
     lg = logo(86, False)
     im.paste(lg, (Wd // 2 - 43, Hd - 150 - 86), lg)
     buf = io.BytesIO()
-    im.convert("RGB").save(buf, "JPEG", quality=92)
+    im.convert("RGB").save(buf, "JPEG", quality=95, subsampling=0)
     return buf.getvalue()
 
 
