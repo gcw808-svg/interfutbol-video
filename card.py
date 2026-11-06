@@ -506,6 +506,106 @@ def render_news(j):
     return im
 
 
+# ---------- istoriya: natija kartochkasi (tik 1080x1920, 2026-yil 7-noyabr tasdiqlangan dizayn) ----------
+def _spaced(d, xy, text, f, fill, sp):
+    w = sum(d.textlength(ch, font=f) for ch in text) + sp * (len(text) - 1)
+    x, y = xy[0] - w / 2, xy[1]
+    for ch in text:
+        d.text((x, y), ch, font=f, fill=fill, anchor="lm")
+        x += d.textlength(ch, font=f) + sp
+
+
+def _story_meta(j):
+    # sana va turnir: post matnidagi "2026-yil 6-noyabr, Turnir." qatoridan olinadi
+    import re, html as H
+    t = H.unescape(re.sub(r"<[^>]+>", "", j.get("chan") or ""))
+    m = re.search(r"(\d{4}-yil \d{1,2}-[a-zA-ZÀ-ɏ'’]+),\s*([^.\n]+)", t)
+    return (m.group(1), m.group(2).strip()) if m else ("", j.get("league") or "")
+
+
+def render_story_result(j):
+    Wd, Hd = 1080, 1920
+    hl, al = get_logo(j.get("homeLogo"), 170), get_logo(j.get("awayLogo"), 170)
+    # rangsiz (qora-oq) logotipda fon kulrang, chiziq oq bo'ladi
+    mc = lambda lg_: (lambda c: None if c == (40, 60, 120) else c)(main_color(lg_)) if lg_ else None
+    c1, c2 = mc(hl), mc(al)
+    dk = lambda c, k: tuple(int(v * k) for v in c)
+    top = dk(c1, 0.62) if c1 else (58, 61, 68)
+    bot = dk(c2, 0.55) if c2 else (58, 61, 68)
+    mid = (10, 14, 22)
+    im = Image.new("RGB", (Wd, Hd))
+    dd = ImageDraw.Draw(im)
+    for y in range(Hd):
+        t = y / Hd
+        if t < 0.5:
+            k = min(1, t / 0.5) ** 1.2
+            c = tuple(int(top[i] + (mid[i] - top[i]) * k) for i in range(3))
+        else:
+            k = min(1, (t - 0.5) / 0.5) ** 0.9
+            c = tuple(int(mid[i] + (bot[i] - mid[i]) * k) for i in range(3))
+        dd.line([0, y, Wd, y], fill=c)
+    paste_league_free(im, j, 120, Wd // 2, 300)
+    d = ImageDraw.Draw(im, "RGBA")
+    day, comp = _story_meta(j)
+    meta = " · ".join(x for x in (comp, day) if x)
+    if meta:
+        d.text((Wd // 2, 410), meta, font=font("bold", 28), fill=(201, 209, 219), anchor="mm")
+    hrows = [("g", n, ms) for n, ms in (j.get("hg") or [])] + [("r", n, [m]) for n, m in (j.get("hr") or [])]
+    arows = [("g", n, ms) for n, ms in (j.get("ag") or [])] + [("r", n, [m]) for n, m in (j.get("ar") or [])]
+
+    def panel(y0, lg_, name, col, rows):
+        n = len(rows)
+        h = max(240, 150 + 44 * n)
+        box = [90, y0, Wd - 90, y0 + h]
+        glass(im, box, alpha=18, line=40, r=36)
+        d = ImageDraw.Draw(im, "RGBA")
+        if lg_:
+            x_, y_ = 90 + 40 + (170 - lg_.width) // 2, y0 + (h - lg_.height) // 2
+            if is_dark(lg_):
+                paste_glow(im, lg_, x_, y_, 255, 8)
+                paste_glow(im, lg_, x_, y_, 210, 22)
+            else:
+                paste_glow(im, lg_, x_, y_, 90, 18)
+        d = ImageDraw.Draw(im, "RGBA")
+        tx = 330
+        t = name.upper()
+        s = 56
+        f = font("black", s)
+        while s > 34 and d.textlength(t, font=f) > Wd - 90 - 40 - tx:
+            s -= 2
+            f = font("black", s)
+        ny = y0 + (h - (70 + 44 * n)) // 2 + 26
+        d.text((tx, ny), t, font=f, fill=WHITE, anchor="lm")
+        d.rounded_rectangle([tx, ny + 36, tx + 90, ny + 42], radius=3, fill=col + (255,))
+        fg = font("bold", 30)
+        for i, (kind, p, ms) in enumerate(rows):
+            y = ny + 80 + i * 44
+            t1, t2 = p + " ", ", ".join(ms)
+            while d.textlength(t1 + t2, font=fg) > Wd - 90 - 40 - tx and len(t1) > 6:
+                t1 = t1[:-2] + " "
+            x = tx
+            if kind == "r":
+                redcard(d, x + 9, y)
+                x += 30
+            d.text((x, y), t1, font=fg, fill=WHITE, anchor="lm")
+            d.text((x + d.textlength(t1, font=fg), y), t2, font=fg, fill=GREEN if kind == "g" else (235, 120, 120), anchor="lm")
+        return y0 + h
+
+    hcol = c1 if c1 and max(c1) > 60 else WHITE
+    acol = c2 if c2 and max(c2) > 60 else WHITE
+    panel(480, hl, j["home"], hcol, hrows)
+    a, b = j["score"].split(":")
+    d = ImageDraw.Draw(im, "RGBA")
+    d.text((Wd // 2, 990), f"{a.strip()} : {b.strip()}", font=font("black", 220), fill=WHITE, anchor="mm")
+    _spaced(d, (Wd // 2, 1125), "ÖYIN YAKUNLANDI", font("bold", 30), (168, 179, 194), 7)
+    panel(1200, al, j["away"], acol, arows)
+    lg = logo(86, False)
+    im.paste(lg, (Wd // 2 - 43, Hd - 150 - 86), lg)
+    buf = io.BytesIO()
+    im.convert("RGB").save(buf, "JPEG", quality=92)
+    return buf.getvalue()
+
+
 def render(j):
     if j.get("lineup"):
         im = render_lineup(j)
@@ -534,3 +634,9 @@ if __name__ == "__main__":
         j = wapi("/ub/cjob?id=" + job)
         if j:
             wapi("/ub/card?id=" + job, render(j), "image/png")
+            if j.get("story") and j.get("score") and j.get("home") and j.get("away"):
+                # tik natija istoriyasi (Telegram + Instagram), faqat top o'yinlar
+                try:
+                    wapi("/ub/simg?id=" + job, render_story_result(j), "image/jpeg")
+                except Exception as e:
+                    print("istoriya xato", e)
