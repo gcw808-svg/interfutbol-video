@@ -389,7 +389,13 @@ if __name__ == "__main__":
                 for i, jpg in enumerate(render_story(j)):
                     if i:
                         time.sleep(45)  # Telegram istoriyalari tartibi buzilmasin
-                    wapi(f"/ub/simg?id={job}&n={i}", jpg, "image/jpeg")
+                    for k in range(3):  # tarmoq xatosida 3 marta urinadi
+                        try:
+                            wapi(f"/ub/simg?id={job}&n={i}", jpg, "image/jpeg")
+                            break
+                        except Exception as e:
+                            print("istoriya qayta", k, e)
+                            time.sleep(10)
             except Exception as e:
                 print("istoriya xato", e)
         for i, png in enumerate(pages):
