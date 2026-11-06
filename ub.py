@@ -95,7 +95,7 @@ def story_canvas(raw):
     if abs(im.width * 16 - im.height * 9) <= im.height * 0.3:
         # rasm allaqachon tik (9:16) bo'lsa, to'liq ekranga qo'yiladi
         out = io.BytesIO()
-        im.resize((W_, H_), Image.LANCZOS).save(out, "JPEG", quality=93)
+        im.resize((W_, H_), Image.LANCZOS).save(out, "JPEG", quality=95, subsampling=0)
         return out.getvalue()
     bg = Image.new("RGB", (W_, H_), (10, 14, 22))
     w = 1040
