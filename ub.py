@@ -92,6 +92,11 @@ def story_canvas(raw):
         from PIL import Image
     im = Image.open(io.BytesIO(raw)).convert("RGB")
     W_, H_ = 1080, 1920
+    if abs(im.width * 16 - im.height * 9) <= im.height * 0.3:
+        # rasm allaqachon tik (9:16) bo'lsa, to'liq ekranga qo'yiladi
+        out = io.BytesIO()
+        im.resize((W_, H_), Image.LANCZOS).save(out, "JPEG", quality=93)
+        return out.getvalue()
     bg = Image.new("RGB", (W_, H_), (10, 14, 22))
     w = 1040
     h = int(im.height * w / im.width)
