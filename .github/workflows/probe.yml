@@ -1,0 +1,34 @@
+name: probe
+# Manbalarni tekshirish: berilgan URL'lar ochiladimi, RSS/JSON bo'lsa nechta yozuv va birinchi sarlavhalar (yangi yangilik manbalarini qo'shishdan oldin)
+on:
+  workflow_dispatch:
+    inputs:
+      urls:
+        description: "URL'lar (bo'sh joy bilan)"
+        required: true
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: probe
+        env:
+          URLS: ${{ github.event.inputs.urls }}
+        run: |
+          for u in $URLS; do
+            echo "=== $u"
+            code=$(curl -sSL -m 20 -A "Mozilla/5.0 (compatible; InterFutbolBot/1.1)" -o body -w "%{http_code} %{content_type} %{size_download}" "$u" || echo "ERR")
+            echo "$code"
+            python3 - <<'PY' || true
+          import re
+          s=open("body",encoding="utf8",errors="ignore").read()
+          items=re.findall(r"<(item|entry)\b",s)
+          print("items:",len(items))
+          t=re.findall(r"<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</title>",s,re.S)[1:4]
+          d=re.findall(r"<(?:pubDate|updated|published)>(.*?)</",s)[:3]
+          print("titles:",[x.strip()[:90] for x in t]); print("dates:",d)
+          print("img:", bool(re.search(r"<enclosure|<media:(content|thumbnail)",s)))
+          if not items: print(s[:300].replace("\n"," "))
+          PY
+          done
