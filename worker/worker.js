@@ -1059,20 +1059,45 @@ async function afMatch(env, m, H, A) {
 // FUTBOLCHIGA URG'U (Bahtiyor aka talabi, 2026-11-08): chet eldagi o'zbek futbolchilari, Ronaldo va Messi — o'ynadimi, necha daqiqa,
 // asosiy/zaxira, gol, kartochka, tarkibda yo'qligi sababi. Legioner klublari va Al-Nassr/Inter Miami natijasida sarlavha futbolchi haqida bo'ladi.
 const FOCUS_PLAYERS = [
-  { n: "⟦Cristiano Ronaldo⟧", k: ["cristiano ronaldo"], club: /al[- ]?nassr/i, star: 1 },
-  { n: "⟦Lionel Messi⟧", k: ["lionel messi"], club: /inter miami/i, star: 1 },
-  { n: "Abduqodir Husanov", k: ["khusanov", "husanov"], club: /manchester city/i },
-  { n: "Eldor Shomurodov", k: ["shomurodov"], club: /ba[sş]ak[sş]ehir/i },
-  { n: "Abbosbek Fayzullayev", k: ["fayzull", "faizull"], club: /ba[sş]ak[sş]ehir/i },
-  { n: "Husniddin Aliqulov", k: ["aliqulov", "alikulov"], club: /rizespor/i },
-  { n: "Sadriddin Hasanov", k: ["sadriddin"], club: /\bbraga\b/i },
-  { n: "Muhammadali O'rinboyev", k: ["urinboev", "rinboyev"], club: /antwerp/i },
-  { n: "Behruz Karimov", k: ["bekhruz karimov", "behruz karimov"], club: /lugano/i },
-  { n: "Jahongir O'rozov", k: ["urozov", "rozov"], club: /rubin/i },
-  { n: "Mahmud Mahamadjonov", k: ["makhamadzhonov", "mahamadjonov"], club: /makhachkala/i },
+  // fm — FotMob futbolchi ID'si (klubi va jarohatini kunlik tekshirish uchun; 2026-11-08)
+  { n: "⟦Cristiano Ronaldo⟧", k: ["cristiano ronaldo"], club: /al[- ]?nassr/i, star: 1, fm: 30893 },
+  { n: "⟦Lionel Messi⟧", k: ["lionel messi"], club: /inter miami/i, star: 1, fm: 30981 },
+  { n: "Abduqodir Husanov", k: ["khusanov", "husanov"], club: /manchester city/i, fm: 1362998 },
+  { n: "Eldor Shomurodov", k: ["shomurodov"], club: /ba[sş]ak[sş]ehir/i, fm: 619513 },
+  { n: "Abbosbek Fayzullayev", k: ["fayzull", "faizull"], club: /ba[sş]ak[sş]ehir/i, fm: 1249993 },
+  { n: "Husniddin Aliqulov", k: ["aliqulov", "alikulov"], club: /rizespor/i, fm: 1135987 },
+  { n: "Sadriddin Hasanov", k: ["sadriddin"], club: /\bbraga\b/i, fm: 1844951 },
+  { n: "Muhammadali O'rinboyev", k: ["urinboev", "rinboyev"], club: /antwerp/i, fm: 1358007 },
+  { n: "Behruz Karimov", k: ["bekhruz karimov", "behruz karimov"], club: /lugano/i, fm: 1898281 },
+  { n: "Jahongir O'rozov", k: ["urozov", "rozov"], club: /rubin/i, fm: 1477513 },
+  { n: "Mahmud Mahamadjonov", k: ["makhamadzhonov", "mahamadjonov"], club: /makhachkala/i, fm: 1477508 },
+  { n: "Jaloliddin Masharipov", k: ["masharipov"], club: /esteghlal(?! khuzestan)/i, fm: 533382 },
+  { n: "Rustam Ashurmatov", k: ["ashurmatov"], club: /esteghlal(?! khuzestan)/i, fm: 643624 },
+  { n: "Odiljon Hamrobekov", k: ["khamrobekov", "hamrobekov"], club: /tractor|traktor/i, fm: 619697 },
+  { n: "Oston O'runov", k: ["urunov"], club: /persepolis/i, fm: 1057486 },
+  { n: "Igor Sergeyev", k: ["igor sergeev", "igor sergeyev"], club: /persepolis/i, fm: 251915 },
+  { n: "Azizjon G'aniyev", k: ["azizjon ganiev", "ganiyev"], club: /bataeh|batayeh/i, fm: 629823 },
+  { n: "Abdulla Abdullayev", k: ["abdulla abdullaev", "abdullayev"], club: /dibba/i, fm: 1294120 },
+  { n: "Otabek Shukurov", k: ["otabek shukurov"], club: /radnik/i, fm: 624405 },
+  { n: "Sherzod Temirov", k: ["sherzod temirov"], club: /zakho/i, fm: 1220854 },
+  { n: "Umarali Rahmonaliyev", k: ["rakhmonaliev", "rahmonaliyev"], club: /\bsabah\b/i, fm: 1429286 },
 ];
+// FUTBOLCHILAR KLUBI NAZORATI (FotMob, 2026-11-08): har kuni 07:00 da har bir futbolchining hozirgi klubi va jarohati tekshiriladi.
+// Klub o'zgarsa (transfer, ijara) yoki futbolchi asosiy jamoada bo'lmasa (U23, ikkinchi jamoa) — adminga bir marta xabar; ro'yxatni Claude yangilaydi.
+async function fmWatch(env, all) {
+  const T = await kvGet(env, "pTeam", {}); const seen = await kvGet(env, "ptSeen", []); const msgs = [];
+  const due = FOCUS_PLAYERS.filter((p) => p.fm && (all || !T[p.fm] || Date.now() - T[p.fm].t > 20 * 3600e3)).slice(0, all ? 30 : 6);
+  await Promise.all(due.map(async (p) => { try { const j = await (await fetch("https://www.fotmob.com/api/data/playerData?id=" + p.fm, { headers: { "user-agent": "Mozilla/5.0 InterFutbolBot" } })).json(); const pt = j.primaryTeam || {}; if (!pt.teamName) return;
+    const inj = j.injuryInformation ? String(j.injuryInformation.name || j.injuryInformation.title || "jarohat") : ""; T[p.fm] = { t: Date.now(), team: pt.teamName, loan: !!pt.onLoan, inj };
+    const ok = p.club.test(pt.teamName) && !NOT_OURS.test(pt.teamName); const sig = p.fm + "|" + pt.teamName;
+    if (!ok && !seen.includes(sig)) { seen.push(sig); msgs.push(p.club.test(pt.teamName) ? `• ${p.n.replace(/[⟦⟧]/g, "")} asosiy jamoada emas: ${pt.teamName}` : `• ${p.n.replace(/[⟦⟧]/g, "")} — FotMob bo'yicha hozirgi klubi: ${pt.teamName}${pt.onLoan ? " (ijarada)" : ""}`); } } catch (e) {} }));
+  if (due.length) await kvPut(env, "pTeam", T);
+  if (msgs.length) { await kvPut(env, "ptSeen", seen.slice(-100)); const ad = (await getAdmins(env))[0]; if (ad) await tg(env, "sendMessage", { chat_id: ad, text: "🔁 Futbolchilar nazorati — ro'yxatdagi klub bilan mos emas:\n" + msgs.join("\n") + "\n\nTransfer bo'lsa, Claude klublar ro'yxatini yangilaydi; asosiy jamoada bo'lmasa, natija postlarida uning qatori chiqmaydi." }); }
+  return { T, msgs };
+}
 async function playerFocus(env, E, m, H, A, F) {
-  const cand = FOCUS_PLAYERS.filter((p) => p.club.test(H + " " + (m.homeTeam?.name || "")) || p.club.test(A + " " + (m.awayTeam?.name || "")));
+  const PT = await kvGet(env, "pTeam", {});
+  const cand = FOCUS_PLAYERS.filter((p) => (p.club.test(H + " " + (m.homeTeam?.name || "")) || p.club.test(A + " " + (m.awayTeam?.name || ""))) && !(PT[p.fm] && (NOT_OURS.test(PT[p.fm].team) || !p.club.test(PT[p.fm].team))));
   if (!cand.length || !E || !E.eid || !E.lg) return null;
   let j; try { j = await (await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${E.lg}/summary?event=${E.eid}`, { cf: { cacheTtl: 60 } })).json(); } catch (e) { return null; }
   const roster = (j.rosters || []).flatMap((r) => r.roster || []); if (!roster.length) return null;
@@ -1083,7 +1108,7 @@ async function playerFocus(env, E, m, H, A, F) {
   for (const p of cand) {
     const r = roster.find((x) => { const nm = String(x.athlete?.displayName || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase(); return p.k.some((k) => nm.includes(k)); });
     const o = { p, goals: 0, yc: 0, rc: 0, assist: 0 };
-    if (!r) { o.st = "absent"; }
+    if (!r) { o.st = "absent"; if (PT[p.fm]?.inj) o.why = "jarohat sababli"; }
     else {
       const st = Object.fromEntries((r.stats || []).map((x) => [x.name, Number(x.value) || 0]));
       o.goals = st.totalGoals || 0; o.yc = st.yellowCards || 0; o.rc = st.redCards || 0; o.assist = st.goalAssists || 0;
@@ -2309,6 +2334,7 @@ return;
     await tg(env, "sendMessage", { chat_id: chat, text: "▶️ Bot qayta ishga tushdi." });
     ctx.waitUntil(nextManual(env, chat, false));
     } else if (/^\/nazorat\s/.test(text)) { const r = await qcCheck(env, text.replace(/^\/nazorat\s+/, ""), false).catch((e) => ({ fatal: ["tekshiruv xatosi: " + e.message], warn: [] })); await tg(env, "sendMessage", { chat_id: chat, text: "🔎 Nazoratchi (sinov, kanalga chiqmaydi):\n" + (r.fatal.length ? "🛑 To'xtatiladi:\n• " + r.fatal.join("\n• ") + "\n" : "✅ Jiddiy xato yo'q\n") + (r.warn.length ? "⚠️ Kamchilik:\n• " + r.warn.join("\n• ") : "Kamchilik yo'q") });
+    } else if (text === "/futbolchilar") { const r = await fmWatch(env, true).catch((e) => ({ err: e.message })); if (r.err) await tg(env, "sendMessage", { chat_id: chat, text: "Xato: " + r.err }); else await tg(env, "sendMessage", { chat_id: chat, text: "👟 Futbolchilar (FotMob, hozirgi klubi):\n" + FOCUS_PLAYERS.map((p) => { const x = r.T[p.fm]; const ok = x && p.club.test(x.team) && !NOT_OURS.test(x.team); return (x ? (ok ? "✅ " : "⚠️ ") : "❔ ") + p.n.replace(/[⟦⟧]/g, "") + " — " + (x ? x.team + (x.loan ? " (ijarada)" : "") + (x.inj ? ", jarohat: " + x.inj : "") : "ma'lumot yo'q"); }).join("\n") });
     } else if (text === "/tahlil") { await tg(env, "sendMessage", { chat_id: chat, text: "📊 Kanal postlari ko'rishlari yig'ilmoqda…" }); const n = await engCollect(env).catch((e) => "xato: " + e.message); await tg(env, "sendMessage", { chat_id: chat, text: "Yangi yozuvlar: " + n }); await engReport(env, chat);
     } else if (text === "/topurar") { const r = await scorersAuto(env, true, chat).catch((e) => "xato: " + e.message); if (!/^ok/.test(r)) await tg(env, "sendMessage", { chat_id: chat, text: "To'purarlar namunasi: " + r });
     } else if (text === "/legioner") { const r = await legionWeekly(env, true, chat).catch((e) => "xato: " + e.message); if (r !== "ok") await tg(env, "sendMessage", { chat_id: chat, text: "Legionerlar namunasi: " + (r === "few" ? "hafta davomida yozuv kam (natija postlaridan yig'iladi)" : r) });
@@ -2931,6 +2957,7 @@ if (url.pathname === "/hook" && req.method === "POST") {
     if (on("C") && new Date().getUTCMinutes() % 30 < 10) try { if (await autoOn(env)) await previewAuto(env); } catch (e) { await err("preview", e); } // yarim soatda bir — football-data so'rov chegarasini tejash
     if (on("C")) try { const xd = tashDate(Date.now()), hh = tashHour(); if (await autoOn(env)) {
       if (hh === 15 && (await kvGet(env, "scDay", "")) !== xd) { await kvPut(env, "scDay", xd, { expirationTtl: 3 * 86400 }); await scorersAuto(env); }
+      if (hh === 7) await fmWatch(env);
       if (hh === 12 && (await kvGet(env, "lgwDay", "")) !== xd) { await kvPut(env, "lgwDay", xd, { expirationTtl: 3 * 86400 }); await legionWeekly(env); }
       if (hh === 23 && (await kvGet(env, "engDay", "")) !== xd) { await kvPut(env, "engDay", xd, { expirationTtl: 3 * 86400 }); await engCollect(env); if (new Date(xd + "T00:00:00Z").getUTCDay() === 0) await engReport(env); }
     } } catch (e) { await err("extra", e); }
