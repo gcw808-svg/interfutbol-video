@@ -1248,6 +1248,12 @@ async function autoResults(env) {
     const tag = (n) => "#" + String(n).replace(/[^\p{L}\p{N}]/gu, "");
     const dt = tashDate(m.utcDate).slice(0, 4) + "-yil " + uzDay(tashDate(m.utcDate)).split(",")[0];
     let PF = null; try { PF = await playerFocus(env, E, m, H, A, F); } catch (e) {}
+    // LEGIONER KLUBI NATIJASI FAQAT FUTBOLCHIMIZ O'YNAGANDA (Bahtiyor aka, 2026-11-08: "bu post kimga qiziq" — Antwerp 2:2 Lommel, O'rinboyev tarkibda yo'q edi).
+    // Top klub bo'lmagan legioner klubida o'zbek futbolchisi maydonga tushmagan yoki ma'lumot yo'q bo'lsa — natija kanalga chiqmaydi, faqat haftalik legionerlar postiga yoziladi.
+    if (!topTeam(H, m.homeTeam?.name) && !topTeam(A, m.awayTeam?.name)) {
+      const played = PF && (PF.rows || []).some((r) => !r.star && ["full", "off", "in"].includes(r.st));
+      if (!played) { if (PF && PF.rows && PF.rows.some((r) => !r.star)) { try { const L = await kvGet(env, "pfLog", []); for (const r of PF.rows.filter((r) => !r.star)) L.push({ t: Date.now(), d: tashDate(m.utcDate), ...r, H, A, sc: ft.home + ":" + ft.away, comp }); await kvPut(env, "pfLog", L.slice(-120), { expirationTtl: 30 * 86400 }); } catch (e) {} } continue; }
+    }
     const scoreLine = `<b>⟦${H}⟧ ${ft.home}:${ft.away} ⟦${A}⟧</b>`;
     const post = `${PF && PF.focusHead ? "<b>" + PF.headline + "</b>\n\n" + scoreLine + "\n" : scoreLine + "\n\n"}${dt}, ${comp}${stage ? ", " + stage : ""}. ${line}${PF ? PF.block : ""}${pens ? "" : goalsBlock(E, H, A)}${redBlock(E, H, A)}\n\n#Natija ${tag(H)} ${tag(A)}`;
     const cg = cardGoals(E); if (pens) { delete cg.hg; delete cg.ag; }
