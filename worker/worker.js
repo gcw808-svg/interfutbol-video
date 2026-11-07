@@ -1248,9 +1248,8 @@ async function autoResults(env) {
     const tag = (n) => "#" + String(n).replace(/[^\p{L}\p{N}]/gu, "");
     const dt = tashDate(m.utcDate).slice(0, 4) + "-yil " + uzDay(tashDate(m.utcDate)).split(",")[0];
     let PF = null; try { PF = await playerFocus(env, E, m, H, A, F); } catch (e) {}
-    let PL = ""; try { if (!pens) PL = await pollLine(env, m, ft); } catch (e) {}
     const scoreLine = `<b>⟦${H}⟧ ${ft.home}:${ft.away} ⟦${A}⟧</b>`;
-    const post = `${PF && PF.focusHead ? "<b>" + PF.headline + "</b>\n\n" + scoreLine + "\n" : scoreLine + "\n\n"}${dt}, ${comp}${stage ? ", " + stage : ""}. ${line}${PF ? PF.block : ""}${pens ? "" : goalsBlock(E, H, A)}${redBlock(E, H, A)}${PL}\n\n#Natija ${tag(H)} ${tag(A)}`;
+    const post = `${PF && PF.focusHead ? "<b>" + PF.headline + "</b>\n\n" + scoreLine + "\n" : scoreLine + "\n\n"}${dt}, ${comp}${stage ? ", " + stage : ""}. ${line}${PF ? PF.block : ""}${pens ? "" : goalsBlock(E, H, A)}${redBlock(E, H, A)}\n\n#Natija ${tag(H)} ${tag(A)}`;
     const cg = cardGoals(E); if (pens) { delete cg.hg; delete cg.ag; }
     await resultJob(env, post, null, { goals: cg, league: compLogoName(m.competition?.code) || ESPN_FIX_LOGO[m.competition?.name] || comp, compName: comp, home: H, away: A, score: ft.home + ":" + ft.away });
     posted++;
@@ -1515,25 +1514,6 @@ async function engReport(env, chat) {
   const tp = Object.entries(s.topicStats).filter(([, v]) => v.n >= 3).sort((a, b) => b[1].avg - a[1].avg); const up = tp.slice(0, 5).map(([k, v]) => `${TOPIC_UZ[k] || k} — ${v.avg}`).join(", "), dn = tp.slice(-3).reverse().map(([k, v]) => `${TOPIC_UZ[k] || k} — ${v.avg}`).join(", ");
   await tg(env, "sendMessage", { chat_id: admin, text: `📊 Kanal tahlili (oxirgi 14 kun, ${s.n} ta post)\nO'rtacha ko'rish: ${s.avg}\n\nPost turlari:\n${ty}\n\nEng ko'p ko'rilgan mavzular: ${up || "—"}\nEng kam: ${dn || "—"}\n\nBot yangiliklar tartibini va qo'shimcha post turlari sonini shu natijalarga qarab o'zi moslashtirdi.` });
 }
-// BASHORAT SO'ROVNOMASI (Bahtiyor aka tanlovi, 2026-11-08): "O'yin oldidan" postidan keyin bot kanalga so'rovnoma qo'yadi,
-// o'yin boshlanishi bilan uni yopadi (stopPoll — ovozlar soni), natija postida "obunachilarning X% to'g'ri topdi" deb yoziladi.
-const pollQ = (H, A) => newAlpha(`⟦${H}⟧ — ⟦${A}⟧: kim g'alaba qozonadi?`);
-const pollOpts = (H, A) => [{ text: H }, { text: newAlpha("Durang") }, { text: A }];
-async function pollTick(env) {
-  const P = await kvGet(env, "polls", []); if (!P.length) return 0; let ch = 0; const now = Date.now();
-  for (const x of P) {
-    if (!x.mid && !x.skip && now - x.t > 4 * 60e3) { if (x.ko - now > 10 * 60e3) { const r = await tg(env, "sendPoll", { chat_id: env.CHANNEL, question: pollQ(x.H, x.A), options: pollOpts(x.H, x.A), is_anonymous: true, disable_notification: true }); if (r.ok) x.mid = r.result.message_id; else x.skip = 1; } else x.skip = 1; ch++; }
-    else if (x.mid && !x.v && now >= x.ko) { const r = await tg(env, "stopPoll", { chat_id: env.CHANNEL, message_id: x.mid }); const o = r.ok ? r.result.options || [] : []; x.v = o.map((y) => y.voter_count || 0); if (!r.ok) x.v = []; ch++; }
-  }
-  const keep = P.filter((x) => now - x.ko < 2 * 86400e3); if (ch || keep.length !== P.length) await kvPut(env, "polls", keep, { expirationTtl: 4 * 86400 });
-  return ch;
-}
-async function pollLine(env, m, ft) {
-  const x = (await kvGet(env, "polls", [])).find((y) => y.id === m.id && y.v && y.v.length === 3); if (!x) return "";
-  const tot = x.v[0] + x.v[1] + x.v[2]; if (!tot) return "";
-  const k = ft.home > ft.away ? 0 : ft.home === ft.away ? 1 : 2; const pc = Math.round((100 * x.v[k]) / tot);
-  return `\n\n<b>Bashorat:</b> obunachilarning ${pc}% to'g'ri topdi (${tot} ta ovoz).`;
-}
 // O'YIN OLDIDAN: katta o'yinlardan ~3 soat oldin — jadvaldagi o'rinlar, shaxsiy uchrashuvlar, o'zbek futbolchilari (faqat rasmiy ma'lumot, AI'siz)
 async function previewAuto(env) {
   const now = Date.now(), d = tashDate(now); const done = await kvGet(env, "pvDone", []); const TW = (await kvGet(env, "engStats", null))?.typeW || {};
@@ -1554,7 +1534,6 @@ async function previewAuto(env) {
     const uzp = FOCUS_PLAYERS.filter((p) => p.club.test(H + " " + m.homeTeam?.name) || p.club.test(A + " " + m.awayTeam?.name)).map((p) => p.n).join(", ");
     const post = `<b>O'yin oldidan: ⟦${H}⟧ — ⟦${A}⟧</b>\n\n${d.slice(0, 4)}-yil ${uzDay(d).split(",")[0]}, ${comp}${m.matchday ? ", " + m.matchday + "-tur" : ""}. Boshlanishi: ${tashTime(m.utcDate)} (Toshkent vaqti).${pos}${form}${h2h}${uzp ? "\n\n<b>Diqqat markazida:</b> " + uzp : ""}\n\n#OyinOldidan #${String(H).replace(/[^\p{L}\p{N}]/gu, "")} #${String(A).replace(/[^\p{L}\p{N}]/gu, "")}`;
     await resultJob(env, post, null, { kind: "news" }); n++;
-    try { const P = await kvGet(env, "polls", []); P.push({ id: m.id, H, A, ko: Date.parse(m.utcDate), t: Date.now() }); await kvPut(env, "polls", P.slice(-20), { expirationTtl: 4 * 86400 }); } catch (e) {}
   }
   return n;
 }
@@ -2355,8 +2334,6 @@ return;
     await tg(env, "sendMessage", { chat_id: chat, text: "▶️ Bot qayta ishga tushdi." });
     ctx.waitUntil(nextManual(env, chat, false));
     } else if (/^\/nazorat\s/.test(text)) { const r = await qcCheck(env, text.replace(/^\/nazorat\s+/, ""), false).catch((e) => ({ fatal: ["tekshiruv xatosi: " + e.message], warn: [] })); await tg(env, "sendMessage", { chat_id: chat, text: "🔎 Nazoratchi (sinov, kanalga chiqmaydi):\n" + (r.fatal.length ? "🛑 To'xtatiladi:\n• " + r.fatal.join("\n• ") + "\n" : "✅ Jiddiy xato yo'q\n") + (r.warn.length ? "⚠️ Kamchilik:\n• " + r.warn.join("\n• ") : "Kamchilik yo'q") });
-    } else if (text === "/bashorat") { const r = await tg(env, "sendPoll", { chat_id: chat, question: pollQ("Arsenal", "Chelsea"), options: pollOpts("Arsenal", "Chelsea"), is_anonymous: true }); if (r.ok) { await kvPut(env, "pollTest", { chat, mid: r.result.message_id }, { expirationTtl: 86400 }); await tg(env, "sendMessage", { chat_id: chat, text: "🧪 Bashorat so'rovnomasi namunasi (kanalga chiqmaydi). Ovoz bering, keyin «⟦/bashorat yop⟧» yozing — bot uni yopib natijani hisoblaydi (kanalda bu o'yin boshlanganda avtomatik bo'ladi)." }); } else await tg(env, "sendMessage", { chat_id: chat, text: "Xato: " + r.description });
-    } else if (text === "/bashorat yop") { const pt = await kvGet(env, "pollTest", null); if (!pt) { await tg(env, "sendMessage", { chat_id: chat, text: "Ochiq namuna yo'q." }); return; } const s2 = await tg(env, "stopPoll", { chat_id: pt.chat, message_id: pt.mid }); const v = (s2.result?.options || []).map((y) => y.voter_count || 0); const tot = v.reduce((x, y) => x + y, 0); await tg(env, "sendMessage", { chat_id: chat, text: s2.ok ? "Yopildi. Ovozlar (Arsenal / Durang / Chelsea): " + v.join(" / ") + (tot ? "\nNatija 2:1 (Arsenal g'alabasi) bo'lsa, natija postida: «Bashorat: obunachilarning " + Math.round(100 * v[0] / tot) + "% to'g'ri topdi (" + tot + " ta ovoz).»" : "\nOvoz berilmadi — natija postida bashorat qatori chiqmaydi.") : "Xato: " + s2.description });
     } else if (text === "/futbolchilar") { const r = await fmWatch(env, true).catch((e) => ({ err: e.message })); if (r.err) await tg(env, "sendMessage", { chat_id: chat, text: "Xato: " + r.err }); else await tg(env, "sendMessage", { chat_id: chat, text: "👟 Futbolchilar (FotMob, hozirgi klubi):\n" + FOCUS_PLAYERS.map((p) => { const x = r.T[p.fm]; const ok = x && p.club.test(x.team) && !NOT_OURS.test(x.team); return (x ? (ok ? "✅ " : "⚠️ ") : "❔ ") + p.n.replace(/[⟦⟧]/g, "") + " — " + (x ? x.team + (x.loan ? " (ijarada)" : "") + (x.inj ? ", jarohat: " + x.inj : "") : "ma'lumot yo'q"); }).join("\n") });
     } else if (text === "/tahlil") { await tg(env, "sendMessage", { chat_id: chat, text: "📊 Kanal postlari ko'rishlari yig'ilmoqda…" }); const n = await engCollect(env).catch((e) => "xato: " + e.message); await tg(env, "sendMessage", { chat_id: chat, text: "Yangi yozuvlar: " + n }); await engReport(env, chat);
     } else if (text === "/topurar") { const r = await scorersAuto(env, true, chat).catch((e) => "xato: " + e.message); if (!/^ok/.test(r)) await tg(env, "sendMessage", { chat_id: chat, text: "To'purarlar namunasi: " + r });
@@ -2977,7 +2954,6 @@ if (url.pathname === "/hook" && req.method === "POST") {
     if (on("C")) try { const fm = await kvGet(env, "factMode", "off"); const fdy = tashDate(Date.now()); if (fm !== "off" && (tashHour() === 20 || tashHour() === 21) && (await kvGet(env, "factDay", "")) !== fdy && (await autoOn(env))) { await kvPut(env, "factDay", fdy, { expirationTtl: 3 * 86400 }); let fr; try { fr = await factRun(env, fm !== "on"); } catch (e) { fr = e; } if (fr === "none" || fr instanceof Error) { const ft = (await kvGet(env, "factTry", {}))[fdy] || 0; if (ft < 5) { await kvPut(env, "factTry", { [fdy]: ft + 1 }, { expirationTtl: 86400 }); await kvPut(env, "factDay", "", { expirationTtl: 3 * 86400 }); } if (fr instanceof Error) throw fr; } } } catch (e) { await err("fact", e); }
     if (on("C")) try { const hm = await kvGet(env, "histMode", "off"); const hd = tashDate(Date.now()); if (hm !== "off" && (tashHour() === 10 || tashHour() === 11) && (await kvGet(env, "histDay", "")) !== hd && (await autoOn(env))) { await kvPut(env, "histDay", hd, { expirationTtl: 3 * 86400 }); let hr; try { hr = await histRun(env, hm !== "on"); } catch (e) { hr = e; } if (hr instanceof Error || /^err/.test(String(hr))) { const ht = (await kvGet(env, "histTry", {}))[hd] || 0; if (ht < 5) { await kvPut(env, "histTry", { [hd]: ht + 1 }, { expirationTtl: 86400 }); await kvPut(env, "histDay", "", { expirationTtl: 3 * 86400 }); } if (hr instanceof Error) throw hr; } } } catch (e) { await err("hist", e); }
     if (on("C")) try { const tdy = tashDate(Date.now()); if ((await kvGet(env, "tblMode", "on")) !== "off" && tashHour() === 11 && (await kvGet(env, "tblDay", "")) !== tdy && (await autoOn(env))) { await kvPut(env, "tblDay", tdy, { expirationTtl: 3 * 86400 }); await tablesAuto(env); } } catch (e) { await err("tbl", e); }
-    if (on("C")) try { await pollTick(env); } catch (e) { await err("poll", e); }
     if (on("C") && new Date().getUTCMinutes() % 30 < 10) try { if (await autoOn(env)) await previewAuto(env); } catch (e) { await err("preview", e); } // yarim soatda bir — football-data so'rov chegarasini tejash
     if (on("C")) try { const xd = tashDate(Date.now()), hh = tashHour(); if (await autoOn(env)) {
       if (hh === 15 && (await kvGet(env, "scDay", "")) !== xd) { await kvPut(env, "scDay", xd, { expirationTtl: 3 * 86400 }); await scorersAuto(env); }
