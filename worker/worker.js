@@ -1032,14 +1032,81 @@ async function afMatch(env, m, H, A) {
     const j = await (await fetch(`https://v3.football.api-sports.io/fixtures?date=${day}&timezone=UTC`, { headers: { "x-apisports-key": key } })).json();
     if (j.errors && Object.keys(j.errors).length) { await kvPut(env, "afCool", 1, { expirationTtl: 60 }); return null; } // me'yor yoki tarif xatosi — saqlamaymiz
     const ids = new Set(Object.values(AF_LG));
-    L = (j.response || []).filter((x) => ids.has(x.league?.id)).map((x) => ({ d: x.fixture?.date, st: x.fixture?.status?.short, h: x.teams?.home?.name, a: x.teams?.away?.name, gh: x.goals?.home, ga: x.goals?.away, ph: x.score?.penalty?.home, r: x.league?.round || "" }));
+    L = (j.response || []).filter((x) => ids.has(x.league?.id)).map((x) => ({ d: x.fixture?.date, st: x.fixture?.status?.short, h: x.teams?.home?.name, a: x.teams?.away?.name, gh: x.goals?.home, ga: x.goals?.away, ph: x.score?.penalty?.home, r: x.league?.round || "", id: x.fixture?.id || 0 }));
     await kvPut(env, "afFx:" + day, L, { expirationTtl: 600 });
   }
   const hT = new Set(espnTok([H, m.homeTeam?.name, m.homeTeam?.shortName].join(" "))), aT = new Set(espnTok([A, m.awayTeam?.name, m.awayTeam?.shortName].join(" ")));
   const ov = (tok, n) => espnTok(n).some((w) => [...tok].some((v) => v === w || (v.length >= 5 && w.length >= 5 && (v.startsWith(w) || w.startsWith(v)))));
   const x = L.find((x) => Math.abs(Date.parse(x.d) - t) <= 40 * 60e3 && ov(hT, x.h) && ov(aT, x.a));
   if (!x) return null;
-  return { af: 1, round: x.r || "", done: ["FT", "AET", "PEN"].includes(x.st), sh: x.gh, sa: x.ga };
+  return { af: 1, fid: x.id || 0, round: x.r || "", done: ["FT", "AET", "PEN"].includes(x.st), sh: x.gh, sa: x.ga };
+}
+// FUTBOLCHIGA URG'U (Bahtiyor aka talabi, 2026-11-08): chet eldagi o'zbek futbolchilari, Ronaldo va Messi — o'ynadimi, necha daqiqa,
+// asosiy/zaxira, gol, kartochka, tarkibda yo'qligi sababi. Legioner klublari va Al-Nassr/Inter Miami natijasida sarlavha futbolchi haqida bo'ladi.
+const FOCUS_PLAYERS = [
+  { n: "⟦Cristiano Ronaldo⟧", k: ["cristiano ronaldo"], club: /al[- ]?nassr/i, star: 1 },
+  { n: "⟦Lionel Messi⟧", k: ["lionel messi"], club: /inter miami/i, star: 1 },
+  { n: "Abduqodir Husanov", k: ["khusanov", "husanov"], club: /manchester city/i },
+  { n: "Eldor Shomurodov", k: ["shomurodov"], club: /ba[sş]ak[sş]ehir/i },
+  { n: "Abbosbek Fayzullayev", k: ["fayzull", "faizull"], club: /ba[sş]ak[sş]ehir/i },
+  { n: "Husniddin Aliqulov", k: ["aliqulov", "alikulov"], club: /rizespor/i },
+  { n: "Sadriddin Hasanov", k: ["sadriddin"], club: /\bbraga\b/i },
+  { n: "Muhammadali O'rinboyev", k: ["urinboev", "rinboyev"], club: /antwerp/i },
+  { n: "Behruz Karimov", k: ["bekhruz karimov", "behruz karimov"], club: /lugano/i },
+  { n: "Jahongir O'rozov", k: ["urozov", "rozov"], club: /rubin/i },
+  { n: "Mahmud Mahamadjonov", k: ["makhamadzhonov", "mahamadjonov"], club: /makhachkala/i },
+];
+async function playerFocus(env, E, m, H, A, F) {
+  const cand = FOCUS_PLAYERS.filter((p) => p.club.test(H + " " + (m.homeTeam?.name || "")) || p.club.test(A + " " + (m.awayTeam?.name || "")));
+  if (!cand.length || !E || !E.eid || !E.lg) return null;
+  let j; try { j = await (await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${E.lg}/summary?event=${E.eid}`, { cf: { cacheTtl: 60 } })).json(); } catch (e) { return null; }
+  const roster = (j.rosters || []).flatMap((r) => r.roster || []); if (!roster.length) return null;
+  const evs = j.keyEvents || []; const per = Number(j.header?.competitions?.[0]?.status?.period || 2); const full = per > 2 ? 120 : 90;
+  const minOf = (e) => parseInt(String(e?.clock?.displayValue || "").replace(/'/g, "")) || 0;
+  const sub = (id, idx) => evs.find((e) => /substitution/i.test(e.type?.type || e.type?.text || "") && String(e.participants?.[idx]?.athlete?.id) === String(id));
+  const out = [];
+  for (const p of cand) {
+    const r = roster.find((x) => { const nm = String(x.athlete?.displayName || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase(); return p.k.some((k) => nm.includes(k)); });
+    const o = { p, goals: 0, yc: 0, rc: 0, assist: 0 };
+    if (!r) { o.st = "absent"; }
+    else {
+      const st = Object.fromEntries((r.stats || []).map((x) => [x.name, Number(x.value) || 0]));
+      o.goals = st.totalGoals || 0; o.yc = st.yellowCards || 0; o.rc = st.redCards || 0; o.assist = st.goalAssists || 0;
+      if (r.starter) { const so = r.subbedOut ? sub(r.athlete?.id, 1) : null; o.st = r.subbedOut ? "off" : "full"; o.min = r.subbedOut ? minOf(so) || null : full; }
+      else if (r.subbedIn) { const si = sub(r.athlete?.id, 0); const mi = minOf(si); o.st = "in"; o.at = mi || null; o.min = mi ? Math.max(1, full - mi) : null; }
+      else o.st = "bench";
+      if (!o.goals) o.goals = (E.home || []).concat(E.away || []).filter((g) => p.k.some((k) => String(g.n).toLowerCase().includes(k.split(" ").pop()))).reduce((a, g) => a + g.ms.filter((x) => !x.og).length, 0);
+    }
+    out.push(o);
+  }
+  // tarkibda yo'qlar uchun sabab: API-Football (jarohat yoki diskvalifikatsiya)
+  if (out.some((o) => o.st === "absent")) {
+    try {
+      const key = await kvGet(env, "afKey", ""); const fid = (F || (await afMatch(env, m, H, A).catch(() => null)) || {}).fid;
+      if (key && fid) { const ij = await (await fetch(`https://v3.football.api-sports.io/injuries?fixture=${fid}`, { headers: { "x-apisports-key": key } })).json(); for (const o of out) if (o.st === "absent") { const x = (ij.response || []).find((y) => o.p.k.some((k) => String(y.player?.name || "").toLowerCase().includes(k.split(" ").pop()))); if (x) o.why = /suspend|red card|yellow card/i.test(x.player?.reason || "") ? "diskvalifikatsiya sababli" : "jarohat sababli"; } }
+    } catch (e) {}
+  }
+  const extra = (o) => [o.goals ? (o.goals > 1 ? o.goals + " ta gol urdi" : "gol urdi") : "", o.assist ? "gol uzatmasini berdi" : "", o.rc ? "qizil kartochka oldi" : o.yc ? "sariq kartochka oldi" : ""].filter(Boolean);
+  const line = (o) => { const x = extra(o); let t;
+    if (o.st === "full") t = "o'yinni to'liq o'tkazdi (" + o.min + " daqiqa)";
+    else if (o.st === "off") t = "asosiy tarkibda chiqib, " + (o.min ? o.min + " daqiqa o'ynadi" : "almashtirildi");
+    else if (o.st === "in") t = (o.at ? o.at + "-daqiqada" : "ikkinchi bo'limda") + " maydonga tushdi" + (o.min ? " (" + o.min + " daqiqa)" : "");
+    else if (o.st === "bench") t = "zaxirada qoldi, maydonga tushmadi";
+    else t = "o'yin tarkibiga kiritilmadi" + (o.why ? " (" + o.why + ")" : "");
+    return t + (x.length ? ", " + x.join(", ") : ""); };
+  const head = (o) => { const x = extra(o);
+    if (o.goals) return o.p.n + " " + (o.goals > 1 ? o.goals + " ta gol urdi" : "gol urdi");
+    if (o.rc) return o.p.n + " qizil kartochka oldi";
+    if (o.st === "full") return o.p.n + " o'yinni to'liq o'tkazdi";
+    if (o.st === "off") return o.p.n + (o.min ? " " + o.min + " daqiqa maydonda bo'ldi" : " asosiy tarkibda o'ynadi");
+    if (o.st === "in") return o.p.n + (o.at ? " " + o.at + "-daqiqada" : "") + " maydonga tushdi";
+    if (o.st === "bench") return o.p.n + " zaxirada qoldi";
+    return o.p.n + " o'yinda ishtirok etmadi" + (o.why ? " (" + o.why + ")" : ""); };
+  const rank = (o) => (o.goals ? 100 : 0) + (o.rc ? 50 : 0) + ({ full: 40, off: 35, in: 30, bench: 10, absent: 5 }[o.st] || 0) + (o.p.star ? 1 : 0);
+  const best = [...out].sort((a, b) => rank(b) - rank(a))[0];
+  const uz = out.filter((o) => !o.p.star), st = out.filter((o) => o.p.star);
+  const block = (uz.length ? "\n\n<b>O'zbek futbolchilari:</b>\n" + uz.map((o) => o.p.n + " — " + line(o) + ".").join("\n") : "") + st.map((o) => "\n\n<b>" + o.p.n + ":</b> " + line(o) + ".").join("");
+  return { headline: head(best), block, focusHead: !topTeam(H, m.homeTeam?.name) && !topTeam(A, m.awayTeam?.name) || st.length > 0 };
 }
 // TUR (nechanchi tur) — har bir natija postida bo'lishi shart (Bahtiyor aka talabi, 2026-11-08: Göztepe – Başakşehir postida tur yo'q edi).
 // Manbalar: football-data matchday → API-Football round → ESPN turnir jadvali (ikkala jamoaning o'ynagan o'yinlari soni teng bo'lsa).
@@ -1116,7 +1183,9 @@ async function autoResults(env) {
     else line = ft.home > ft.away ? `Uchrashuv ⟦${H}⟧ g'alabasi bilan yakunlandi.` : ft.away > ft.home ? `Uchrashuv ⟦${A}⟧ g'alabasi bilan yakunlandi.` : "Uchrashuv durang bilan yakunlandi.";
     const tag = (n) => "#" + String(n).replace(/[^\p{L}\p{N}]/gu, "");
     const dt = tashDate(m.utcDate).slice(0, 4) + "-yil " + uzDay(tashDate(m.utcDate)).split(",")[0];
-    const post = `<b>⟦${H}⟧ ${ft.home}:${ft.away} ⟦${A}⟧</b>\n\n${dt}, ${comp}${stage ? ", " + stage : ""}. ${line}${pens ? "" : goalsBlock(E, H, A)}${redBlock(E, H, A)}\n\n#Natija ${tag(H)} ${tag(A)}`;
+    let PF = null; try { PF = await playerFocus(env, E, m, H, A, F); } catch (e) {}
+    const scoreLine = `<b>⟦${H}⟧ ${ft.home}:${ft.away} ⟦${A}⟧</b>`;
+    const post = `${PF && PF.focusHead ? "<b>" + PF.headline + "</b>\n\n" + scoreLine + "\n" : scoreLine + "\n\n"}${dt}, ${comp}${stage ? ", " + stage : ""}. ${line}${PF ? PF.block : ""}${pens ? "" : goalsBlock(E, H, A)}${redBlock(E, H, A)}\n\n#Natija ${tag(H)} ${tag(A)}`;
     const cg = cardGoals(E); if (pens) { delete cg.hg; delete cg.ag; }
     await resultJob(env, post, null, { goals: cg, league: compLogoName(m.competition?.code) || ESPN_FIX_LOGO[m.competition?.name] || comp, compName: comp, home: H, away: A, score: ft.home + ":" + ft.away });
     posted++;
@@ -1634,7 +1703,7 @@ async function resRedo(env, chat, mid) {
   // logotiplar (custom emoji) matnda oddiy emoji bo'lib keladi — olib tashlanadi, addLogos ularni qayta qo'yadi
   let cap = String(m.caption || m.text || "").replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}\uFE0F\u200D]/gu, "").replace(/[ \t]{2,}/g, " ").split("\n").map((l) => l.trim()).join("\n");
   for (const [a, b] of Object.entries(ESPN_NAME)) if (a !== b && !cap.includes(b)) cap = cap.replace(new RegExp("(^|[^\\p{L}])" + a.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![\\p{L}])", "gu"), "$1" + b);
-  const L = cap.split("\n"); const t0 = (L[0] || "").trim();
+  const L = cap.split("\n"); const t0 = (L.find((l) => /^.+?\s+\d{1,2}:\d{1,2}\s+.+$/.test(l.trim())) || L[0] || "").trim();
   const sm = t0.match(/^(.+?)\s+(\d{1,2}):(\d{1,2})\s+(.+)$/); if (!sm) throw new Error("birinchi qatorda hisob topilmadi — bu natija posti emas");
   const H = sm[1].trim(), A = sm[4].trim();
   const side = (l) => (l.startsWith(H + ":") ? "h" : l.startsWith(A + ":") ? "a" : "");
