@@ -6,6 +6,10 @@ on:
       urls:
         description: "URL'lar (bo'sh joy bilan)"
         required: true
+      grep:
+        description: "ixtiyoriy: javobdan qidiriladigan so'zlar (regex)"
+        required: false
+        default: ""
 permissions:
   contents: read
 jobs:
@@ -15,6 +19,7 @@ jobs:
       - name: probe
         env:
           URLS: ${{ github.event.inputs.urls }}
+          GREP: ${{ github.event.inputs.grep }}
         run: |
           for u in $URLS; do
             echo "=== $u"
@@ -22,7 +27,11 @@ jobs:
             echo "$code"
             python3 - <<'PY' || true
           import re
+          import os
           s=open("body",encoding="utf8",errors="ignore").read()
+          g=os.environ.get("GREP","")
+          if g:
+              for m in list(re.finditer(g,s,re.I))[:25]: print("  >>", s[max(0,m.start()-160):m.end()+220].replace("\n"," "))
           items=re.findall(r"<(item|entry)\b",s)
           print("items:",len(items))
           t=re.findall(r"<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</title>",s,re.S)[1:4]
