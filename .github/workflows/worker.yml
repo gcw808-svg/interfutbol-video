@@ -81,7 +81,7 @@ jobs:
         run: |
           NS=$(curl -sS "https://api.cloudflare.com/client/v4/accounts/$ACC/workers/scripts/$SCRIPT/settings" -H "Authorization: Bearer $CF" | jq -r '.result.bindings[] | select(.type=="kv_namespace" and .name=="STATE") | .namespace_id')
           [ -n "$NS" ] || { echo "KV topilmadi"; exit 1; }
-          LIST="healthDay,healthTg,storyLast,igLast,rsDay,tblDay,cronErr,igMode,storyMode,orMode,tblMode${KEYS:+,$KEYS}"
+          LIST="alertLog,healthDay,healthTg,storyLast,igLast,rsDay,tblDay,cronErr,cronLog,igMode,storyMode,orMode,tblMode${KEYS:+,$KEYS}"
           for k in ${LIST//,/ }; do
             if echo "$k" | grep -qiE '(sess|key|token|secret|pass|auth|^ig$|^admins?$|^usess|^or|api|tgph|cred)' && ! echo "$k" | grep -qE '^(orMode|igMode|igLast)$'; then echo "$k: (maxfiy — ko'rsatilmaydi)"; continue; fi
             v=$(curl -sS "https://api.cloudflare.com/client/v4/accounts/$ACC/storage/kv/namespaces/$NS/values/$k" -H "Authorization: Bearer $CF")

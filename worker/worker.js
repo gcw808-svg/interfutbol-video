@@ -220,7 +220,10 @@ async function tg(env, method, body) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(naBody(body, body?.chat_id !== env.CHANNEL)),
     });
-    return r.json();
+    const res = await r.json();
+    // adminga ketgan ogohlantirishlar KV alertLog'ga ham yoziladi (Claude kompyutersiz nazoratda ko'rishi uchun)
+    try { if (method === "sendMessage" && body && body.chat_id !== env.CHANNEL && /⚠️|❌|chiqmadi|ishlamay|uzil|javob bermadi/i.test(String(body.text || ""))) { const L = await kvGet(env, "alertLog", []); L.push({ t: Date.now(), ok: !!res.ok, x: String(body.text).slice(0, 300) }); await kvPut(env, "alertLog", L.slice(-30), { expirationTtl: 14 * 86400 }); } } catch (x) {}
+    return res;
     }
 
     function keyboard(hasImg, article, video) {
