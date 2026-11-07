@@ -1597,7 +1597,7 @@ async function logoFix(env, chat, ids) {
   }
   if (!edits.length) { await tg(env, "sendMessage", { chat_id: chat, text: "Tahrirlanadigan post topilmadi. " + bad.join(", ") }); return; }
   const uid = "L" + Date.now().toString(36);
-  await kvPut(env, "ujob:" + uid, { html: "batch", edit: "batch", edits, chat, photo: null, video: null, raw: { text: "", img: null, url: null, video: null } }, { expirationTtl: 86400 });
+  await kvPut(env, "ujob:" + uid, { html: "batch", html2: "batch", edit: "batch", edits, chat, photo: null, video: null, raw: { text: "", img: null, url: null, video: null } }, { expirationTtl: 86400 });
   await ghDispatch(env, "ubpost.yml", { job: uid });
   await tg(env, "sendMessage", { chat_id: chat, text: "✅ " + edits.length + " ta post tayyorlandi, hisobingiz orqali tahrirlanmoqda (2–3 daqiqa)." + (bad.length ? "\nO'tkazib yuborildi: " + bad.join(", ") : "") });
 }
