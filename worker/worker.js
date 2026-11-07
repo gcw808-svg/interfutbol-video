@@ -1266,8 +1266,10 @@ async function healthCheck(env) { const now = Date.now(), d = tashDate(now), h =
   const ci = { ...cardInfo(post, idx), ...(extra.home && extra.away ? { home: extra.home, away: extra.away, score: extra.score || "" } : {}) };
   const lgName = extra.league || ci.league;
   let [homeLogo, awayLogo, leagueLogo] = await Promise.all([logoUrl(env, ci.home, idx), logoUrl(env, ci.away, idx), logoUrl(env, lgName, idx)]);
-  homeLogo = homeLogo || ESPN_CREST[ci.home] || ""; awayLogo = awayLogo || ESPN_CREST[ci.away] || ""; leagueLogo = leagueLogo || espnLgLogo(extra.compName || lgName) || "";
-  await kvPut(env, "cjob:" + id, { ...ci, home: newAlpha(ci.home), away: newAlpha(ci.away), league: newAlpha(lgName || ""), homeLogo, awayLogo, leagueLogo, ...(extra.goals || {}), chan: post, to: to || null, url: extra.url || null, kind: extra.kind || "res", story: (!to && (extra.kind || "res") === "res" && STORY_BIG.test(ci.home + " " + ci.away + " " + (lgName || ""))) ? await storyQuota(env) : 0 }, { expirationTtl: 7 * 3600 });
+  const crest = (n) => ESPN_CREST[n] || ESPN_CREST[Object.keys(ESPN_CREST).find((k) => norm(k) === norm(n))] || "";
+  homeLogo = homeLogo || crest(ci.home); awayLogo = awayLogo || crest(ci.away);
+  if ((extra.home && extra.away) && (!homeLogo || !awayLogo)) { try { const ad = (await getAdmins(env))[0]; if (ad) await tg(env, "sendMessage", { chat_id: ad, text: "⚠️ Nazorat: natija kartochkasida klub logotipi topilmadi — " + [!homeLogo && ci.home, !awayLogo && ci.away].filter(Boolean).join(", ") + ". Claude logotipni qo'shib, /kartaqayta bilan kartochkani yangilaydi." }); } catch (e) {} } leagueLogo = leagueLogo || espnLgLogo(extra.compName || lgName) || "";
+  await kvPut(env, "cjob:" + id, { ...ci, home: cardNm(ci.home), away: cardNm(ci.away), league: newAlpha(lgName || ""), homeLogo, awayLogo, leagueLogo, ...(extra.goals || {}), chan: post, to: to || null, url: extra.url || null, kind: extra.kind || "res", story: (!to && (extra.kind || "res") === "res" && STORY_BIG.test(ci.home + " " + ci.away + " " + (lgName || ""))) ? await storyQuota(env) : 0 }, { expirationTtl: 7 * 3600 });
   if (to) return ghDispatch(env, "card.yml", { job: id });
   const w = await kvGet(env, "resWait", []); w.push({ id, post, t: Date.now(), url: extra.url || null, kind: extra.kind || "res" }); await kvPut(env, "resWait", w.slice(-20));
   await ghDispatch(env, "card.yml", { job: id }); // chizilmasa resFallback qayta urinadi
@@ -1793,7 +1795,7 @@ async function qcCheck(env, text, media) {
     if (!QC_ALIAS) QC_ALIAS = CLUB_EMOJI.flatMap(([, , ns]) => ns.map(qcNorm));
     const nt = " " + qcNorm(plain).replace(/[^\p{L}\p{N}'.&/-]+/gu, " ") + " ";
     const miss = new Set();
-    for (const n of await qcTeams(env)) { const k = qcNorm(n); if (k.length < 4) continue; let at = nt.indexOf(" " + k), hit = false; while (at >= 0 && !hit) { hit = /^(?:'?(?:ning|ni|ga|ka|qa|dagi|dan|da|tan|ta|lik|chilar|chi|lar))? /.test(nt.slice(at + 1 + k.length)); at = nt.indexOf(" " + k, at + 1); } if (!hit) continue; if (QC_ALIAS.some((a) => a === k || a.includes(k) || (a.length >= 5 && k.includes(a)))) continue; miss.add(n); }
+    for (const n of await qcTeams(env)) { const k = qcNorm(n); if (k.length < 4) continue; let at = nt.indexOf(" " + k), hit = false; while (at >= 0 && !hit) { hit = /^(?:'?(?:ning|ni|ga|ka|qa|dagi|dan|da|tan|ta|lik|chilar|chi|lar))? /.test(nt.slice(at + 1 + k.length)); at = nt.indexOf(" " + k, at + 1); } if (!hit) continue; if (QC_ALIAS.some((a) => a === k || (a.length > k.length && a.includes(k) && nt.includes(" " + a + " ")) || (a.length >= 5 && k.includes(a) && nt.includes(" " + a)))) continue; miss.add(n); }
     if (miss.size) warn.push("logotipsiz klub: " + [...miss].slice(0, 6).join(", "));
   } catch (e) {}
   return { text: canonFix(raw), fatal: [...new Set(fatal)], warn: [...new Set(warn)] };
@@ -1893,7 +1895,7 @@ async function cardJob(env, pk, pend) {
   const idx = await kvGet(env, "lgidx", {});
   const ci = cardInfo(pend.post, idx);
   const [homeLogo, awayLogo, leagueLogo] = await Promise.all([logoUrl(env, ci.home, idx), logoUrl(env, ci.away, idx), logoUrl(env, ci.league, idx)]);
-  await kvPut(env, "cjob:" + id, { ...ci, home: newAlpha(ci.home), away: newAlpha(ci.away), league: newAlpha(ci.league), homeLogo, awayLogo, leagueLogo, pk, chat: pend.chat, msg: pend.msg }, { expirationTtl: 3600 });
+  await kvPut(env, "cjob:" + id, { ...ci, home: cardNm(ci.home), away: cardNm(ci.away), league: newAlpha(ci.league), homeLogo, awayLogo, leagueLogo, pk, chat: pend.chat, msg: pend.msg }, { expirationTtl: 3600 });
   return ghDispatch(env, "card.yml", { job: id });
 }
 // /logotip ID1 ID2 ...: kanaldagi postlarning matniga klub/liga logotiplarini (custom emoji) qayta qo'yadi — matn, qalin yozuv va havolalar saqlanadi
@@ -1940,7 +1942,9 @@ async function resRedo(env, chat, mid) {
   // logotiplar (custom emoji) matnda oddiy emoji bo'lib keladi — olib tashlanadi, addLogos ularni qayta qo'yadi
   let cap = String(m.caption || m.text || "").replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}\uFE0F\u200D]/gu, "").replace(/[ \t]{2,}/g, " ").split("\n").map((l) => l.trim()).join("\n");
   for (const [a, b] of Object.entries(ESPN_NAME)) if (a !== b && !cap.includes(b)) cap = cap.replace(new RegExp("(^|[^\\p{L}])" + a.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![\\p{L}])", "gu"), "$1" + b);
-  const L = cap.split("\n"); const t0 = (L.find((l) => /^.+?\s+\d{1,2}:\d{1,2}\s+.+$/.test(l.trim())) || L[0] || "").trim();
+  let L = cap.split("\n"); let t0 = (L.find((l) => /^.+?\s+\d{1,2}:\d{1,2}\s+.+$/.test(l.trim())) || L[0] || "").trim();
+  // qisqartirilgan klub nomi logotip to'plamida bo'lmasa — rasmiy to'liq nomga ("Charlotte" -> "Charlotte FC")
+  { const s0 = t0.match(/^(.+?)\s+\d{1,2}:\d{1,2}\s+(.+)$/); if (s0) { if (!ALIAS_LC) teamName({ name: "x" }); for (const n of [s0[1].trim(), s0[2].trim()]) { if (ALIAS_LC.has(n.toLowerCase())) continue; const full = CLUB_EMOJI.flatMap(([, , ns]) => ns).find((x) => x !== n && teamName0({ name: x }) === n); if (full) cap = cap.replace(new RegExp("(^|[^\\p{L}#])" + n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![\\p{L}]| FC| SK| SC)", "gu"), "$1" + full); } L = cap.split("\n"); t0 = (L.find((l) => /^.+?\s+\d{1,2}:\d{1,2}\s+.+$/.test(l.trim())) || L[0] || "").trim(); } }
   const sm = t0.match(/^(.+?)\s+(\d{1,2}):(\d{1,2})\s+(.+)$/); if (!sm) throw new Error("birinchi qatorda hisob topilmadi — bu natija posti emas");
   const H = sm[1].trim(), A = sm[4].trim();
   const side = (l) => (l.startsWith(H + ":") ? "h" : l.startsWith(A + ":") ? "a" : "");
@@ -1950,7 +1954,11 @@ async function resRedo(env, chat, mid) {
     for (const tk of body.split(/,\s*/)) { const mm = tk.match(/^(.*?)\s+(\d+(?:\+\d+)?'.*)$/); if (mm) out.push([mm[1].trim(), [mm[2].trim()]]); else if (/^\d+(?:\+\d+)?'/.test(tk) && out.length) out[out.length - 1][1].push(tk.trim()); }
     if (sec === "g") goals[sd + "g"].push(...out); else goals[sd + "r"].push(...out.map(([n, ms]) => [n, ms[0]])); }
   if (!goals.hg.length && !goals.ag.length) { delete goals.hg; delete goals.ag; }
-  const html = L.map((l, i) => (i === 0 || /^(Gollar|Qizil karto[cç]h?ka):$/i.test(l.trim()) ? "<b>" + esc(l) + "</b>" : esc(l))).join("\n");
+  // qalin: sarlavha (1-qator), hisob qatori, bo'lim nomlari; yulduz futbolchi qatorida faqat ism ("Lionel Messi:")
+  // klub va futbolchi nomlari ⟦ ⟧ ichida — yangi alifboga o'girilmasin ("Charlotte" "Çarlotte" bo'lib qolmasin, 2026-11-08)
+  const rxq = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const wrapN = (x) => { if (x.trim().startsWith("#")) return x; for (const n of [H, A].sort((a, b) => b.length - a.length)) x = x.replace(new RegExp("(^|[^\\p{L}⟦#])" + rxq(esc(n)) + "(?![\\p{L}])", "gu"), "$1⟦" + esc(n) + "⟧"); const g = x.match(/^(\s*⟦[^⟧]+⟧:\s*)(.+)$/); if (g) x = g[1] + g[2].split(/,\s*/).map((tk) => { const mm = tk.match(/^(.*?\S)\s+(\d+(?:\+\d+)?'.*)$/); return mm ? "⟦" + mm[1] + "⟧ " + mm[2] : tk; }).join(", "); return x; };
+  const html = L.map((l, i) => { const t = l.trim(); if (i === 0 || t === t0 || /^(Gollar|Qizil karto[cç]h?ka|[OÖ]['ʻ‘’`]?zbek futbol[cç]h?ilari):$/i.test(t)) return "<b>" + wrapN(esc(l)) + "</b>"; const st = t.match(/^(Cristiano Ronaldo|Lionel Messi):\s(.+)$/); return st ? "<b>⟦" + st[1] + "⟧:</b> " + wrapN(esc(st[2])) : wrapN(esc(l)); }).join("\n");
   const names = [...Object.values(FD_COMPS), ...Object.values(ESPN_FIX).map((x) => x[1])];
   const lg = names.find((x) => cap.includes(x) || cap.includes(newAlpha(x))) || "";
   const idx = await kvGet(env, "lgidx", {});
@@ -1958,7 +1966,7 @@ async function resRedo(env, chat, mid) {
   const lgLogoName = ESPN_FIX_LOGO[lg] || compLogoName(Object.keys(FD_COMPS).find((k) => FD_COMPS[k] === lg) || "") || lg;
   const [hl, al, ll] = await Promise.all([logoUrl(env, H, idx), logoUrl(env, A, idx), logoUrl(env, lgLogoName, idx)]);
   const id = "r" + Date.now().toString(36) + "k";
-  await kvPut(env, "cjob:" + id, { title: newAlpha(t0), home: newAlpha(H), away: newAlpha(A), score: sm[2] + ":" + sm[3], league: newAlpha(lgLogoName), homeLogo: hl || ESPN_CREST[H] || "", awayLogo: al || ESPN_CREST[A] || "", leagueLogo: ll || espnLgLogo(lg) || "", ...goals, chan: html, rep: mid, kind: "res", story: 0 }, { expirationTtl: 7 * 3600 });
+  await kvPut(env, "cjob:" + id, { title: newAlpha(t0), home: cardNm(H), away: cardNm(A), score: sm[2] + ":" + sm[3], league: newAlpha(lgLogoName), homeLogo: hl || ESPN_CREST[H] || ESPN_CREST[Object.keys(ESPN_CREST).find((k) => norm(k) === norm(H))] || "", awayLogo: al || ESPN_CREST[A] || ESPN_CREST[Object.keys(ESPN_CREST).find((k) => norm(k) === norm(A))] || "", leagueLogo: ll || espnLgLogo(lg) || "", ...goals, chan: html, rep: mid, kind: "res", story: 0 }, { expirationTtl: 7 * 3600 });
   await ghDispatch(env, "card.yml", { job: id });
   await tg(env, "sendMessage", { chat_id: chat, text: "✅ " + H + " – " + A + ": kartochka chizilmoqda. 2–3 daqiqada kanaldagi post rasmi natija kartochkasiga almashtiriladi." });
 }
@@ -2573,9 +2581,18 @@ async function fd(env, path, ttl) {
   return j;
 }
 
+let ALIAS_LC = null;
+// kartochkadagi klub nomi: chet el klubi asl yozuvda ("Charlotte", "Çarlotte" emas); faqat o'zbekcha nom yangi alifboga o'tadi
+const cardNm = (n) => (/[oOgG]['ʻ‘’`]|o'zbekiston|uzbekistan/i.test(String(n || "")) ? newAlpha(String(n || "")) : String(n || ""));
 function teamName(t) {
   if (!t) return "?";
   if (FD_NAME[t.name]) return FD_NAME[t.name];
+  // rasmiy nom: qisqartirilgan nom logotip to'plamida bo'lmasa, to'liq nom ("Charlotte FC", "Lommel SK") qoladi (2026-11-08)
+  if (!ALIAS_LC) ALIAS_LC = new Set(CLUB_EMOJI.flatMap(([, , ns]) => ns.map((x) => x.toLowerCase())));
+  const sh = teamName0(t); if (t.name && sh !== t.name && !ALIAS_LC.has(sh.toLowerCase()) && ALIAS_LC.has(String(t.name).toLowerCase())) return t.name;
+  return sh;
+}
+function teamName0(t) {
   return String(t.name || t.shortName || "?").replace(/^(FC|AFC|SC|CD|CA|SE|EC|CR|SK|FK|GD|CS|RCD|RC|US|SS|SSC|ACF)\s+/, "").replace(/\s+(FC|AFC|CF|SC|FBC|AF|AC|EC|KV|SK|FK)$/, "");
 }
 
