@@ -1019,7 +1019,7 @@ async function lineupsAuto(env) {
   return n;
 }
 // uchinchi manba — API-Football (bepul: kuniga 100 so'rov). Faqat kerak bo'lganda (ESPN topilmasa yoki manbalar kelishmasa) so'raladi, kunlik sana bo'yicha 10 daqiqa saqlanadi
-const AF_LG = { CL: 2, PL: 39, PD: 140, SA: 135, BL1: 78, FL1: 61, DED: 88, PPL: 94, ELC: 40, BSA: 71, WC: 1, EC: 4, EL: 3, ECL: 848 };
+const AF_LG = { CL: 2, PL: 39, PD: 140, SA: 135, BL1: 78, FL1: 61, DED: 88, PPL: 94, ELC: 40, BSA: 71, WC: 1, EC: 4, EL: 3, ECL: 848, TUR: 203, RUS: 235, BEL: 144, SUI: 207, KSA: 307, MLS: 253, ACL: 17 };
 async function afMatch(env, m, H, A) {
   const key = await kvGet(env, "afKey", ""); const lgId = AF_LG[m.competition?.code];
   if (!key || !lgId) return null;
@@ -1032,14 +1032,32 @@ async function afMatch(env, m, H, A) {
     const j = await (await fetch(`https://v3.football.api-sports.io/fixtures?date=${day}&timezone=UTC`, { headers: { "x-apisports-key": key } })).json();
     if (j.errors && Object.keys(j.errors).length) { await kvPut(env, "afCool", 1, { expirationTtl: 60 }); return null; } // me'yor yoki tarif xatosi — saqlamaymiz
     const ids = new Set(Object.values(AF_LG));
-    L = (j.response || []).filter((x) => ids.has(x.league?.id)).map((x) => ({ d: x.fixture?.date, st: x.fixture?.status?.short, h: x.teams?.home?.name, a: x.teams?.away?.name, gh: x.goals?.home, ga: x.goals?.away, ph: x.score?.penalty?.home }));
+    L = (j.response || []).filter((x) => ids.has(x.league?.id)).map((x) => ({ d: x.fixture?.date, st: x.fixture?.status?.short, h: x.teams?.home?.name, a: x.teams?.away?.name, gh: x.goals?.home, ga: x.goals?.away, ph: x.score?.penalty?.home, r: x.league?.round || "" }));
     await kvPut(env, "afFx:" + day, L, { expirationTtl: 600 });
   }
   const hT = new Set(espnTok([H, m.homeTeam?.name, m.homeTeam?.shortName].join(" "))), aT = new Set(espnTok([A, m.awayTeam?.name, m.awayTeam?.shortName].join(" ")));
   const ov = (tok, n) => espnTok(n).some((w) => [...tok].some((v) => v === w || (v.length >= 5 && w.length >= 5 && (v.startsWith(w) || w.startsWith(v)))));
   const x = L.find((x) => Math.abs(Date.parse(x.d) - t) <= 40 * 60e3 && ov(hT, x.h) && ov(aT, x.a));
   if (!x) return null;
-  return { af: 1, done: ["FT", "AET", "PEN"].includes(x.st), sh: x.gh, sa: x.ga };
+  return { af: 1, round: x.r || "", done: ["FT", "AET", "PEN"].includes(x.st), sh: x.gh, sa: x.ga };
+}
+// TUR (nechanchi tur) — har bir natija postida bo'lishi shart (Bahtiyor aka talabi, 2026-11-08: Göztepe – Başakşehir postida tur yo'q edi).
+// Manbalar: football-data matchday → API-Football round → ESPN turnir jadvali (ikkala jamoaning o'ynagan o'yinlari soni teng bo'lsa).
+const afRound = (r) => { r = String(r || ""); let k = r.match(/(?:Regular Season|League Stage|League Phase|Group Stage|Group [A-Z]|Matchday)\s*-\s*(\d+)/i); if (k) return k[1] + "-tur"; if (/Round of 16|8th Finals/i.test(r)) return "1/8 final"; if (/Round of 32|16th Finals/i.test(r)) return "1/16 final"; if (/Quarter/i.test(r)) return "chorak final"; if (/Semi/i.test(r)) return "yarim final"; if (/^Final$/i.test(r.trim())) return "final"; if (/Play-?offs?/i.test(r)) return "pley-off"; k = r.match(/-\s*(\d+)\s*$/); return k ? k[1] + "-tur" : ""; };
+async function espnRound(m, H, A) {
+  const lg = (ESPN_FIX[m.competition?.code] || [])[0] || ESPN_LG[m.competition?.code]; if (!lg) return "";
+  let j; try { j = await (await fetch(`https://site.api.espn.com/apis/v2/sports/soccer/${lg}/standings`, { cf: { cacheTtl: 600 } })).json(); } catch (e) { return ""; }
+  const rows = []; const walk = (o) => { if (!o || typeof o !== "object") return; if (Array.isArray(o.entries)) for (const e of o.entries) rows.push(e); for (const v of Object.values(o)) if (v && typeof v === "object") walk(v); }; walk(j);
+  const hT = new Set(espnTok([H, m.homeTeam?.name].join(" "))), aT = new Set(espnTok([A, m.awayTeam?.name].join(" ")));
+  const ov = (tok, n) => espnTok(n).some((w) => [...tok].some((v) => v === w || (v.length >= 5 && w.length >= 5 && (v.startsWith(w) || w.startsWith(v)))));
+  const gp = (tok) => { const e = rows.find((e) => ov(tok, (ESPN_NAME[e.team?.displayName] || e.team?.displayName || "") + " " + (e.team?.displayName || ""))); const s = e && (e.stats || []).find((s) => s.name === "gamesPlayed"); return s ? Number(s.value) : 0; };
+  const a = gp(hT), b = gp(aT);
+  return a && a === b ? a + "-tur" : "";
+}
+async function matchRound(env, m, H, A, F) {
+  if (m.matchday) return m.matchday + "-tur";
+  const r1 = afRound((F || (await afMatch(env, m, H, A).catch(() => null)) || {}).round); if (r1) return r1;
+  return await espnRound(m, H, A).catch(() => "");
 }
 async function autoResults(env) {
   if (!(await autoOn(env))) return "off";
@@ -1088,9 +1106,11 @@ async function autoResults(env) {
       if (F && F.done && (F.sh !== ft.home || F.sa !== ft.away)) { if (age < 170 * 60e3) continue; if (!warned.includes(m.id)) { warned.push(m.id); await tg(env, "sendMessage", { chat_id: (await getAdmins(env))[0], text: `⚠️ Natija chiqarilmadi: manbalar hisobda kelishmadi.\n${H} – ${A}\nfootball-data: ${ft.home}:${ft.away}\nAPI-Football: ${F.sh}:${F.sa}` }); } continue; }
     }
     if (E && !E.goalsOk && !pens && age < 170 * 60e3) continue; // gollar ma'lumoti hali to'liq emas
+    const stage = await matchRound(env, m, H, A, F);
+    if (!stage && age < 170 * 60e3) continue; // tur hali aniqlanmadi — keyingi aylanishda yana urinamiz
+    if (!stage) await tg(env, "sendMessage", { chat_id: (await getAdmins(env))[0], text: "⚠️ Natija posti turisiz chiqdi (tur hech bir manbada topilmadi): " + H + " – " + A + ". /tur XABAR_ID N bilan qo'shing." });
     done.push(m.id);
     const comp = FD_COMPS[m.competition?.code] || m.competition?.name || "";
-    const stage = m.matchday ? m.matchday + "-tur" : "";
     let line;
     if (pens && m.score.penalties) { const pw = m.score.penalties.home > m.score.penalties.away ? H : A; line = `Asosiy vaqt durang yakunlandi, penaltilar seriyasida (${m.score.penalties.home}:${m.score.penalties.away}) ⟦${pw}⟧ g'alaba qozondi.`; }
     else line = ft.home > ft.away ? `Uchrashuv ⟦${H}⟧ g'alabasi bilan yakunlandi.` : ft.away > ft.home ? `Uchrashuv ⟦${A}⟧ g'alabasi bilan yakunlandi.` : "Uchrashuv durang bilan yakunlandi.";
@@ -1586,7 +1606,7 @@ function entHtmlNoLogo(text, ents) {
   }
   return out;
 }
-async function logoFix(env, chat, ids) {
+async function logoFix(env, chat, ids, opt = {}) {
   CLUB_RE = null;
   const edits = [], bad = [];
   for (const mid of ids) {
@@ -1595,7 +1615,8 @@ async function logoFix(env, chat, ids) {
     await tg(env, "deleteMessage", { chat_id: chat, message_id: m.message_id }).catch(() => null);
     const text = m.caption != null ? m.caption : m.text; const ents = m.caption != null ? m.caption_entities : m.entities;
     if (!text) { bad.push(mid + " (matnsiz)"); continue; }
-    const html = addLogos(hashFix(CANON.reduce((a, [re, v]) => a.replace(re, v), entHtmlNoLogo(text, ents))));
+    let html = addLogos(hashFix(CANON.reduce((a, [re, v]) => a.replace(re, v), entHtmlNoLogo(text, ents))));
+    if (opt.tur) { const h2 = html.replace(/(\d{4}-yil [^,\n]+, [^\n]*?)(?:, \d+-tur)?\. (U[çc]h?ra[şs]h?uv)/, "$1, " + opt.tur + "-tur. $2"); if (h2 === html) { bad.push(mid + " (tur joyi topilmadi)"); continue; } html = h2; }
     edits.push({ id: mid, html });
   }
   if (!edits.length) { await tg(env, "sendMessage", { chat_id: chat, text: "Tahrirlanadigan post topilmadi. " + bad.join(", ") }); return; }
@@ -1996,6 +2017,7 @@ return;
     await env.STATE.delete("pending");
     await tg(env, "sendMessage", { chat_id: chat, text: "⏳ Keyingi yangilik tayyorlanmoqda..." });
     ctx.waitUntil(nextManual(env, chat, true, old?.item?.link));
+    } else if (/^\/tur\s+\d+\s+\d+$/.test(text)) { const [, id, n] = text.split(/\s+/).map(Number); await tg(env, "sendMessage", { chat_id: chat, text: "Postga " + n + "-tur qo'shilmoqda..." }); ctx.waitUntil(logoFix(env, chat, [id], { tur: n }).catch((e) => tg(env, "sendMessage", { chat_id: chat, text: "Xato: " + String((e && e.message) || e).slice(0, 200) })));
     } else if (/^\/logotip(\s+\d+)+$/.test(text)) { const ids = text.split(/\s+/).slice(1).map(Number).slice(0, 40); await tg(env, "sendMessage", { chat_id: chat, text: "Logotiplar qo'yilmoqda: " + ids.length + " ta post..." }); ctx.waitUntil(logoFix(env, chat, ids).catch((e) => tg(env, "sendMessage", { chat_id: chat, text: "Logotip qo'yishda xato: " + String((e && e.message) || e).slice(0, 200) })));
     } else if (/^\/kartaqayta\s+\d+$/.test(text)) { const mid = Number(text.split(/\s+/)[1]); await tg(env, "sendMessage", { chat_id: chat, text: "Natija kartochkasi qayta chizilmoqda..." }); ctx.waitUntil(resRedo(env, chat, mid).catch((e) => tg(env, "sendMessage", { chat_id: chat, text: "Kartochkani qayta chizishda xato: " + String((e && e.message) || e).slice(0, 200) })));
     } else if (text === "/tekshir") { await tg(env, "sendMessage", { chat_id: chat, text: "Bugungi postlar tekshirilmoqda..." }); ctx.waitUntil(dailyAudit(env, chat).catch((e) => tg(env, "sendMessage", { chat_id: chat, text: "Tekshiruvda xato: " + String((e && e.message) || e).slice(0, 200) }))); } else if (text === "/jadval" || text === "/jadval test") { const test = text === "/jadval test"; await tg(env, "sendMessage", { chat_id: chat, text: "O'yinlar jadvali tayyorlanmoqda..." }); ctx.waitUntil((async () => { let r; try { r = await fixturesRun(env, test); } catch (e) { r = "xato: " + String((e && e.message) || e).slice(0, 200); } if (!test && String(r).startsWith("ok")) await kvPut(env, "fixDay", tashDate(Date.now()), { expirationTtl: 3 * 86400 }); await tg(env, "sendMessage", { chat_id: chat, text: r === "none" ? "Keyingi 22 soatda bizning klublar o'yini yo'q, jadval chiqmadi." : String(r).startsWith("ok") ? (test ? "Namuna sizga yuborildi, rasm 1-2 daqiqada keladi." : "Jadval kanalga yuborildi (" + String(r).slice(3) + " ta o'yin), rasm 1-2 daqiqada chiqadi.") : "Jadval chiqmadi: " + r }); })()); } else if (text === "/pauza") {
