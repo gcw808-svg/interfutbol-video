@@ -13,6 +13,17 @@ const FEEDS = [
     { name: "FourFourTwo", url: "https://www.fourfourtwo.com/feeds/all" },
     { name: "90min", url: "https://www.90min.com/posts.rss" },
     { name: "Soccer.ru", url: "https://www.soccer.ru/rss.xml" },
+    // qo'shimcha manbalar (2026-11-08, probe.yml bilan tekshirilgan): klublarga yaqin nashrlar, transferlar va o'zbek legionerlari
+    { name: "AS English", url: "https://feeds.as.com/mrss-s/pages/as/site/en.as.com/portada/" },
+    { name: "Football Italia", url: "https://football-italia.net/feed/" },
+    { name: "Manchester Evening News", url: "https://www.manchestereveningnews.co.uk/sport/football/?service=rss" },
+    { name: "Football London", url: "https://www.football.london/?service=rss" },
+    { name: "Liverpool Echo", url: "https://www.liverpoolecho.co.uk/all-about/liverpool-fc?service=rss" },
+    { name: "Transfermarkt", url: "https://www.transfermarkt.com/rss/news" },
+    { name: "The Telegraph", url: "https://www.telegraph.co.uk/football/rss.xml" },
+    { name: "Daryo", url: "https://daryo.uz/feed/" },
+    { name: "Sports.uz", url: "https://sports.uz/rss" },
+    { name: "Gazeta.uz", url: "https://www.gazeta.uz/oz/rss/?section=sport" },
 { name: "InterFutbol TV", url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCDnCDK0EjtZr640DIWbEMUQ", type: "yt" },
 ];
 
@@ -742,8 +753,8 @@ async function ytFill(env, st, force = false) {
 async function collect(env) {
     const st = await kvGet(env, "st", { idx: 0, queue: [], seen: [], titles: [] }); const sig = (s) => s.seen.length + "|" + s.seen[s.seen.length - 1] + "|" + s.queue.length + "|" + (s.vqueue || []).length; const sig0 = sig(st); st.idx = (Math.floor(Date.now() / 600e3) * 2) % FEEDS.filter((f) => f.type !== "yt").length;
 const NEWS = FEEDS.filter((f) => f.type !== "yt");
-const feeds = [NEWS[st.idx % NEWS.length], NEWS[(st.idx + 1) % NEWS.length], ...FEEDS.filter((f) => f.type === "yt")];
-st.idx = (st.idx + 2) % NEWS.length;
+const feeds = [NEWS[st.idx % NEWS.length], NEWS[(st.idx + 1) % NEWS.length], NEWS[(st.idx + 2) % NEWS.length], ...FEEDS.filter((f) => f.type === "yt")];
+st.idx = (st.idx + 3) % NEWS.length;
 let items = [];
 for (const feed of feeds) {
 try {
@@ -764,9 +775,12 @@ items.push(...(feed.type === "sitemap" ? parseSitemap(xml, feed.name) : feed.typ
     (it.video ? (st.vqueue = st.vqueue || []) : st.queue).push(it);
     st.titles.push(it.title);
     }
+    // o'zini o'zi rivojlantirish: kanalda ko'p ko'rilgan mavzular navbatda oldinga chiqadi (engStats — kunlik ko'rishlar tahlili)
+    const TW = await kvGet(env, "topicW", {}); const tw = (i) => { let x = 0; for (const t of topicsOf(i.title + " " + (i.desc || ""))) x += TW[t] || 0; return Math.max(-0.9, Math.min(0.9, x)); };
+    for (const i of st.queue) i.tw = tw(i);
     st.queue = st.queue
     .filter((i) => Date.now() - i.date < MAX_AGE_HOURS * 3600e3 && isFocus(i))
-    .sort((a, b) => (b.prio || 0) - (a.prio || 0) || b.date - a.date)
+    .sort((a, b) => ((b.prio || 0) + (b.tw || 0)) - ((a.prio || 0) + (a.tw || 0)) || b.date - a.date)
     .slice(0, QUEUE_LIMIT);
     st.vqueue = (st.vqueue || [])
     .filter((i) => i.video)
@@ -1107,7 +1121,8 @@ async function playerFocus(env, E, m, H, A, F) {
   const best = [...out].sort((a, b) => rank(b) - rank(a))[0];
   const uz = out.filter((o) => !o.p.star), st = out.filter((o) => o.p.star);
   const block = (uz.length ? "\n\n<b>O'zbek futbolchilari:</b>\n" + uz.map((o) => o.p.n + " — " + line(o) + ".").join("\n") : "") + st.map((o) => "\n\n<b>" + o.p.n + ":</b> " + line(o) + ".").join("");
-  return { headline: head(best), block, focusHead: !topTeam(H, m.homeTeam?.name) && !topTeam(A, m.awayTeam?.name) || st.length > 0 };
+  const rows = out.map((o) => ({ n: o.p.n, star: o.p.star ? 1 : 0, club: o.p.club.test(H + " " + (m.homeTeam?.name || "")) ? H : A, line: line(o), st: o.st, min: o.min || 0, g: o.goals || 0 }));
+  return { rows, headline: head(best), block, focusHead: !topTeam(H, m.homeTeam?.name) && !topTeam(A, m.awayTeam?.name) || st.length > 0 };
 }
 // TUR (nechanchi tur) — har bir natija postida bo'lishi shart (Bahtiyor aka talabi, 2026-11-08: Göztepe – Başakşehir postida tur yo'q edi).
 // Manbalar: football-data matchday → API-Football round → ESPN turnir jadvali (ikkala jamoaning o'ynagan o'yinlari soni teng bo'lsa).
@@ -1190,6 +1205,7 @@ async function autoResults(env) {
     const cg = cardGoals(E); if (pens) { delete cg.hg; delete cg.ag; }
     await resultJob(env, post, null, { goals: cg, league: compLogoName(m.competition?.code) || ESPN_FIX_LOGO[m.competition?.name] || comp, compName: comp, home: H, away: A, score: ft.home + ":" + ft.away });
     posted++;
+    if (PF && PF.rows && PF.rows.some((r) => !r.star)) { try { const L = await kvGet(env, "pfLog", []); for (const r of PF.rows.filter((r) => !r.star)) L.push({ t: Date.now(), d: tashDate(m.utcDate), ...r, H, A, sc: ft.home + ":" + ft.away, comp }); await kvPut(env, "pfLog", L.slice(-120), { expirationTtl: 30 * 86400 }); } catch (e) {} }
   }
   if (first || done.length !== n0) await kvPut(env, "resDone", done.slice(-400));
   if (warned.length !== w0) await kvPut(env, "resWarn", warned.slice(-60));
@@ -1390,6 +1406,116 @@ async function factRun(env, toAdmin, pageHint, test = false) {
   else r = (await userPublish(env, f.post, img, null, null, admin).catch(() => null)) || (await publish(env, f.post, img, undefined, null));
   if (r?.ok && !toAdmin && !test) { const u = await kvGet(env, "factUsed", []); u.push({ p: f.page, t: Date.now() }); await kvPut(env, "factUsed", u.slice(-100)); }
   return r?.ok ? "ok " + f.page : "err " + (r?.description || "");
+}
+
+// ---------------- YANGI POST TURLARI VA O'ZINI O'ZI RIVOJLANTIRISH (2026-11-08) ----------------
+// Mavzular: yangilik manbasi sarlavhasi (ingliz/rus/o'zbek) va kanal posti (o'zbek) uchun bir xil teglar
+const TOPICS = [
+  ["uz", /uzbek|o['ʻ‘’`]?zbek|ўзбек|узбек|ozbekiston|husanov|khusanov|хусанов|ҳусанов|shomurodov|шомуродов|fayzull|файзулл|masharipov|aliqulov|alikulov|urunov|o['ʻ]runov/i],
+  ["transfer", /transfer|\bsign(s|ed|ing)?\b|contract|\bdeal\b|\bbid\b|\bloan\b|трансфер|контракт|подпис|аренд|shartnoma|ijara|sotib ol|o['ʻ]tish/i],
+  ["injury", /injur|ruled out|sidelined|травм|jarohat/i],
+  ["coach", /manager|head coach|\bsack|appoint|тренер|отставк|murabbiy|iste['ʻ]?fo/i],
+  ["rumor", /\breport(s|edly)?\b|gossip|rumou?r|close to|\btarget|interest|слух|интерес|qiziqish|xohla/i],
+  ["result", /\d+\s*[:–-]\s*\d+|\bbeat\b|\bwin\b|\bdraw\b|победил|обыграл|g['ʻ]alaba|mag['ʻ]lub|durang/i],
+  ["record", /record|milestone|рекорд|rekord/i],
+  ["ronaldo", /ronaldo|роналду/i], ["messi", /messi|месси/i], ["mbappe", /mbapp|мбапп/i], ["yamal", /yamal|ямал/i], ["haaland", /haaland|холанд/i], ["salah", /salah|салах/i],
+  ["c:mu", /man(chester)?\s*(utd|united)|манчестер юнайтед|«мю»/i], ["c:mc", /man(chester)?\s*city|манчестер сити|ман сити/i], ["c:liv", /liverpool|ливерпул/i], ["c:ars", /arsenal|арсенал/i], ["c:che", /chelsea|челси/i],
+  ["c:rma", /real madrid|«реал»|реал мадрид/i], ["c:bar", /barcelona|barça|барселон/i], ["c:atm", /atl[eé]tico|атлетико/i], ["c:int", /\binter\b(?! miami)|internazionale|интер(?! майами)/i], ["c:mil", /\bmilan\b|милан/i],
+  ["c:juv", /juventus|ювентус/i], ["c:bay", /bayern|бавари/i], ["c:bvb", /dortmund|боруссия д/i], ["c:psg", /\bpsg\b|paris saint|псж/i], ["c:nas", /al[- ]?nassr|аль-наср/i], ["c:mia", /inter miami|интер майами/i],
+];
+const topicsOf = (t) => TOPICS.filter(([, re]) => re.test(String(t || ""))).map(([k]) => k);
+// post turi (kanal postining matnidan)
+const postKind = (t) => { t = String(t || ""); return /#Natija\b/i.test(t) ? "result" : /#OyinOldidan/i.test(t) ? "preview" : /#Topurarlar/i.test(t) ? "scorers" : /#Legionerlar/i.test(t) ? "legion" : /#FutbolTarixi/i.test(t) ? "hist" : /#QiziqarliFakt/i.test(t) ? "fact" : /yin(lar)? jadvali/i.test(t) ? "fixtures" : /tarkib/i.test(t) && /#/.test(t) && /\d+\./.test(t) ? "lineup" : "news"; };
+const viewsNum = (x) => { const m = String(x || "").trim().match(/^([\d.,]+)\s*([KM]?)/i); if (!m) return 0; const n = parseFloat(m[1].replace(",", ".")); return Math.round(n * (/k/i.test(m[2]) ? 1e3 : /m/i.test(m[2]) ? 1e6 : 1)); };
+// kanal ochiq sahifasidan (t.me/s) har bir postning ko'rishlar soni — 24–96 soat o'tgan postlar hisobga olinadi
+async function engCollect(env) {
+  const ch = String(env.CHANNEL || "").replace("@", ""); if (!ch) return 0;
+  const L = await kvGet(env, "engLog", []); const have = new Set(L.map((x) => x.id)); let before = "", added = 0;
+  for (let pg = 0; pg < 8; pg++) {
+    let h; try { h = await (await fetch(`https://t.me/s/${ch}${before ? "?before=" + before : ""}`, { headers: { "user-agent": "Mozilla/5.0 InterFutbolBot" } })).text(); } catch (e) { break; }
+    const parts = h.split('data-post="' + ch + "/").slice(1); if (!parts.length) break;
+    let minId = Infinity, oldest = Infinity;
+    for (const p of parts) {
+      const id = parseInt(p); if (!id) continue; minId = Math.min(minId, id);
+      const t = Date.parse((p.match(/<time datetime="([^"]+)"/) || [])[1] || ""); if (!t) continue; oldest = Math.min(oldest, t);
+      const v = viewsNum((p.match(/tgme_widget_message_views">([^<]+)</) || [])[1]);
+      const txt = ((p.match(/js-message_text[^>]*>([\s\S]*?)<\/div>/) || [])[1] || "").replace(/<br\s*\/?>/g, "\n").replace(/<[^>]+>/g, "").replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, "&").trim();
+      const age = Date.now() - t; if (age < 24 * 3600e3 || age > 96 * 3600e3 || !v || have.has(id)) continue;
+      have.add(id); added++; L.push({ id, t, v, k: postKind(txt), tp: topicsOf(txt), h: txt.split("\n")[0].slice(0, 80) });
+    }
+    if (!isFinite(minId) || oldest < Date.now() - 96 * 3600e3) break; before = minId;
+  }
+  const keep = L.filter((x) => Date.now() - x.t < 21 * 86400e3).slice(-500); await kvPut(env, "engLog", keep);
+  // tahlil: post turlari va mavzular bo'yicha o'rtacha ko'rish; mavzu og'irliklari navbatni tartiblaydi
+  const mean = (a) => (a.length ? a.reduce((s, x) => s + x.v, 0) / a.length : 0);
+  const recent = keep.filter((x) => Date.now() - x.t < 14 * 86400e3); const all = mean(recent); const news = recent.filter((x) => x.k === "news"); const nAll = mean(news) || all;
+  const types = {}; for (const x of recent) (types[x.k] = types[x.k] || []).push(x);
+  const typeStats = Object.fromEntries(Object.entries(types).map(([k, a]) => [k, { n: a.length, avg: Math.round(mean(a)) }]));
+  const topicStats = {}, topicW = {};
+  for (const [k] of TOPICS) { const a = news.filter((x) => (x.tp || []).includes(k)); if (!a.length || !nAll) continue; const r = mean(a) / nAll; const rs = 1 + (r - 1) * a.length / (a.length + 8); topicStats[k] = { n: a.length, avg: Math.round(mean(a)) }; topicW[k] = Math.round(Math.max(-0.8, Math.min(0.8, Math.log2(Math.max(rs, 0.05)))) * 100) / 100; }
+  const typeW = {}; for (const [k, v] of Object.entries(typeStats)) if (all && v.n >= 2) { const rs = 1 + (v.avg / all - 1) * v.n / (v.n + 4); typeW[k] = Math.round(Math.log2(Math.max(rs, 0.05)) * 100) / 100; }
+  await kvPut(env, "topicW", topicW); await kvPut(env, "engStats", { t: Date.now(), n: recent.length, avg: Math.round(all), typeStats, topicStats, typeW, topicW });
+  return added;
+}
+const TYPE_UZ = { result: "natijalar", news: "yangiliklar", preview: "o'yin oldidan", scorers: "to'purarlar", legion: "legionerlar", hist: "tarixda bugun", fact: "qiziqarli fakt", fixtures: "o'yinlar jadvali", lineup: "tarkiblar" };
+const TOPIC_UZ = { uz: "o'zbek futboli", transfer: "transferlar", injury: "jarohatlar", coach: "murabbiylar", rumor: "mish-mishlar", result: "o'yin natijalari", record: "rekordlar", ronaldo: "Ronaldo", messi: "Messi", mbappe: "Mbappé", yamal: "Yamal", haaland: "Haaland", salah: "Salah", "c:mu": "Manchester United", "c:mc": "Manchester City", "c:liv": "Liverpool", "c:ars": "Arsenal", "c:che": "Chelsea", "c:rma": "Real Madrid", "c:bar": "Barcelona", "c:atm": "Atlético Madrid", "c:int": "Inter", "c:mil": "Milan", "c:juv": "Juventus", "c:bay": "Bayern", "c:bvb": "Dortmund", "c:psg": "PSG", "c:nas": "Al-Nassr", "c:mia": "Inter Miami" };
+async function engReport(env, chat) {
+  const s = await kvGet(env, "engStats", null); const admin = chat || (await getAdmins(env))[0]; if (!s || !admin) return;
+  const ty = Object.entries(s.typeStats).sort((a, b) => b[1].avg - a[1].avg).map(([k, v]) => `${TYPE_UZ[k] || k} — ${v.avg} (${v.n} ta)`).join("\n");
+  const tp = Object.entries(s.topicStats).filter(([, v]) => v.n >= 3).sort((a, b) => b[1].avg - a[1].avg); const up = tp.slice(0, 5).map(([k, v]) => `${TOPIC_UZ[k] || k} — ${v.avg}`).join(", "), dn = tp.slice(-3).reverse().map(([k, v]) => `${TOPIC_UZ[k] || k} — ${v.avg}`).join(", ");
+  await tg(env, "sendMessage", { chat_id: admin, text: `📊 Kanal tahlili (oxirgi 14 kun, ${s.n} ta post)\nO'rtacha ko'rish: ${s.avg}\n\nPost turlari:\n${ty}\n\nEng ko'p ko'rilgan mavzular: ${up || "—"}\nEng kam: ${dn || "—"}\n\nBot yangiliklar tartibini va qo'shimcha post turlari sonini shu natijalarga qarab o'zi moslashtirdi.` });
+}
+// O'YIN OLDIDAN: katta o'yinlardan ~3 soat oldin — jadvaldagi o'rinlar, shaxsiy uchrashuvlar, o'zbek futbolchilari (faqat rasmiy ma'lumot, AI'siz)
+async function previewAuto(env) {
+  const now = Date.now(), d = tashDate(now); const done = await kvGet(env, "pvDone", []); const TW = (await kvGet(env, "engStats", null))?.typeW || {};
+  const cap = (TW.preview ?? 0) < -0.4 ? 1 : 2; if (done.filter((x) => x.d === d).length >= cap) return 0;
+  let ms = []; try { ms = await fdMatchesOn(env, d, null); } catch (e) { return 0; }
+  const big = ms.filter((m) => ["TIMED", "SCHEDULED"].includes(m.status) && !done.some((x) => x.id === m.id) && Date.parse(m.utcDate) - now > 140 * 60e3 && Date.parse(m.utcDate) - now < 200 * 60e3)
+    .filter((m) => { const H = teamName(m.homeTeam), A = teamName(m.awayTeam); return (topTeam(H, m.homeTeam?.name) && topTeam(A, m.awayTeam?.name)) || ((topTeam(H, m.homeTeam?.name) || topTeam(A, m.awayTeam?.name)) && m.competition?.code === "CL"); });
+  let n = 0;
+  for (const m of big.slice(0, 1)) {
+    const H = teamName(m.homeTeam), A = teamName(m.awayTeam), comp = FD_COMPS[m.competition?.code] || m.competition?.name || "";
+    done.push({ id: m.id, d }); await kvPut(env, "pvDone", done.slice(-60), { expirationTtl: 7 * 86400 });
+    let pos = "", h2h = "", form = "";
+    try { const j = await fd(env, `/competitions/${m.competition.code}/standings`, 1800); const rows = (j.standings || []).filter((x) => x.type === "TOTAL").flatMap((g) => g.table || []); const f = (id) => rows.find((r) => r.team?.id === id);
+      const a = f(m.homeTeam.id), b = f(m.awayTeam.id); if (a && b) { pos = `\n\n<b>Turnir jadvalida:</b>\n⟦${H}⟧ — ${a.position}-o'rin, ${a.points} ochko\n⟦${A}⟧ — ${b.position}-o'rin, ${b.points} ochko`; const fm = (x) => String(x || "").split(",").filter(Boolean).slice(-5).map((c) => ({ W: "G", D: "D", L: "M" })[c] || c).join(" "); if (a.form && b.form) form = `\n\n<b>So'nggi 5 o'yin</b> (G — g'alaba, D — durang, M — mag'lubiyat):\n⟦${H}⟧: ${fm(a.form)}\n⟦${A}⟧: ${fm(b.form)}`; } } catch (e) {}
+    try { const j = await fd(env, `/matches/${m.id}/head2head?limit=5`, 6 * 3600); const L = (j.matches || []).filter((x) => x.status === "FINISHED").slice(-5).reverse(); if (L.length) { let w1 = 0, w2 = 0, dr = 0; for (const x of L) { const hg = x.score.fullTime.home, ag = x.score.fullTime.away; const hn = x.homeTeam.id === m.homeTeam.id; if (hg === ag) dr++; else if ((hg > ag) === hn) w1++; else w2++; }
+      h2h = `\n\n<b>Oxirgi ${L.length} ta shaxsiy uchrashuv:</b> ⟦${H}⟧ ${w1} g'alaba, ${dr} durang, ⟦${A}⟧ ${w2} g'alaba\n` + L.map((x) => { const dd = tashDate(x.utcDate); return `${dd.slice(0, 4)}-yil ${uzDay(dd).split(",")[0]}: ⟦${teamName(x.homeTeam)}⟧ ${x.score.fullTime.home}:${x.score.fullTime.away} ⟦${teamName(x.awayTeam)}⟧`; }).join("\n"); } } catch (e) {}
+    if (!pos && !h2h) continue;
+    const uzp = FOCUS_PLAYERS.filter((p) => p.club.test(H + " " + m.homeTeam?.name) || p.club.test(A + " " + m.awayTeam?.name)).map((p) => p.n).join(", ");
+    const post = `<b>O'yin oldidan: ⟦${H}⟧ — ⟦${A}⟧</b>\n\n${d.slice(0, 4)}-yil ${uzDay(d).split(",")[0]}, ${comp}${m.matchday ? ", " + m.matchday + "-tur" : ""}. Boshlanishi: ${tashTime(m.utcDate)} (Toshkent vaqti).${pos}${form}${h2h}${uzp ? "\n\n<b>Diqqat markazida:</b> " + uzp : ""}\n\n#OyinOldidan #${String(H).replace(/[^\p{L}\p{N}]/gu, "")} #${String(A).replace(/[^\p{L}\p{N}]/gu, "")}`;
+    await resultJob(env, post, null, { kind: "news" }); n++;
+  }
+  return n;
+}
+// TO'PURARLAR POYGASI: ligalar navbat bilan; top-5 o'zgarmagan bo'lsa chiqmaydi; post turi kam ko'rilsa — haftada bir marta
+const LG_TAG = { PL: "PremierLeague", PD: "LaLiga", SA: "SerieA", BL1: "Bundesliga", FL1: "Ligue1", CL: "ChampionsLeague" };
+async function scorersAuto(env, force, to) {
+  const d = tashDate(Date.now()), wd = new Date(d + "T00:00:00Z").getUTCDay(); const TW = (await kvGet(env, "engStats", null))?.typeW || {};
+  const days = (TW.scorers ?? 0) < -0.4 ? [6] : [2, 4, 6]; if (!force && !days.includes(wd)) return "day";
+  const st = await kvGet(env, "scState", { i: 0, sig: {} }); const LG = ["PL", "PD", "SA", "BL1", "FL1", "CL"];
+  for (let k = 0; k < LG.length; k++) {
+    const c = LG[(st.i + k) % LG.length]; let j; try { j = await fd(env, `/competitions/${c}/scorers?limit=10`, 6 * 3600); } catch (e) { continue; }
+    const S = (j.scorers || []).filter((x) => x.goals).slice(0, 7); if (S.length < 5) continue;
+    const sig = S.slice(0, 5).map((x) => x.player?.id + ":" + x.goals).join(","); if (st.sig[c] === sig) continue;
+    if (!to) { st.sig[c] = sig; st.i = (st.i + k + 1) % LG.length; await kvPut(env, "scState", st); }
+    const comp = FD_COMPS[c]; const md = j.season?.currentMatchday;
+    const rows = S.map((x, i) => `${i + 1}. ⟦${x.player?.name}⟧ (⟦${teamName(x.team)}⟧) — ${x.goals} gol${x.assists ? ", " + x.assists + " ta gol uzatmasi" : ""}${x.penalties ? " (" + x.penalties + " tasi penaltidan)" : ""}`).join("\n");
+    const post = `<b>${comp}: to'purarlar poygasi</b>\n\n${d.slice(0, 4)}-yil ${uzDay(d).split(",")[0]} holatiga${md ? ", " + md + "-tur" : ""}.\n\n${rows}\n\n#Topurarlar #${LG_TAG[c]}`;
+    await resultJob(env, post, to || null, { kind: "news" }); return "ok " + c;
+  }
+  return "none";
+}
+// O'ZBEK LEGIONERLARI: haftalik yakun (dushanba) — natija postlaridagi futbolchi bo'limlaridan yig'iladi
+async function legionWeekly(env, force, to) {
+  const d = tashDate(Date.now()); if (!force && new Date(d + "T00:00:00Z").getUTCDay() !== 1) return "day";
+  const L = (await kvGet(env, "pfLog", [])).filter((x) => Date.now() - x.t < 7 * 86400e3 && x.d >= addDays(d, -7)); if (L.length < 2) return "few";
+  const by = new Map(); for (const x of L) { if (!by.has(x.n)) by.set(x.n, []); by.get(x.n).push(x); }
+  const order = [...by.entries()].sort((a, b) => b[1].reduce((s, x) => s + x.g * 100 + x.min, 0) - a[1].reduce((s, x) => s + x.g * 100 + x.min, 0));
+  const blocks = order.map(([n, a]) => `<b>${n}</b> (⟦${a[0].club}⟧)\n` + a.sort((x, y) => x.d.localeCompare(y.d)).map((x) => `${uzDay(x.d).split(",")[0]}: ⟦${x.H}⟧ ${x.sc} ⟦${x.A}⟧ — ${x.line}.`).join("\n")).join("\n\n");
+  const tot = L.reduce((s, x) => s + x.min, 0), goals = L.reduce((s, x) => s + x.g, 0);
+  const post = `<b>O'zbek legionerlari: hafta yakunlari</b>\n\n${uzDay(addDays(d, -7)).split(",")[0]} — ${uzDay(addDays(d, -1)).split(",")[0]}, ${d.slice(0, 4)}-yil. Legionerlarimiz jami ${tot} daqiqa maydonda bo'ldi${goals ? ", " + goals + " ta gol urdi" : ""}.\n\n${blocks}\n\n#Legionerlar #Ozbekiston`;
+  await resultJob(env, post, to || null, { kind: "news" }); return "ok";
 }
 
 // hisob orqali chiqarish ishlari javob bermay qolsa: qayta urinish, oxirida bot orqali
@@ -2158,6 +2284,9 @@ return;
     await kvPut(env, "paused", false);
     await tg(env, "sendMessage", { chat_id: chat, text: "▶️ Bot qayta ishga tushdi." });
     ctx.waitUntil(nextManual(env, chat, false));
+    } else if (text === "/tahlil") { await tg(env, "sendMessage", { chat_id: chat, text: "📊 Kanal postlari ko'rishlari yig'ilmoqda…" }); const n = await engCollect(env).catch((e) => "xato: " + e.message); await tg(env, "sendMessage", { chat_id: chat, text: "Yangi yozuvlar: " + n }); await engReport(env, chat);
+    } else if (text === "/topurar") { const r = await scorersAuto(env, true, chat).catch((e) => "xato: " + e.message); if (!/^ok/.test(r)) await tg(env, "sendMessage", { chat_id: chat, text: "To'purarlar namunasi: " + r });
+    } else if (text === "/legioner") { const r = await legionWeekly(env, true, chat).catch((e) => "xato: " + e.message); if (r !== "ok") await tg(env, "sendMessage", { chat_id: chat, text: "Legionerlar namunasi: " + (r === "few" ? "hafta davomida yozuv kam (natija postlaridan yig'iladi)" : r) });
     } else if (text === "/test") {
     const r = await publish(env, "🟢 <b>Inter Futbol</b> — avtomatik tizim ulandi.");
     await tg(env, "sendMessage", { chat_id: chat, text: r.ok ? "✅ Kanalga sinov xabari yuborildi." : "⚠️ Kanalga yozib bo'lmadi: " + r.description + "\nBot kanalda admin ekanini tekshiring." });
@@ -2774,6 +2903,12 @@ if (url.pathname === "/hook" && req.method === "POST") {
     if (on("C")) try { const fm = await kvGet(env, "factMode", "off"); const fdy = tashDate(Date.now()); if (fm !== "off" && (tashHour() === 20 || tashHour() === 21) && (await kvGet(env, "factDay", "")) !== fdy && (await autoOn(env))) { await kvPut(env, "factDay", fdy, { expirationTtl: 3 * 86400 }); let fr; try { fr = await factRun(env, fm !== "on"); } catch (e) { fr = e; } if (fr === "none" || fr instanceof Error) { const ft = (await kvGet(env, "factTry", {}))[fdy] || 0; if (ft < 5) { await kvPut(env, "factTry", { [fdy]: ft + 1 }, { expirationTtl: 86400 }); await kvPut(env, "factDay", "", { expirationTtl: 3 * 86400 }); } if (fr instanceof Error) throw fr; } } } catch (e) { await err("fact", e); }
     if (on("C")) try { const hm = await kvGet(env, "histMode", "off"); const hd = tashDate(Date.now()); if (hm !== "off" && (tashHour() === 10 || tashHour() === 11) && (await kvGet(env, "histDay", "")) !== hd && (await autoOn(env))) { await kvPut(env, "histDay", hd, { expirationTtl: 3 * 86400 }); let hr; try { hr = await histRun(env, hm !== "on"); } catch (e) { hr = e; } if (hr instanceof Error || /^err/.test(String(hr))) { const ht = (await kvGet(env, "histTry", {}))[hd] || 0; if (ht < 5) { await kvPut(env, "histTry", { [hd]: ht + 1 }, { expirationTtl: 86400 }); await kvPut(env, "histDay", "", { expirationTtl: 3 * 86400 }); } if (hr instanceof Error) throw hr; } } } catch (e) { await err("hist", e); }
     if (on("C")) try { const tdy = tashDate(Date.now()); if ((await kvGet(env, "tblMode", "on")) !== "off" && tashHour() === 11 && (await kvGet(env, "tblDay", "")) !== tdy && (await autoOn(env))) { await kvPut(env, "tblDay", tdy, { expirationTtl: 3 * 86400 }); await tablesAuto(env); } } catch (e) { await err("tbl", e); }
+    if (on("C")) try { if (await autoOn(env)) await previewAuto(env); } catch (e) { await err("preview", e); }
+    if (on("C")) try { const xd = tashDate(Date.now()), hh = tashHour(); if (await autoOn(env)) {
+      if (hh === 15 && (await kvGet(env, "scDay", "")) !== xd) { await kvPut(env, "scDay", xd, { expirationTtl: 3 * 86400 }); await scorersAuto(env); }
+      if (hh === 12 && (await kvGet(env, "lgwDay", "")) !== xd) { await kvPut(env, "lgwDay", xd, { expirationTtl: 3 * 86400 }); await legionWeekly(env); }
+      if (hh === 23 && (await kvGet(env, "engDay", "")) !== xd) { await kvPut(env, "engDay", xd, { expirationTtl: 3 * 86400 }); await engCollect(env); if (new Date(xd + "T00:00:00Z").getUTCDay() === 0) await engReport(env); }
+    } } catch (e) { await err("extra", e); }
     if (on("B")) try { await resFallback(env); } catch (e) { await err("resfb", e); }
     if (on("B")) try { await ujobSweep(env); } catch (e) { await err("usweep", e); }
     if (on("A")) try { await sendNext(env, { st, kind: "v" }); } catch (e) { await err("sendv", e); }

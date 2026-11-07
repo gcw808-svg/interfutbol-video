@@ -29,6 +29,12 @@ jobs:
           d=re.findall(r"<(?:pubDate|updated|published)>(.*?)</",s)[:3]
           print("titles:",[x.strip()[:90] for x in t]); print("dates:",d)
           print("img:", bool(re.search(r"<enclosure|<media:(content|thumbnail)",s)))
-          if not items: print(s[:300].replace("\n"," "))
+          if "tgme_widget_message" in s:
+              ps=s.split('data-post="')[1:]
+              print("tg posts:",len(ps))
+              for x in ps[:40]:
+                  v=re.search(r'tgme_widget_message_views">([^<]+)<',x); t=re.search(r'<time datetime="([^"]+)"',x); tx=re.search(r'js-message_text[^>]*>([\s\S]*?)</div>',x)
+                  print(x[:25].split('"')[0], v and v.group(1), t and t.group(1), re.sub(r"<[^>]+>","",tx.group(1))[:70] if tx else None)
+          elif not items: print(s[:300].replace("\n"," "))
           PY
           done
