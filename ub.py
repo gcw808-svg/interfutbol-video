@@ -188,6 +188,22 @@ async def post(job):
                 print("takror post, yuborilmadi", dup)
                 done({"id": job, "ok": True, "msg_id": dup, "dup": True})
                 return
+        if j.get("edits"):
+            # bir nechta postni ketma-ket tahrirlash (masalan logotiplarni qayta qo'yish) — bitta ulanishda
+            ok, failed = 0, []
+            for e in j["edits"]:
+                try:
+                    await c.edit_message(ch, int(e["id"]), e["html"], parse_mode="html")
+                    ok += 1
+                except Exception as x:
+                    if "not modified" in str(x).lower():
+                        ok += 1
+                    else:
+                        failed.append(str(e["id"]) + ": " + str(x)[:80])
+                await asyncio.sleep(1.5)
+            await c.disconnect()
+            done({"id": job, "ok": True, "edited": ok, "failed": failed})
+            return
         if j.get("edit"):
             # editPhoto bo'lsa — post rasmi ham almashtiriladi (masalan natija kartochkasi yangi dizaynda)
             ef = None
