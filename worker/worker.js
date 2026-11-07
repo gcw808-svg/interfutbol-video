@@ -1968,7 +1968,7 @@ async function resRedo(env, chat, mid) {
   const id = "r" + Date.now().toString(36) + "k";
   await kvPut(env, "cjob:" + id, { title: newAlpha(t0), home: cardNm(H), away: cardNm(A), score: sm[2] + ":" + sm[3], league: newAlpha(lgLogoName), homeLogo: hl || ESPN_CREST[H] || ESPN_CREST[Object.keys(ESPN_CREST).find((k) => norm(k) === norm(H))] || "", awayLogo: al || ESPN_CREST[A] || ESPN_CREST[Object.keys(ESPN_CREST).find((k) => norm(k) === norm(A))] || "", leagueLogo: ll || espnLgLogo(lg) || "", ...goals, chan: html, rep: mid, kind: "res", story: 0 }, { expirationTtl: 7 * 3600 });
   await ghDispatch(env, "card.yml", { job: id });
-  await tg(env, "sendMessage", { chat_id: chat, text: "✅ " + H + " – " + A + ": kartochka chizilmoqda. 2–3 daqiqada kanaldagi post rasmi natija kartochkasiga almashtiriladi." });
+  await tg(env, "sendMessage", { chat_id: chat, text: "✅ ⟦" + H + "⟧ – ⟦" + A + "⟧" + ": kartochka chizilmoqda. 2–3 daqiqada kanaldagi post rasmi natija kartochkasiga almashtiriladi." });
 }
 async function cardDone(env, id, png) {
   const j = await kvGet(env, "cjob:" + id, null);
