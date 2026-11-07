@@ -22,6 +22,9 @@ const FEEDS = [
 
     // Kanal yo'nalishi: faqat eng mashhur klublar, turnirlar va o'zbek futboli
     const FOCUS_EN = /\b(man(chester)?\s*(united|utd|city)|liverpool|arsenal|chelsea|real madrid|barcelona|barca|barça|atl[eé]tico( de)? madrid|atleti\b|inter milan|internazionale|nerazzurri|milan|juventus|juve|bayern|dortmund|psg|paris saint-germain|paris sg|al[- ]?nassr|inter miami|ronaldo|messi|mbapp[eé]|yamal|haaland|salah|harry kane|vin[ií]cius|bellingham|lewandowski|saka|cole palmer|bruno fernandes|champions league|world cup|euro 20\d\d|european championship|uzbek)/i;
+    // Jamoa nomi uchun qat'iy tekshiruv: "RCD Espanyol de Barcelona" Barcelona emas; ayollar, yoshlar va ikkinchi jamoalar ham bizniki emas (2026-11-08)
+    const NOT_OURS = /espanyol|women|\bwfc\b|femen|f[eé]minin|frauen|ladies|\bII\b|\bU-?(1[5-9]|2[0-3])\b|castilla|futuro|primavera|reserves?\b|academy|youth|juniors?\b|atl[eè]tic\b/i;
+    const ourTeam = (...n) => { const t = n.filter(Boolean).join(" "); return !!t && !NOT_OURS.test(t) && FOCUS_EN.test(t); };
     const FOCUS_RU = /манчестер|ман сити|ман юнайтед|ливерпул|«арсенал|челси|«реал|реал мадрид|барселон|«барс|атлетико|«интер|интер милан|интер майами|милан|ювентус|бавари|дортмунд|боруссия д|псж|пари сен|наср|роналду|месси|мбаппе|ямал|холанд|салах|кейн|винисиус|беллингем|левандовск|сака|палмер|бруну ферн|лиг[аиуе] чемпионов|лч\b|чемпионат[аеу]? мира|чм-20|чемпионат[аеу]? европы|евро-20|узбек/i;
     const RU_PUNDIT = /радимов|погребняк|самедов|мостов[оа]|бубнов|генич|шалимов|канчельскис|кержаков|глушаков|мамаев|кокорин|смертин|аршавин|губерниев|черданцев|уткин|черчесов|слуцк|гончаренко|карпин|семак|станкович|мусаев|галицк|кафельников|тарханов|кисляк|глушенков|соболев|батраков|миранчук|сперцян|дзюба/i; const RU_DOM = /сборн\S* росси|россии по футболу|\bрпл\b|рфпл|«зенит|«спартак|цска|«локомотив|«динамо|«краснодар|«ростов|«рубин|«ахмат|«оренбург|«крылья|«акрон|«пари нн|«факел|«балтика|«химки|russia national team/i; const ruOff = (t) => RU_PUNDIT.test(t) || (RU_DOM.test(t) && !(FOCUS_EN.test(t.replace(/uzbek\S*/gi, "")) || FOCUS_RU.test(t.replace(/узбек\S*/gi, "")))); const isFocus = (i) => { const t = (i.title || "") + " " + (i.desc || ""); if (ruOff(String(i.title || ""))) return false; return FOCUS_EN.test(t) || FOCUS_RU.test(t) || PRIORITY.test(t); };
 
@@ -979,7 +982,7 @@ async function lineupsAuto(env) {
     if (left < 5 * 60e3 || left > 80 * 60e3 || done.includes(m.id) || n >= 2) continue;
     const H = teamName(m.homeTeam), A = teamName(m.awayTeam);
     const uz = /uzbek|o'zbek/i.test(H + " " + A + " " + (m.homeTeam?.name || "") + " " + (m.awayTeam?.name || ""));
-    const big = uz || (FOCUS_EN.test(H + " " + (m.homeTeam?.name || "")) && FOCUS_EN.test(A + " " + (m.awayTeam?.name || "")));
+    const big = uz || (ourTeam(H, m.homeTeam?.name) && ourTeam(A, m.awayTeam?.name));
     if (!big) continue;
     const E = await espnMatch(m, H, A).catch(() => null); if (!E?.eid) continue;
     let sm; try { sm = await (await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${E.lg}/summary?event=${E.eid}`, { cf: { cacheTtl: 60 } })).json(); } catch (e) { continue; }
@@ -1036,8 +1039,7 @@ async function autoResults(env) {
   for (let m of ms) {
     if (done.includes(m.id)) continue;
     const H = teamName(m.homeTeam), A = teamName(m.awayTeam);
-    const names = [H, A, m.homeTeam?.name, m.awayTeam?.name].join(" ");
-    if (!FOCUS_EN.test(names)) continue;
+    if (!(ourTeam(H, m.homeTeam?.name) || ourTeam(A, m.awayTeam?.name))) continue;
     const age = Date.now() - Date.parse(m.utcDate);
     if (first || age > 6 * 3600e3) { if (m.status === "FINISHED") done.push(m.id); continue; }
     if (posted >= 4) continue;
@@ -1161,7 +1163,7 @@ async function fixturesRun(env, toAdmin) {
   let fdm = []; try { fdm = [...(await fdMatchesOn(env, today, null)), ...(await fdMatchesOn(env, addDays(today, 1), null))]; } catch (e) { await kvPut(env, "cronErr", { k: "fix-fd", t: Date.now(), e: String(e && e.message || e) }, { expirationTtl: 3 * 86400 }); }
   const fdKey = new Set(fdm.map((m) => norm(teamName(m.homeTeam)) + "|" + tashDate(m.utcDate)));
   let esm = []; try { esm = (await espnFixtures([today, addDays(today, 1)])).filter((m) => !fdKey.has(norm(teamName(m.homeTeam)) + "|" + tashDate(m.utcDate))); } catch (e) {}
-  const ms = [...fdm, ...esm].filter((m) => ["TIMED", "SCHEDULED"].includes(m.status) && Date.parse(m.utcDate) > now && Date.parse(m.utcDate) < now + 22 * 3600e3 && FOCUS_EN.test([teamName(m.homeTeam), teamName(m.awayTeam), m.homeTeam?.name, m.awayTeam?.name].join(" ")));
+  const ms = [...fdm, ...esm].filter((m) => ["TIMED", "SCHEDULED"].includes(m.status) && Date.parse(m.utcDate) > now && Date.parse(m.utcDate) < now + 22 * 3600e3 && (ourTeam(teamName(m.homeTeam), m.homeTeam?.name) || ourTeam(teamName(m.awayTeam), m.awayTeam?.name)));
   if (!ms.length) return "none";
   const dlab = (d) => d.slice(0, 4) + "-yil " + uzDay(d).split(",")[0];
   const out = ["<b>O'yinlar jadvali</b>", "Barcha o'yinlar Toshkent vaqti bilan."];
@@ -2309,7 +2311,7 @@ async function standingsImg(env, c) {
   const j = await fd(env, `/competitions/${c}/standings`, 600);
   const g = (j.standings || []).find((s) => s.type === "TOTAL");
   if (!g || !g.table?.length) return null;
-  const rows = g.table.map((r) => { const n = teamName(r.team); return { p: r.position, n, g: r.playedGames, w: r.won, d: r.draw, l: r.lost, gd: r.goalDifference, pts: r.points, hl: FOCUS_EN.test(n + " " + (r.team?.name || "")) }; });
+  const rows = g.table.map((r) => { const n = teamName(r.team); return { p: r.position, n, g: r.playedGames, w: r.won, d: r.draw, l: r.lost, gd: r.goalDifference, pts: r.points, hl: ourTeam(n, r.team?.name) }; });
   const name = FD_COMPS[c];
   const md = Math.max(...rows.map((r) => r.g));
   return { fp: rows.reduce((a, r) => a + r.g, 0), img: { kind: "standings", title: UZ_COMP.has(name) ? newAlpha(name) : name, league: name, sub: newAlpha(md + "-turdan so'ng · " + tblDateStr()), groups: [{ name: "", rows }] } };
