@@ -1501,7 +1501,7 @@ async function scorersAuto(env, force, to) {
     if (!to) { st.sig[c] = sig; st.i = (st.i + k + 1) % LG.length; await kvPut(env, "scState", st); }
     const comp = FD_COMPS[c]; const md = j.season?.currentMatchday;
     const rows = S.map((x, i) => `${i + 1}. ⟦${x.player?.name}⟧ (⟦${teamName(x.team)}⟧) — ${x.goals} gol${x.assists ? ", " + x.assists + " ta gol uzatmasi" : ""}${x.penalties ? " (" + x.penalties + " tasi penaltidan)" : ""}`).join("\n");
-    const post = `<b>${comp}: to'purarlar poygasi</b>\n\n${d.slice(0, 4)}-yil ${uzDay(d).split(",")[0]} holatiga${md ? ", " + md + "-tur" : ""}.\n\n${rows}\n\n#Topurarlar #${LG_TAG[c]}`;
+    const post = `<b>${comp}: to'purarlar poygasi</b>\n\n${d.slice(0, 4)}-yil ${uzDay(d).split(",")[0]} holatiga.\n\n${rows}\n\n#Topurarlar #${LG_TAG[c]}`;
     await resultJob(env, post, to || null, { kind: "news" }); return "ok " + c;
   }
   return "none";
