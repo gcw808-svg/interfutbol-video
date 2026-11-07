@@ -1411,12 +1411,12 @@ async function factRun(env, toAdmin, pageHint, test = false) {
 // ---------------- YANGI POST TURLARI VA O'ZINI O'ZI RIVOJLANTIRISH (2026-11-08) ----------------
 // Mavzular: yangilik manbasi sarlavhasi (ingliz/rus/o'zbek) va kanal posti (o'zbek) uchun bir xil teglar
 const TOPICS = [
-  ["uz", /uzbek|o['ʻ‘’`]?zbek|ўзбек|узбек|ozbekiston|husanov|khusanov|хусанов|ҳусанов|shomurodov|шомуродов|fayzull|файзулл|masharipov|aliqulov|alikulov|urunov|o['ʻ]runov/i],
-  ["transfer", /transfer|\bsign(s|ed|ing)?\b|contract|\bdeal\b|\bbid\b|\bloan\b|трансфер|контракт|подпис|аренд|shartnoma|ijara|sotib ol|o['ʻ]tish/i],
+  ["uz", /uzbek|o['ʻ‘’`]?zbek|özbek|şomurodov|ş?omurodov|ўзбек|узбек|ozbekiston|husanov|khusanov|хусанов|ҳусанов|shomurodov|шомуродов|fayzull|файзулл|masharipov|aliqulov|alikulov|urunov|o['ʻ]runov/i],
+  ["transfer", /transfer|\bsign(s|ed|ing)?\b|contract|\bdeal\b|\bbid\b|\bloan\b|трансфер|контракт|подпис|аренд|s?h?artnoma|şartnoma|ijara|sotib ol|o['ʻ]tish|ötiş/i],
   ["injury", /injur|ruled out|sidelined|травм|jarohat/i],
   ["coach", /manager|head coach|\bsack|appoint|тренер|отставк|murabbiy|iste['ʻ]?fo/i],
-  ["rumor", /\breport(s|edly)?\b|gossip|rumou?r|close to|\btarget|interest|слух|интерес|qiziqish|xohla/i],
-  ["result", /\d+\s*[:–-]\s*\d+|\bbeat\b|\bwin\b|\bdraw\b|победил|обыграл|g['ʻ]alaba|mag['ʻ]lub|durang/i],
+  ["rumor", /\breport(s|edly)?\b|gossip|rumou?r|close to|\btarget|interest|слух|интерес|qiziqiş|qiziqish|xohla/i],
+  ["result", /\d+\s*[:–-]\s*\d+|\bbeat\b|\bwin\b|\bdraw\b|победил|обыграл|g['ʻ]alaba|ğalaba|mag['ʻ]lub|mağlub|durang/i],
   ["record", /record|milestone|рекорд|rekord/i],
   ["ronaldo", /ronaldo|роналду/i], ["messi", /messi|месси/i], ["mbappe", /mbapp|мбапп/i], ["yamal", /yamal|ямал/i], ["haaland", /haaland|холанд/i], ["salah", /salah|салах/i],
   ["c:mu", /man(chester)?\s*(utd|united)|манчестер юнайтед|«мю»/i], ["c:mc", /man(chester)?\s*city|манчестер сити|ман сити/i], ["c:liv", /liverpool|ливерпул/i], ["c:ars", /arsenal|арсенал/i], ["c:che", /chelsea|челси/i],
