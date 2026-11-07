@@ -37,11 +37,11 @@ const FEEDS = [
     const NOT_OURS = /espanyol|women|\bwfc\b|femen|f[eé]minin|frauen|ladies|\bII\b|\bU-?(1[5-9]|2[0-3])\b|castilla|futuro|primavera|reserves?\b|academy|youth|juniors?\b|atl[eè]tic\b/i;
     // CHET ELDAGI O'ZBEK FUTBOLCHILARI KLUBLARI (Bahtiyor aka qarori, 2026-11-08): o'yinlari jadvalga va natijalarga ham chiqadi.
     // Klubda o'zbek futbolchisi qolmasa (va u top ro'yxatda bo'lmasa) bu yerdan olib tashlanadi; yangi o'zbek legioner klubi qo'shiladi.
-    // İstanbul Başakşehir — Eldor Shomurodov, Abbosbek Fayzullayev; Çaykur Rizespor — Husniddin Aliqulov; Braga — Sadriddin Hasanov;
+    // İstanbul Başakşehir — Eldor Shomurodov, Abbosbek Fayzullayev; Çaykur Rizespor — Husniddin Aliqulov; Braga — olib tashlandi (2026-11-08, Bahtiyor aka qarori: Sadriddin Hasanov U23 jamoasida; asosiy jamoaga chiqsa fmWatch xabar beradi va qaytariladi);
     // Royal Antwerp — Muhammadali O'rinboyev; FC Lugano — Behruz Karimov; Tractor — Odiljon Hamrobekov; Esteghlal — Jaloliddin Masharipov, Rustam Ashurmatov;
     // Persepolis — Oston O'runov, Igor Sergeyev; Baniyas — Azizjon G'aniyev (2026-11-08 FotMob: Al Bataeh'dan o'tgan; Abdulla Abdullayev Neftchi Farg'onaga qaytgani uchun Dibba olib tashlandi); Sabah — Umarali Rahmonaliyev;
     // Radnik Surdulica — Otabek Shukurov; Zakho — Sherzod Temirov. Rossiya: Rubin Kazan — Jahongir O'rozov, Dynamo Makhachkala — Mahmud Mahamadjonov (Bahtiyor aka qarori 2026-11-08: Rossiya klublarining faqat o'yinlari/natijalari; yangiliklardan faqat o'zbek futbolchisi nomi borlari).
-    const UZ_CLUBS = /ba[sş]ak[sş]ehir|rizespor|\bbraga\b|\bantwerp\b|\blugano\b|\btractor\b|traktor sazi|esteghlal(?! khuzestan)|persepolis|bani ?yas|\bsabah\b|radnik surdulica|\bzakho\b|rubin kazan|\brubin\b|d[iy]namo makhachkala/i;
+    const UZ_CLUBS = /ba[sş]ak[sş]ehir|rizespor|\bantwerp\b|\blugano\b|\btractor\b|traktor sazi|esteghlal(?! khuzestan)|persepolis|bani ?yas|\bsabah\b|radnik surdulica|\bzakho\b|rubin kazan|\brubin\b|d[iy]namo makhachkala/i;
     // Chet eldagi o'zbek futbolchilari ismlari: Rossiya mavzusidagi yangilik shu ismlardan biri bo'lsa ham chiqadi
     const UZ_NAMES = /shomurodov|шомуродов|husanov|khusanov|хусанов|fayzullaev|fayzullayev|faizullaev|файзуллаев|masharipov|машарипов|urunov|урунов|bekhruz karimov|behruz karimov|бехруз каримов|urozov|o'rozov|урозов|makhamadzhonov|mahamadjonov|махамаджонов|hamrobekov|khamrobekov|хамробеков|azizjon ganiev|azizjon g'aniyev|азизжон ганиев|rakhmonaliev|rahmonaliyev|рахмоналиев|sadriddin khasanov|sadriddin hasanov|садриддин хасанов|urinboev|o'rinboyev|уринбоев|abdulla abdullaev|ashurmatov|ашурматов|aliqulov|alikulov|аликулов|igor sergeev|игорь сергеев|otabek shukurov|отабек шукуров|sherzod temirov|шерзод темиров/i;
     const topTeam = (...n) => { const t = n.filter(Boolean).join(" "); return !!t && !NOT_OURS.test(t) && FOCUS_EN.test(t); };
@@ -1066,7 +1066,7 @@ const FOCUS_PLAYERS = [
   { n: "Eldor Shomurodov", k: ["shomurodov"], club: /ba[sş]ak[sş]ehir/i, fm: 619513 },
   { n: "Abbosbek Fayzullayev", k: ["fayzull", "faizull"], club: /ba[sş]ak[sş]ehir/i, fm: 1249993 },
   { n: "Husniddin Aliqulov", k: ["aliqulov", "alikulov"], club: /rizespor/i, fm: 1135987 },
-  { n: "Sadriddin Hasanov", k: ["sadriddin"], club: /\bbraga\b/i, fm: 1844951 },
+  { n: "Sadriddin Hasanov", k: ["sadriddin"], club: /\bbraga\b/i, fm: 1844951, off: 1 }, // off — klubi hozircha kanal ro'yxatida emas
   { n: "Muhammadali O'rinboyev", k: ["urinboev", "rinboyev"], club: /antwerp/i, fm: 1358007 },
   { n: "Behruz Karimov", k: ["bekhruz karimov", "behruz karimov"], club: /lugano/i, fm: 1898281 },
   { n: "Jahongir O'rozov", k: ["urozov", "rozov"], club: /rubin/i, fm: 1477513 },
@@ -1089,9 +1089,10 @@ async function fmWatch(env, all) {
   await Promise.all(due.map(async (p) => { try { const j = await (await fetch("https://www.fotmob.com/api/data/playerData?id=" + p.fm, { headers: { "user-agent": "Mozilla/5.0 InterFutbolBot" } })).json(); const pt = j.primaryTeam || {}; if (!pt.teamName) return;
     const inj = j.injuryInformation ? String(j.injuryInformation.name || j.injuryInformation.title || "jarohat") : ""; T[p.fm] = { t: Date.now(), team: pt.teamName, loan: !!pt.onLoan, inj };
     const ok = p.club.test(pt.teamName) && !NOT_OURS.test(pt.teamName); const sig = p.fm + "|" + pt.teamName;
+    if (ok && p.off && !seen.includes(sig + "|on")) { seen.push(sig + "|on"); msgs.push(`• ${p.n.replace(/[⟦⟧]/g, "")} endi asosiy jamoada: ${pt.teamName} — klubni kanal ro'yxatiga qaytarish kerak`); }
     if (!ok && !seen.includes(sig)) { seen.push(sig); msgs.push(p.club.test(pt.teamName) ? `• ${p.n.replace(/[⟦⟧]/g, "")} asosiy jamoada emas: ${pt.teamName}` : `• ${p.n.replace(/[⟦⟧]/g, "")} — FotMob bo'yicha hozirgi klubi: ${pt.teamName}${pt.onLoan ? " (ijarada)" : ""}`); } } catch (e) {} }));
   if (due.length) await kvPut(env, "pTeam", T);
-  if (msgs.length) { await kvPut(env, "ptSeen", seen.slice(-100)); const ad = (await getAdmins(env))[0]; if (ad) await tg(env, "sendMessage", { chat_id: ad, text: "🔁 Futbolchilar nazorati — ro'yxatdagi klub bilan mos emas:\n" + msgs.join("\n") + "\n\nTransfer bo'lsa, Claude klublar ro'yxatini yangilaydi; asosiy jamoada bo'lmasa, natija postlarida uning qatori chiqmaydi." }); }
+  if (msgs.length) { await kvPut(env, "ptSeen", seen.slice(-100)); const ad = (await getAdmins(env))[0]; if (ad) await tg(env, "sendMessage", { chat_id: ad, text: "🔁 Futbolchilar nazorati — o'zgarish bor:\n" + msgs.join("\n") + "\n\nTransfer bo'lsa, Claude klublar ro'yxatini yangilaydi; asosiy jamoada bo'lmasa, natija postlarida uning qatori chiqmaydi." }); }
   return { T, msgs };
 }
 async function playerFocus(env, E, m, H, A, F) {
