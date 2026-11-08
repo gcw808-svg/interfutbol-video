@@ -1482,7 +1482,7 @@ const TOPICS = [
 ];
 const topicsOf = (t) => TOPICS.filter(([, re]) => re.test(String(t || ""))).map(([k]) => k);
 // post turi (kanal postining matnidan)
-const postKind = (t) => { t = String(t || ""); return /#Natija\b/i.test(t) ? "result" : /#OyinOldidan/i.test(t) ? "preview" : /#Topurarlar/i.test(t) ? "scorers" : /#Legionerlar/i.test(t) ? "legion" : /#OzbekFutboli/i.test(t) ? "uzfact" : /#FutbolTarixi/i.test(t) ? "hist" : /#QiziqarliFakt/i.test(t) ? "fact" : /yin(lar)? jadvali/i.test(t) ? "fixtures" : /tarkib/i.test(t) && /#/.test(t) && /\d+\./.test(t) ? "lineup" : "news"; };
+const postKind = (t) => { t = String(t || ""); return /#Natija\b/i.test(t) ? "result" : /#OyinOldidan/i.test(t) ? "preview" : /#Topurarlar/i.test(t) ? "scorers" : /#Legionerlar/i.test(t) ? "legion" : /#OzbekFutboli/i.test(t) ? "uzfact" : /#Raqamlarda/i.test(t) ? "stats" : /#FutbolTarixi/i.test(t) ? "hist" : /#QiziqarliFakt/i.test(t) ? "fact" : /yin(lar)? jadvali/i.test(t) ? "fixtures" : /tarkib/i.test(t) && /#/.test(t) && /\d+\./.test(t) ? "lineup" : "news"; };
 const viewsNum = (x) => { const m = String(x || "").trim().match(/^([\d.,]+)\s*([KM]?)/i); if (!m) return 0; const n = parseFloat(m[1].replace(",", ".")); return Math.round(n * (/k/i.test(m[2]) ? 1e3 : /m/i.test(m[2]) ? 1e6 : 1)); };
 // kanal ochiq sahifasidan (t.me/s) har bir postning ko'rishlar soni — 24–96 soat o'tgan postlar hisobga olinadi
 async function engCollect(env) {
@@ -1514,7 +1514,7 @@ async function engCollect(env) {
   await kvPut(env, "topicW", topicW); await kvPut(env, "engStats", { t: Date.now(), n: recent.length, avg: Math.round(all), typeStats, topicStats, typeW, topicW });
   return added;
 }
-const TYPE_UZ = { result: "natijalar", news: "yangiliklar", preview: "o'yin oldidan", scorers: "to'purarlar", legion: "legionerlar", uzfact: "o'zbek futboli fakti", hist: "tarixda bugun", fact: "qiziqarli fakt", fixtures: "o'yinlar jadvali", lineup: "tarkiblar" };
+const TYPE_UZ = { result: "natijalar", news: "yangiliklar", preview: "o'yin oldidan", scorers: "to'purarlar", legion: "legionerlar", uzfact: "o'zbek futboli fakti", stats: "raqamlarda", hist: "tarixda bugun", fact: "qiziqarli fakt", fixtures: "o'yinlar jadvali", lineup: "tarkiblar" };
 const TOPIC_UZ = { uz: "o'zbek futboli", transfer: "transferlar", injury: "jarohatlar", coach: "murabbiylar", rumor: "mish-mishlar", result: "o'yin natijalari", record: "rekordlar", ronaldo: "Ronaldo", messi: "Messi", mbappe: "Mbappé", yamal: "Yamal", haaland: "Haaland", salah: "Salah", "c:mu": "Manchester United", "c:mc": "Manchester City", "c:liv": "Liverpool", "c:ars": "Arsenal", "c:che": "Chelsea", "c:rma": "Real Madrid", "c:bar": "Barcelona", "c:atm": "Atlético Madrid", "c:int": "Inter", "c:mil": "Milan", "c:juv": "Juventus", "c:bay": "Bayern", "c:bvb": "Dortmund", "c:psg": "PSG", "c:nas": "Al-Nassr", "c:mia": "Inter Miami" };
 async function engReport(env, chat) {
   const s = await kvGet(env, "engStats", null); const admin = chat || (await getAdmins(env))[0]; if (!s || !admin) return;
@@ -1634,6 +1634,49 @@ async function uzFactRun(env, to) {
   await resultJob(env, f.post, to || null, { kind: "news" });
   if (!to) { const u = await kvGet(env, "uzfUsed", []); u.push({ k: f.key, t: Date.now() }); await kvPut(env, "uzfUsed", u.slice(-80)); }
   return "ok " + f.key;
+}
+
+// ---------------- RAQAMLARDA (Bahtiyor aka tanlovi, 2026-11-08): haftada 2 marta (payshanba, yakshanba 13:00) ----------------
+// Faqat aniq raqamlar, AI'siz. Gol va gol uzatmalari kamida IKKI manbada bir xil bo'lsagina chiqadi: FotMob, ESPN, football-data.
+const STAT_PLAYERS = [
+  { n: "Erling Haaland", fm: 737066 }, { n: "Kylian Mbappé", fm: 701154 }, { n: "Lamine Yamal", fm: 1467236 }, { n: "Harry Kane", fm: 194165 },
+  { n: "Vinícius Júnior", fm: 846033 }, { n: "Jude Bellingham", fm: 1077894 }, { n: "Cole Palmer", fm: 1096353 }, { n: "Bukayo Saka", fm: 961995 },
+  { n: "Raphinha", fm: 696679 }, { n: "Julián Álvarez", fm: 974753 }, { n: "Cristiano Ronaldo", fm: 30893 }, { n: "Lionel Messi", fm: 30981 },
+  { n: "Eldor Shomurodov", fm: 619513, uz: 1 },
+];
+const LG_SLUG = { "Premier League": ["eng.1", "PL"], "LaLiga": ["esp.1", "PD"], "Serie A": ["ita.1", "SA"], "Bundesliga": ["ger.1", "BL1"], "Ligue 1": ["fra.1", "FL1"], "Super Lig": ["tur.1"], "Süper Lig": ["tur.1"], "Saudi Pro League": ["ksa.1"], "Major League Soccer": ["usa.1"], "MLS": ["usa.1"] };
+const findStat = (o, name) => { if (!o || typeof o !== "object") return null; if (o.name === name && o.value != null) return Number(o.value); for (const v of Object.values(o)) { const r = findStat(v, name); if (r != null) return r; } return null; };
+async function statPlayer(env, p) {
+  const nk = (x) => norm(x).replace(/ /g, "");
+  let fm; try { fm = await (await fetch("https://www.fotmob.com/api/data/playerData?id=" + p.fm, { headers: { "user-agent": "Mozilla/5.0 InterFutbolBot" } })).json(); } catch (e) { return null; }
+  const ml = fm.mainLeague; if (!ml) return null; const st = Object.fromEntries((ml.stats || []).map((x) => [x.title, Number(x.value)]));
+  const lgName = ml.leagueName; const [slug, fdc] = LG_SLUG[lgName] || [];
+  const src = { fm: { g: st.Goals, a: st.Assists } };
+  if (slug) { try { const ids = await kvGet(env, "espnIds", {}); let id = ids[p.fm]; if (!id) { const sj = await (await fetch("https://site.web.api.espn.com/apis/search/v2?limit=3&query=" + encodeURIComponent(fm.name || p.n))).json(); const c = (sj.results || []).find((r) => r.type === "player")?.contents?.[0]; id = c && String(c.uid || "").split("~a:")[1]; if (id) { ids[p.fm] = id; await kvPut(env, "espnIds", ids); } }
+    if (id) { const ej = await (await fetch(`https://site.web.api.espn.com/apis/common/v3/sports/soccer/${slug}/athletes/${id}`)).json(); const g = findStat(ej.athlete?.statsSummary || ej, "totalGoals"), a = findStat(ej.athlete?.statsSummary || ej, "goalAssists"), sh = findStat(ej.athlete?.statsSummary || ej, "totalShots"); if (g != null) src.espn = { g, a, sh }; } } catch (e) {} }
+  if (fdc) { try { const j = await fd(env, `/competitions/${fdc}/scorers?limit=60`, 6 * 3600); const r = (j.scorers || []).find((x) => nk(x.player?.name) === nk(fm.name || p.n)); src.fd = r ? { g: r.goals, a: r.assists ?? null } : null; } catch (e) {} }
+  const agree = (k) => { const v = Object.values(src).filter(Boolean).map((x) => x[k]).filter((x) => x != null); for (const x of v) if (v.filter((y) => y === x).length >= 2) return x; return null; };
+  const g = agree("g"), a = agree("a"); if (g == null) return null;
+  return { p, name: fm.name || p.n, club: fm.primaryTeam?.teamName || "", lg: lgName, season: ml.season, g, a, mp: st.Matches, min: st["Minutes played"], rating: st.Rating, sh: src.espn?.sh, n: Object.values(src).filter(Boolean).length };
+}
+async function statsPost(env, to, pick) {
+  const used = await kvGet(env, "statUsed", {}); const now = Date.now();
+  const order = pick ? STAT_PLAYERS.filter((p) => norm(p.n).includes(norm(pick))) : [...STAT_PLAYERS].sort((x, y) => (used[x.fm] || 0) - (used[y.fm] || 0));
+  for (const p of order.slice(0, 4)) {
+    const r = await statPlayer(env, p); if (!r || (!r.g && !r.a)) continue;
+    const d = tashDate(now); const per = r.g && r.min ? Math.round(r.min / r.g) : 0;
+    const L = [`• ${r.g} gol${r.a != null ? ", " + r.a + " ta gol uzatmasi" : ""}`];
+    if (r.mp) L.push(`• ${r.mp} o'yin${r.min ? ", " + r.min + " daqiqa" : ""}`);
+    if (per) L.push(`• har ${per} daqiqada bitta gol`);
+    if (r.sh) L.push(`• ${r.sh} ta zarba`);
+    if (r.rating) L.push(`• o'rtacha baho: ${String(r.rating).replace(".", ",")} (FotMob)`);
+    const nm = p.uz ? "Eldor Shomurodov" : "⟦" + r.name + "⟧";
+    const post = `<b>Raqamlarda: ${nm}</b>\n\n⟦${r.club}⟧, ${r.lg}, ${String(r.season || "").replace("/", "/")}-mavsum — ${d.slice(0, 4)}-yil ${uzDay(d).split(",")[0]} holatiga:\n${L.join("\n")}\n\n#Raqamlarda #${String(r.name).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\p{L}\p{N}]/gu, "")}`;
+    await resultJob(env, post, to || null, { kind: "news" });
+    if (!to) { used[p.fm] = now; await kvPut(env, "statUsed", used); }
+    return "ok " + r.name + " (" + r.n + " manba)";
+  }
+  return "none";
 }
 
 // hisob orqali chiqarish ishlari javob bermay qolsa: qayta urinish, oxirida bot orqali
@@ -2409,6 +2452,7 @@ return;
     await tg(env, "sendMessage", { chat_id: chat, text: "▶️ Bot qayta ishga tushdi." });
     ctx.waitUntil(nextManual(env, chat, false));
     } else if (/^\/nazorat\s/.test(text)) { const r = await qcCheck(env, text.replace(/^\/nazorat\s+/, ""), false).catch((e) => ({ fatal: ["tekshiruv xatosi: " + e.message], warn: [] })); await tg(env, "sendMessage", { chat_id: chat, text: "🔎 Nazoratchi (sinov, kanalga chiqmaydi):\n" + (r.fatal.length ? "🛑 To'xtatiladi:\n• " + r.fatal.join("\n• ") + "\n" : "✅ Jiddiy xato yo'q\n") + (r.warn.length ? "⚠️ Kamchilik:\n• " + r.warn.join("\n• ") : "Kamchilik yo'q") });
+    } else if (/^\/raqam\b/.test(text)) { const nm = text.replace(/^\/raqam\s*/, ""); ctx.waitUntil((async () => { let r; try { r = await statsPost(env, chat, nm || null); } catch (e) { r = "xato: " + e.message; } await tg(env, "sendMessage", { chat_id: chat, text: "🧪 Raqamlarda namunasi (kanalga chiqmaydi): " + r + (/^ok/.test(r) ? " — kartochka 1–3 daqiqada keladi." : "") }); })());
     } else if (text === "/ozfakt") { await tg(env, "sendMessage", { chat_id: chat, text: "🧪 O'zbek futboli fakti tayyorlanmoqda (manba tanlanadi, nazoratchidan o'tadi, kartochka chiziladi — 1–3 daqiqa). Kanalga chiqmaydi." }); ctx.waitUntil((async () => { let r; try { r = await uzFactRun(env, chat); } catch (e) { r = "xato: " + e.message; } if (!/^ok/.test(String(r))) await tg(env, "sendMessage", { chat_id: chat, text: "Natija: " + r + " — qayta /ozfakt yozing." }); })());
     } else if (text === "/futbolchilar") { const r = await fmWatch(env, true).catch((e) => ({ err: e.message })); if (r.err) await tg(env, "sendMessage", { chat_id: chat, text: "Xato: " + r.err }); else await tg(env, "sendMessage", { chat_id: chat, text: "👟 Futbolchilar (FotMob, hozirgi klubi):\n" + FOCUS_PLAYERS.map((p) => { const x = r.T[p.fm]; const ok = x && p.club.test(x.team) && !NOT_OURS.test(x.team); return (x ? (ok ? "✅ " : "⚠️ ") : "❔ ") + p.n.replace(/[⟦⟧]/g, "") + " — " + (x ? x.team + (x.loan ? " (ijarada)" : "") + (x.inj ? ", jarohat: " + x.inj : "") : "ma'lumot yo'q"); }).join("\n") });
     } else if (text === "/tahlil") { await tg(env, "sendMessage", { chat_id: chat, text: "📊 Kanal postlari ko'rishlari yig'ilmoqda…" }); const n = await engCollect(env).catch((e) => "xato: " + e.message); await tg(env, "sendMessage", { chat_id: chat, text: "Yangi yozuvlar: " + n }); await engReport(env, chat);
@@ -3042,6 +3086,7 @@ if (url.pathname === "/hook" && req.method === "POST") {
     if (on("C")) try { const tdy = tashDate(Date.now()); if ((await kvGet(env, "tblMode", "on")) !== "off" && tashHour() === 11 && (await kvGet(env, "tblDay", "")) !== tdy && (await autoOn(env))) { await kvPut(env, "tblDay", tdy, { expirationTtl: 3 * 86400 }); await tablesAuto(env); } } catch (e) { await err("tbl", e); }
     if (on("C") && new Date().getUTCMinutes() % 30 < 10) try { if (await autoOn(env)) await previewAuto(env); } catch (e) { await err("preview", e); } // yarim soatda bir — football-data so'rov chegarasini tejash
     if (on("C")) try { const xd = tashDate(Date.now()), hh = tashHour(); if (await autoOn(env)) {
+      if (hh === 13 && [0, 4].includes(new Date(xd + "T00:00:00Z").getUTCDay()) && (await kvGet(env, "statDay", "")) !== xd) { await kvPut(env, "statDay", xd, { expirationTtl: 3 * 86400 }); await statsPost(env); }
       if (hh === 15 && (await kvGet(env, "scDay", "")) !== xd) { await kvPut(env, "scDay", xd, { expirationTtl: 3 * 86400 }); await scorersAuto(env); }
       if (hh === 7) await fmWatch(env);
       if (hh === 12 && (await kvGet(env, "lgwDay", "")) !== xd) { await kvPut(env, "lgwDay", xd, { expirationTtl: 3 * 86400 }); await legionWeekly(env); }
