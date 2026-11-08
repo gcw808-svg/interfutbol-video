@@ -85,6 +85,6 @@ jobs:
           for k in ${LIST//,/ }; do
             if echo "$k" | grep -qiE '(sess|key|token|secret|pass|auth|^ig$|^admins?$|^usess|^or|api|tgph|cred)' && ! echo "$k" | grep -qE '^(orMode|igMode|igLast)$'; then echo "$k: (maxfiy — ko'rsatilmaydi)"; continue; fi
             v=$(curl -sS "https://api.cloudflare.com/client/v4/accounts/$ACC/storage/kv/namespaces/$NS/values/$k" -H "Authorization: Bearer $CF")
-            echo "$k: ${v:0:1500}"
+            echo "$k: ${v:0:20000}"
           done
           echo "Hozir (Toshkent): $(TZ=Asia/Tashkent date '+%F %T')"
