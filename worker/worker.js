@@ -2184,7 +2184,8 @@ async function limitsReport(env, b, admin) {
   if (b.gh) add("GitHub daqiqalari (oy boshidan)", b.gh.minutes, 2000, "oy oxirigacha taxmin: " + b.gh.proj);
   const cf = b.cf || {};
   add("Bot so'rovlari (bugun)", cf.requests, 100000);
-  add("Xotiraga yozish (bugun)", (cf.kvWrite || 0) + (cf.kvDelete || 0), 1000);
+  add("Xotiraga yozish (bugun)", cf.kvWrite, 1000, b.cfY && b.cfY.kvWrite != null ? "kecha butun kun: " + b.cfY.kvWrite : "");
+  add("Xotiradan o'chirish (bugun)", cf.kvDelete, 1000, b.cfY && b.cfY.kvDelete != null ? "kecha butun kun: " + b.cfY.kvDelete : "");
   add("Xotiradan o'qish (bugun)", cf.kvRead, 100000);
   add("Xotira ro'yxati (bugun)", cf.kvList, 1000);
   try { const k = await kvGet(env, "afKey", ""); if (k) { const j = await (await fetch("https://v3.football.api-sports.io/status", { headers: { "x-apisports-key": k } })).json(); const q = j?.response?.requests; if (q && q.limit_day) add("API-Football (bugun)", q.current, q.limit_day); } } catch (e) {}
