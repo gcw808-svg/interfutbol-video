@@ -52,7 +52,7 @@ jobs:
               page += 1
           day = now.day
           dim = calendar.monthrange(now.year, now.month)[1]
-          out = {"gh": {"minutes": mins, "runs": runs, "proj": round(mins / max(day - 1 + now.hour / 24, 0.5) * dim)}, "force": os.environ.get("FORCE") == "1"}
+          out = {"gh": {"minutes": mins, "runs": runs, "proj": round(mins / max(day - 1 + now.hour / 24, 0.5) * dim)}, "force": os.environ.get("FORCE") == "1", "hrs": round(now.hour + now.minute / 60, 2)}
           d = now.strftime("%Y-%m-%d")
           dy = (now - D.timedelta(days=1)).strftime("%Y-%m-%d")
           q = """query($a:String!,$d:Date!){viewer{accounts(filter:{accountTag:$a}){
