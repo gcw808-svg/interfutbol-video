@@ -1973,7 +1973,8 @@ function cardInfo(post, extra = {}) {
   const rx = (n) => new RegExp("(^|[^\\p{L}])" + n.replace(/[.*+?^${}()|[\]\\\/]/g, "\\$&") + "(?![\\p{Lu}])", "u");
   const LEAGUES = new Set(CLUB_EMOJI.slice(0, 8).map((c) => c[0]));
   const found = [];
-  for (const [id, em, names] of CLUB_EMOJI) for (const n of names) {
+  const NA2 = (ns) => [...new Set([...ns, ...ns.map((x) => newAlpha(x))])]; // kanal matni yangi alifboda ("Çempionlar ligasi") — ikkala shakl ham tekshiriladi
+  for (const [id, em, names] of CLUB_EMOJI) for (const n of NA2(names)) {
     const mm = title.match(rx(n));
     if (mm) { const i = mm.index + mm[1].length; found.push({ i, len: n.length, n: names[0], lg: LEAGUES.has(id) }); break; }
   }
@@ -1988,13 +1989,13 @@ function cardInfo(post, extra = {}) {
   const clubs = found.filter((f) => !f.lg && !inside(f)).sort((a, b) => a.i - b.i);
   let league = (found.find((f) => f.lg) || {}).n || "";
   if (!league) for (const [a, c, lg] of ex) if (lg && rx(a).test(plain)) { league = c; break; }
-  if (!league) league = (CLUB_EMOJI.slice(0, 8).map(([id, em, names]) => ({ n: names[0], ok: names.some((x) => rx(x).test(plain)) })).find((x) => x.ok) || {}).n || "";
+  if (!league) league = (CLUB_EMOJI.slice(0, 8).map(([id, em, names]) => ({ n: names[0], ok: NA2(names).some((x) => rx(x).test(plain)) })).find((x) => x.ok) || {}).n || "";
   const sc = title.match(/(\d{1,2}):(\d{1,2})/);
   const tline = (String(post || "").replace(/<[^>]+>/g, "").split("\n").find((l) => l.trim()) || "").trim();
   // yangilik kartochkasi uchun (2026-11-08 dizayni): butun matnda tilga olingan klublar (4 tagacha) va liga — fonda klublar, chapda liga
   const isLg = (ns) => ns.some((x) => /league|liga\b|ligasi|\blig\b|bundesliga|serie a|ligue|\bmls\b|eredivisie|\bcup\b|kubog|chempionat|primeira|pro league|s[uü]per lig|conference/i.test(x));
   const all = [];
-  for (const [id, em, names] of CLUB_EMOJI) { if (LEAGUES.has(id) || isLg(names)) { if (!league && names.some((x) => rx(x).test(plain))) league = names[0]; continue; } let best = -1; for (const x of names) { const mm = plain.match(rx(x)); if (mm && (best < 0 || mm.index < best)) best = mm.index; } if (best >= 0 && !all.some((a) => a.n === names[0])) all.push({ i: best, n: names[0] }); }
+  for (const [id, em, names] of CLUB_EMOJI) { if (LEAGUES.has(id) || isLg(names)) { if (!league && NA2(names).some((x) => rx(x).test(plain))) league = names[0]; continue; } let best = -1; for (const x of NA2(names)) { const mm = plain.match(rx(x)); if (mm && (best < 0 || mm.index < best)) best = mm.index; } if (best >= 0 && !all.some((a) => a.n === names[0])) all.push({ i: best, n: names[0] }); }
   const cl = [...clubs.map((c) => c.n), ...all.sort((a, b) => a.i - b.i).map((a) => a.n)].filter((n, k, arr) => arr.indexOf(n) === k).slice(0, 4);
   return { title: newAlpha(canonFix(tline || title.trim())), home: clubs[0]?.n || "", away: clubs[1]?.n || "", score: sc ? sc[1] + ":" + sc[2] : "", league, clubs: cl };
 }
