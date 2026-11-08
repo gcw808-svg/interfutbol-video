@@ -1656,14 +1656,14 @@ async function statPlayer(env, p) {
     if (id) { const ej = await (await fetch(`https://site.web.api.espn.com/apis/common/v3/sports/soccer/${slug}/athletes/${id}`, { headers: { "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36", accept: "application/json" } })).json(); const g = findStat(ej.athlete?.statsSummary || ej, "totalGoals"), a = findStat(ej.athlete?.statsSummary || ej, "goalAssists"), sh = findStat(ej.athlete?.statsSummary || ej, "totalShots"); if (g != null) src.espn = { g, a, sh }; else src.espnErr = "statistika yo'q"; } else src.espnErr = "ID topilmadi"; } catch (e) { src.espnErr = String(e.message || e).slice(0, 60); } }
   if (fdc) { try { const j = await fd(env, `/competitions/${fdc}/scorers?limit=60`, 6 * 3600); const r = (j.scorers || []).find((x) => nk(x.player?.name) === nk(fm.name || p.n)); src.fd = r ? { g: r.goals, a: r.assists ?? null } : null; } catch (e) {} }
   const agree = (k) => { const v = Object.values(src).filter(Boolean).map((x) => x[k]).filter((x) => x != null); for (const x of v) if (v.filter((y) => y === x).length >= 2) return x; return null; };
-  const g = agree("g"), a = agree("a"); if (g == null) return null;
+  const g = agree("g"), a = agree("a"); if (g == null) return { fail: JSON.stringify(src).slice(0, 300) };
   return { p, name: fm.name || p.n, club: fm.primaryTeam?.teamName || "", lg: lgName, season: ml.season, g, a, mp: st.Matches, min: st["Minutes played"], rating: st.Rating, sh: src.espn?.sh, n: Object.values(src).filter(Boolean).length, srcs: Object.keys(src).filter((k) => src[k]).join("+") + (src.espnErr ? " (ESPN: " + src.espnErr + ")" : "") };
 }
 async function statsPost(env, to, pick) {
   const used = await kvGet(env, "statUsed", {}); const now = Date.now();
   const order = pick ? STAT_PLAYERS.filter((p) => norm(p.n).includes(norm(pick))) : [...STAT_PLAYERS].sort((x, y) => (used[x.fm] || 0) - (used[y.fm] || 0));
   for (const p of order.slice(0, 4)) {
-    const r = await statPlayer(env, p); if (!r || (!r.g && !r.a)) continue;
+    const r = await statPlayer(env, p); if (r && r.fail) { if (pick) return "manbalar mos kelmadi: " + r.fail; continue; } if (!r || (!r.g && !r.a)) continue;
     const d = tashDate(now); const per = r.g && r.min ? Math.round(r.min / r.g) : 0;
     const L = [`• ${r.g} gol${r.a != null ? ", " + r.a + " ta gol uzatmasi" : ""}`];
     if (r.mp) L.push(`• ${r.mp} o'yin${r.min ? ", " + r.min + " daqiqa" : ""}`);
