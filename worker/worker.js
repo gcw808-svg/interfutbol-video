@@ -1549,9 +1549,13 @@ const TYPE_UZ = { result: "natijalar", news: "yangiliklar", preview: "o'yin oldi
 const TOPIC_UZ = { uz: "o'zbek futboli", transfer: "transferlar", injury: "jarohatlar", coach: "murabbiylar", rumor: "mish-mishlar", result: "o'yin natijalari", record: "rekordlar", ronaldo: "Ronaldo", messi: "Messi", mbappe: "Mbappé", yamal: "Yamal", haaland: "Haaland", salah: "Salah", "c:mu": "Manchester United", "c:mc": "Manchester City", "c:liv": "Liverpool", "c:ars": "Arsenal", "c:che": "Chelsea", "c:rma": "Real Madrid", "c:bar": "Barcelona", "c:atm": "Atlético Madrid", "c:int": "Inter", "c:mil": "Milan", "c:juv": "Juventus", "c:bay": "Bayern", "c:bvb": "Dortmund", "c:psg": "PSG", "c:nas": "Al-Nassr", "c:mia": "Inter Miami" };
 async function engReport(env, chat) {
   const s = await kvGet(env, "engStats", null); const admin = chat || (await getAdmins(env))[0]; if (!s || !admin) return;
+  // haftalik sifat ko'rsatkichlari (2026-11-08): to'xtatilgan postlar, nazorat ogohlantirishlari, ish xatolari, tejash rejimi
+  const wk = Date.now() - 7 * 86400e3; const held = (await kvGet(env, "qcHeld", [])).filter((x) => x.t > wk).length; const warns = (await kvGet(env, "qcSeen", [])).length; const errs = (await kvGet(env, "cronLog", [])).filter((x) => x.t > wk); const eco = await kvGet(env, "ecoMode", 0); const jf = await kvGet(env, "jobsFail", null);
+  const errK = {}; for (const e of errs) errK[e.k] = (errK[e.k] || 0) + 1;
+  const qual = `\n\n🛡 Sifat nazorati (7 kun):\n• To'xtatilgan postlar: ${held}\n• Kamchilik ogohlantirishlari (oxirgi 3 kun): ${warns}\n• Ish xatolari: ${errs.length ? Object.entries(errK).map(([k, v]) => k + " — " + v).join(", ") : "yo'q"}\n• Modal ishlamay GitHub'ga o'tilgan holatlar: ${jf ? jf.n : 0}\n• Tejash rejimi: ${eco ? "yoqilgan" : "o'chiq"}`;
   const ty = Object.entries(s.typeStats).sort((a, b) => b[1].avg - a[1].avg).map(([k, v]) => `${TYPE_UZ[k] || k} — ${v.avg} (${v.n} ta)`).join("\n");
   const tp = Object.entries(s.topicStats).filter(([, v]) => v.n >= 3).sort((a, b) => b[1].avg - a[1].avg); const up = tp.slice(0, 5).map(([k, v]) => `${TOPIC_UZ[k] || k} — ${v.avg}`).join(", "), dn = tp.slice(-3).reverse().map(([k, v]) => `${TOPIC_UZ[k] || k} — ${v.avg}`).join(", ");
-  await tg(env, "sendMessage", { chat_id: admin, text: `📊 Kanal tahlili (oxirgi 14 kun, ${s.n} ta post)\nO'rtacha ko'rish: ${s.avg}\n\nPost turlari:\n${ty}\n\nEng ko'p ko'rilgan mavzular: ${up || "—"}\nEng kam: ${dn || "—"}\n\nBot yangiliklar tartibini va qo'shimcha post turlari sonini shu natijalarga qarab o'zi moslashtirdi.` });
+  await tg(env, "sendMessage", { chat_id: admin, text: `📊 Kanal tahlili (oxirgi 14 kun, ${s.n} ta post)\nO'rtacha ko'rish: ${s.avg}\n\nPost turlari:\n${ty}\n\nEng ko'p ko'rilgan mavzular: ${up || "—"}\nEng kam: ${dn || "—"}\n\nBot yangiliklar tartibini va qo'shimcha post turlari sonini shu natijalarga qarab o'zi moslashtirdi.` + qual });
 }
 // O'YIN OLDIDAN: katta o'yinlardan ~3 soat oldin — jadvaldagi o'rinlar, shaxsiy uchrashuvlar, o'zbek futbolchilari (faqat rasmiy ma'lumot, AI'siz)
 async function previewAuto(env) {
@@ -2814,17 +2818,23 @@ const rp = (v, w) => esc(String(v ?? "").padStart(w, " "));
 const compLabel = (n) => emo(n) + (UZ_COMP.has(n) ? esc(n) : keep(n)); // klub nomlari asl holicha
 const norm = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\b(fc|cf|afc|sc|ac|ssc|as|club|de|futbol)\b/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 
+// football-data javoblari keshi (2026-11-08, bepul KV limitini tejash): avval xotira (isolate ichida), qisqa muddatli
+// (10 daqiqadan kam) javoblar KV'ga YOZILMAYDI — kuzatuvda KV yozuvlarining ~1/3 qismi shu edi
+const FDM = new Map();
 async function fd(env, path, ttl) {
   const ck = "fd:" + path;
-  const c = await env.STATE.get(ck);
-  if (c) return JSON.parse(c);
+  const mm = FDM.get(ck); if (mm && mm.exp > Date.now()) return structuredClone(mm.j); // nusxa — chaqiruvchi o'zgartirsa kesh buzilmasin
+  const useKv = ttl >= 600;
+  const c = useKv ? await env.STATE.get(ck) : null;
+  if (c) { const jc = JSON.parse(c); FDM.set(ck, { j: structuredClone(jc), exp: Date.now() + Math.min(ttl, 600) * 1000 }); return jc; }
   if (!env.FD_KEY) { const e = new Error("nokey"); e.nokey = true; throw e; }
   const r = await fetch("https://api.football-data.org/v4" + path, { headers: { "X-Auth-Token": env.FD_KEY } });
   if (r.status === 429) { const e = new Error("limit"); e.limit = true; throw e; }
   if (r.status === 403) { const e = new Error("403"); e.denied = true; throw e; }
   if (!r.ok) throw new Error("football-data " + r.status);
   const j = await r.json();
-  await env.STATE.put(ck, JSON.stringify(j), { expirationTtl: Math.max(60, ttl) });
+  FDM.set(ck, { j: structuredClone(j), exp: Date.now() + ttl * 1000 }); if (FDM.size > 200) FDM.delete(FDM.keys().next().value);
+  if (useKv) await env.STATE.put(ck, JSON.stringify(j), { expirationTtl: Math.max(60, ttl) });
   return j;
 }
 
