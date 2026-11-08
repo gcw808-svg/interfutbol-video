@@ -36,7 +36,7 @@ jobs:
           now = D.datetime.utcnow()
           m0 = now.strftime("%Y-%m-01")
           gh = {"Authorization": "Bearer " + os.environ["GH"], "Accept": "application/vnd.github+json"}
-          mins, runs, page = 0, 0, 1
+          mins, runs, page, rec = 0, 0, 1, 0
           while page <= 20:
               j = get(f"https://api.github.com/repos/{os.environ['REPO']}/actions/runs?per_page=100&page={page}&created=>={m0}", gh)
               w = j.get("workflow_runs", [])
@@ -45,14 +45,18 @@ jobs:
                       continue
                   a = D.datetime.fromisoformat(r["run_started_at"].replace("Z", "+00:00"))
                   b = D.datetime.fromisoformat(r["updated_at"].replace("Z", "+00:00"))
-                  mins += max(1, math.ceil((b - a).total_seconds() / 60))
+                  mm = max(1, math.ceil((b - a).total_seconds() / 60))
+                  mins += mm
                   runs += 1
+                  if (now.replace(tzinfo=D.timezone.utc) - a).total_seconds() < 72 * 3600:
+                      rec += mm
               if len(w) < 100:
                   break
               page += 1
           day = now.day
           dim = calendar.monthrange(now.year, now.month)[1]
-          out = {"gh": {"minutes": mins, "runs": runs, "proj": round(mins / max(day - 1 + now.hour / 24, 0.5) * dim)}, "force": os.environ.get("FORCE") == "1", "hrs": round(now.hour + now.minute / 60, 2)}
+          # taxmin: oy boshidan sarflangan + oxirgi 3 kunlik o'rtacha sarf x qolgan kunlar (sinov kunlari taxminni buzmasin, 2026-11-09)
+          out = {"gh": {"minutes": mins, "runs": runs, "rec3": rec, "proj": round(mins + rec / min(3, max(0.5, day - 1 + now.hour / 24)) * max(0, dim - (day - 1 + now.hour / 24)))}, "force": os.environ.get("FORCE") == "1", "hrs": round(now.hour + now.minute / 60, 2)}
           d = now.strftime("%Y-%m-%d")
           dy = (now - D.timedelta(days=1)).strftime("%Y-%m-%d")
           q = """query($a:String!,$d:Date!){viewer{accounts(filter:{accountTag:$a}){
