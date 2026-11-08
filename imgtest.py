@@ -1,6 +1,6 @@
 # Sinov: fakt/yangilik uchun ijodiy rasm variantlari (AI fon + Inter Futbol bezagi). Natijalar /tmp/out ga yoziladi
 # (GitHub artifact). Bir nechta bepul manba sinaladi: Cloudflare Workers AI (FLUX), Gemini rasm modellari, Pollinations.
-import base64, io, json, os, sys, time, urllib.parse, urllib.request
+import base64, io, json, os, sys, time, urllib.error, urllib.parse, urllib.request
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import card
 from PIL import Image, ImageDraw, ImageFilter, ImageOps
@@ -21,7 +21,10 @@ def gen_cfw(prompt, seed):
     # botning o'zidagi Cloudflare Workers AI (env.AI) orqali
     import hashlib
     key = hashlib.sha256(("ub-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:40]
-    raw, ct = http("https://inter-futbol-bot.gcw808.workers.dev/ub/aiimg", json.dumps({"prompt": prompt, "seed": seed}).encode(), {"x-key": key, "content-type": "application/json", "user-agent": "InterFutbolImg"}, 120)
+    try:
+        raw, ct = http("https://inter-futbol-bot.gcw808.workers.dev/ub/aiimg", json.dumps({"prompt": prompt, "seed": seed}).encode(), {"x-key": key, "content-type": "application/json", "user-agent": "InterFutbolImg"}, 120)
+    except urllib.error.HTTPError as e:
+        raise Exception(f"{e.code} {e.read().decode(errors='ignore')[:300]}")
     if "image" not in ct:
         raise Exception(raw[:200])
     return raw
