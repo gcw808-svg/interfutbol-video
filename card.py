@@ -215,13 +215,13 @@ def paste_glow(im, lg, x, y, strength=110, radius=18):
     im.paste(lg, (x, y), lg)
 
 
-def is_dark(lg):
+def is_dark(lg, th=75):
     sm = lg.copy()
     sm.thumbnail((48, 48))
     px = [(r, g, b) for r, g, b, a in sm.getdata() if a > 200]
     if not px:
         return False
-    return sum(0.299 * r + 0.587 * g + 0.114 * b for r, g, b in px) / len(px) < 75
+    return sum(0.299 * r + 0.587 * g + 0.114 * b for r, g, b in px) / len(px) < th
 
 
 def blends(lg):
@@ -719,7 +719,7 @@ def render_news(j):
         if lgl and not crest:
             left, glow_ = league_mark(left, j.get("league") or "")
         x_, y_ = 270 - left.width // 2, Hd // 2 - left.height // 2
-        if glow_ or is_dark(left):
+        if glow_ or (is_dark(left, 50) if (crest or not lgl) else is_dark(left)):  # klub gerbi faqat juda to'q bo'lsa (Liverpool kabi qizil — yo'q)
             # to'q liga logotipi (masalan Premier League) to'q fonda yo'qolmasin: ortida yumshoq oq yorug'lik doirasi
             r = int(max(left.width, left.height) * 0.62)
             halo = Image.new("L", (r * 2 + 240, r * 2 + 240), 0)
