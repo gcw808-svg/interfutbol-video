@@ -685,7 +685,7 @@ def render_news(j):
     Wd, Hd = 1280, 720
     NAVY = (10, 14, 22)
     im = Image.new("RGB", (Wd, Hd), NAVY)
-    urls = [u for u in (j.get("clubLogos") or [j.get("homeLogo"), j.get("awayLogo")]) if u][:4]
+    urls = [u for u in (j.get("clubLogos") or [j.get("homeLogo"), j.get("awayLogo")]) if u and u != j.get("leftLogo")][:4]  # chapdagi asosiy gerb fonda takrorlanmaydi
     clubs = [c for c in (get_logo(u, 360) for u in urls) if c]
     lgl = get_logo(j.get("leagueLogo"), 240)
     # chapdagi gerb (terma jamoa — UFA va h.k.) yoki birinchi klub gerbi — kattaroq, 340 px (Bahtiyor aka tasdiqlagan, 2026-11-08)

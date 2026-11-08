@@ -1422,7 +1422,7 @@ async function healthCheck(env) { const now = Date.now(), d = tashDate(now), h =
   homeLogo = homeLogo || crest(ci.home); awayLogo = awayLogo || crest(ci.away);
   const clubLogos = extra.home ? [] : (await Promise.all((ci.clubs || []).map(async (n) => (await logoUrl(env, n, idx)) || crest(n)))).filter(Boolean).slice(0, 4);
   if ((extra.home && extra.away) && (!homeLogo || !awayLogo)) { try { const ad = (await getAdmins(env))[0]; if (ad) await tg(env, "sendMessage", { chat_id: ad, text: "⚠️ Nazorat: natija kartochkasida klub logotipi topilmadi — " + [!homeLogo && ci.home, !awayLogo && ci.away].filter(Boolean).join(", ") + ". Claude logotipni qo'shib, /kartaqayta bilan kartochkani yangilaydi." }); } catch (e) {} } leagueLogo = leagueLogo || espnLgLogo(extra.compName || lgName) || (await leagueLogoUrl(env, lgName, idx)) || "";
-  await kvPut(env, "cjob:" + id, { ...ci, home: cardNm(ci.home), away: cardNm(ci.away), league: newAlpha(lgName || ""), homeLogo, awayLogo, leagueLogo, leftLogo: (extra.kind || "res") === "news" ? await leftCrest(env, post) : "", clubLogos, ...(extra.goals || {}), chan: post, to: to || null, url: extra.url || null, kind: extra.kind || "res", story: (!to && (extra.kind || "res") === "res" && STORY_BIG.test(ci.home + " " + ci.away + " " + (lgName || ""))) ? await storyQuota(env) : 0 }, { expirationTtl: 7 * 3600 });
+  await kvPut(env, "cjob:" + id, { ...ci, home: cardNm(ci.home), away: cardNm(ci.away), league: newAlpha(lgName || ""), homeLogo, awayLogo, leagueLogo, leftLogo: (extra.kind || "res") === "news" ? await leftCrest(env, post, ci, idx) : "", clubLogos, ...(extra.goals || {}), chan: post, to: to || null, url: extra.url || null, kind: extra.kind || "res", story: (!to && (extra.kind || "res") === "res" && STORY_BIG.test(ci.home + " " + ci.away + " " + (lgName || ""))) ? await storyQuota(env) : 0 }, { expirationTtl: 7 * 3600 });
   if (to) return ghDispatch(env, "card.yml", { job: id });
   const w = await kvGet(env, "resWait", []); w.push({ id, post, t: Date.now(), url: extra.url || null, kind: extra.kind || "res" }); await kvPut(env, "resWait", w.slice(-20));
   await ghDispatch(env, "card.yml", { job: id }); // chizilmasa resFallback qayta urinadi
@@ -2138,7 +2138,11 @@ async function ufaCrest(env) {
   }
   return WURL + "/lg/ufa";
 }
-const leftCrest = async (env, post) => (NAT_RE.test(String(post || "").replace(/<[^>]+>/g, "")) ? await ufaCrest(env) : "");
+const leftCrest = async (env, post, ci, idx) => {
+  if (NAT_RE.test(String(post || "").replace(/<[^>]+>/g, ""))) return await ufaCrest(env);
+  if (ci && ci.subj && ci.subj.t === "club") { const n = ci.subj.n; return (await logoUrl(env, n, idx || {})) || ESPN_CREST[n] || ESPN_CREST[Object.keys(ESPN_CREST).find((k) => norm(k) === norm(n))] || ""; }
+  return ""; // mavzu liga bo'lsa — chapda liga logotipi (avvalgidek)
+};
 function cardInfo(post, extra = {}) {
   const plain = String(post || "").replace(/<[^>]+>/g, "").replace(/[⟦⟧]/g, "");
   const title = plain.split("\n").find((l) => l.trim()) || "";
@@ -2171,7 +2175,27 @@ function cardInfo(post, extra = {}) {
   if (!(found.find((f) => f.lg))) { let li = -1, ln = ""; for (const [id, em, names] of CLUB_EMOJI) { if (!(LEAGUES.has(id) || isLg(names))) continue; for (const x of NA2(names)) { const mm = plain.match(rx(x)); if (mm && (li < 0 || mm.index < li)) { li = mm.index; ln = names[0]; } } } if (ln) league = ln; }
   for (const [id, em, names] of CLUB_EMOJI) { if (LEAGUES.has(id) || isLg(names)) continue; let best = -1; for (const x of NA2(names)) { const mm = plain.match(rx(x)); if (mm && (best < 0 || mm.index < best)) best = mm.index; } if (best >= 0 && !all.some((a) => a.n === names[0])) all.push({ i: best, n: names[0] }); }
   const cl = [...clubs.map((c) => c.n), ...all.sort((a, b) => a.i - b.i).map((a) => a.n)].filter((n, k, arr) => arr.indexOf(n) === k).slice(0, 4);
-  return { title: newAlpha(canonFix(tline || title.trim())), home: clubs[0]?.n || "", away: clubs[1]?.n || "", score: sc ? sc[1] + ":" + sc[2] : "", league, clubs: cl };
+  // ASOSIY MAVZU (Bahtiyor aka qoidasi, 2026-11-08: "qaysi klub yoki liga haqida gapirilsa o'shani qo'yasan"):
+  // sarlavhada birinchi tilga olingan klub yoki liga; sarlavhada yo'q bo'lsa — matnda birinchi tilga olingani
+  const tLg = found.filter((f) => f.lg).sort((a, b) => a.i - b.i)[0];
+  let subj = null;
+  if (clubs[0] && (!tLg || clubs[0].i <= tLg.i)) subj = { t: "club", n: clubs[0].n };
+  else if (tLg) subj = { t: "league", n: tLg.n };
+  else {
+    // sarlavhada yo'q — avval heshteglar tartibi (muharrir asosiy mavzuni birinchi qo'yadi: "#BradleyBarcola #Liverpool #ParisSaintGermain" → Liverpool)
+    const cmp = (x) => String(x).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9]/g, "").toLowerCase();
+    for (const h of (plain.match(/#[\p{L}\p{N}_]+/gu) || [])) {
+      const hc = cmp(h); let hit = null;
+      for (const [id, , names] of CLUB_EMOJI) if (names.some((x) => cmp(x) === hc)) { hit = { t: LEAGUES.has(id) || isLg(names) ? "league" : "club", n: names[0] }; break; }
+      if (hit) { subj = hit; break; }
+    }
+  }
+  if (!subj) {
+    const fc = all.sort((a, b) => a.i - b.i)[0];
+    let li = -1; if (league) for (const [, , names] of CLUB_EMOJI) if (names[0] === league) for (const x of NA2(names)) { const mm = plain.match(rx(x)); if (mm && (li < 0 || mm.index < li)) li = mm.index; }
+    if (fc && (li < 0 || fc.i <= li)) subj = { t: "club", n: fc.n }; else if (league) subj = { t: "league", n: league };
+  }
+  return { title: newAlpha(canonFix(tline || title.trim())), home: clubs[0]?.n || "", away: clubs[1]?.n || "", score: sc ? sc[1] + ":" + sc[2] : "", league, clubs: cl, subj };
 }
 // klub yoki liga nomini yagona (asosiy) shaklga keltiradi: "Barselona" → "Barcelona"
 function canonName(n) {
@@ -2193,7 +2217,7 @@ async function cardJob(env, pk, pend) {
   const [homeLogo, awayLogo, leagueLogo0] = await Promise.all([logoUrl(env, ci.home, idx), logoUrl(env, ci.away, idx), logoUrl(env, ci.league, idx)]);
   const leagueLogo = leagueLogo0 || (await leagueLogoUrl(env, ci.league, idx)) || "";
   const clubLogos = (await Promise.all((ci.clubs || []).map(async (n) => (await logoUrl(env, n, idx)) || ESPN_CREST[n] || ""))).filter(Boolean).slice(0, 4);
-  await kvPut(env, "cjob:" + id, { ...ci, home: cardNm(ci.home), away: cardNm(ci.away), league: newAlpha(ci.league), homeLogo, awayLogo, leagueLogo, leftLogo: await leftCrest(env, pend.post), clubLogos, pk, chat: pend.chat, msg: pend.msg }, { expirationTtl: 3600 });
+  await kvPut(env, "cjob:" + id, { ...ci, home: cardNm(ci.home), away: cardNm(ci.away), league: newAlpha(ci.league), homeLogo, awayLogo, leagueLogo, leftLogo: await leftCrest(env, pend.post, ci, idx), clubLogos, pk, chat: pend.chat, msg: pend.msg }, { expirationTtl: 3600 });
   return ghDispatch(env, "card.yml", { job: id });
 }
 // /logotip ID1 ID2 ...: kanaldagi postlarning matniga klub/liga logotiplarini (custom emoji) qayta qo'yadi — matn, qalin yozuv va havolalar saqlanadi
@@ -2711,7 +2735,7 @@ return;
       const [leagueLogo0, ...cls] = await Promise.all([leagueLogoUrl(env, ci.league, idx), ...(ci.clubs || []).map((n) => logoUrl(env, n, idx))]);
       const clubLogos = cls.map((u, k) => u || ESPN_CREST[ci.clubs[k]] || "").filter(Boolean).slice(0, 4);
       const id = "n" + Date.now().toString(36) + "r";
-      await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", leftLogo: await leftCrest(env, html), clubLogos, chan: html, rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 });
+      await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", leftLogo: await leftCrest(env, html, ci, idx), clubLogos, chan: html, rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 });
       await ghDispatch(env, "card.yml", { job: id });
       await tg(env, "sendMessage", { chat_id: chat, text: "🖼 " + mid + "-post uchun yangi kartochka chizilmoqda (liga: " + (ci.league || "—") + ", klublar: " + (ci.clubs || []).join(", ") + "). 2–3 daqiqada rasm almashtiriladi." });
     } else if (/^\/maqola\s+\S+\s*\n/.test(text)) {
