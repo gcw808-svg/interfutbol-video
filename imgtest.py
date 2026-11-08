@@ -78,15 +78,37 @@ def gen_poll(prompt, seed):
     return raw
 
 
+VQ = "Look at this image for a football (soccer) news channel. Answer strictly in JSON {\"ok\":true/false,\"why\":\"...\"}. ok=false if ANY: American football / rugby ball or gridiron field; any visible letters, words, numbers or fake logos; distorted/extra limbs or melted faces; recognizable real person; violence. Otherwise ok=true."
+def vision_ok(b):
+    key = os.environ.get("GEMINI_KEY")
+    if not key: return True, "kalit yo'q"
+    for m in ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-2.5-flash"]:
+        try:
+            body = {"contents": [{"parts": [{"text": VQ}, {"inline_data": {"mime_type": "image/jpeg", "data": base64.b64encode(b).decode()}}]}], "generationConfig": {"temperature": 0, "maxOutputTokens": 200}}
+            raw, _ = http(f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent", json.dumps(body).encode(), {"content-type": "application/json", "x-goog-api-key": key}, 60)
+            t = "".join(p.get("text", "") for c in json.loads(raw).get("candidates", []) for p in c.get("content", {}).get("parts", []))
+            j = json.loads(t[t.find("{"): t.rfind("}") + 1])
+            return bool(j.get("ok")), m + ": " + str(j.get("why"))[:160]
+        except Exception as e:
+            last = str(e)[:120]
+    return True, "tekshirib bo'lmadi " + last
+
+
 def bg(prompt, seed, prefer):
     for name, fn in prefer:
-        try:
-            b = fn(prompt, seed)
-            im = Image.open(io.BytesIO(b)).convert("RGB")
-            LOG.append([name, "ok", im.size])
-            return ImageOps.fit(im, (W, H), Image.LANCZOS), name
-        except Exception as e:
-            LOG.append([name, "xato", str(e)[:300]])
+        for k in range(3):
+            try:
+                b = fn(prompt, seed + k * 101)
+                im = Image.open(io.BytesIO(b)).convert("RGB")
+                buf = io.BytesIO(); im.save(buf, "JPEG", quality=85)
+                ok, why = vision_ok(buf.getvalue())
+                LOG.append([name, "seed", seed + k * 101, "tekshiruv", ok, why])
+                if not ok:
+                    im.save(f"{OUT}/rad_{name}_{seed + k * 101}.jpg", quality=70)
+                    continue
+                return ImageOps.fit(im, (W, H), Image.LANCZOS), name
+            except Exception as e:
+                LOG.append([name, "xato", str(e)[:300]]); break
     return None, None
 
 
@@ -125,8 +147,8 @@ def brand(im, rubric):
 
 TITLE_NA = "Özbekiston milliy futbol terma jamoasi 1992-yilda taşkil etilgan"
 SUB = "Ilk yilda faqat 4 raqib: Tojikiston, Turkmaniston, Qozoğiston, Qirğiziston"
-NEG = "no text, no letters, no numbers, no logos, no watermark, no identifiable real people"
-order = [("hf", gen_hf), ("pollinations", gen_poll)]
+NEG = "association football (soccer) only, absolutely no text, no letters, no numbers, no signs, no banners, no logos, no watermark, no identifiable real people"
+order = [("hf", gen_hf)]
 GREEN = (91, 182, 55)
 
 def grad(im, top, bottom, y0=0):
@@ -153,7 +175,7 @@ if im:
     d.text((60, y + 6), SUB, font=card.font("med", 24), fill=(215, 225, 235)); iflogo(im); save(im, "1_kino_" + src)
 
 # 2) RETRO PLAKAT — markazda katta yil, ostida sarlavha
-im, src = bg("Retro 1990s sports poster illustration, vintage leather football ball flying over stylized mountains and a stadium, halftone dots, aged paper texture, sky blue, white, green palette with thin red accents, bold graphic shapes, " + NEG, 23, order)
+im, src = bg("Retro 1990s sports poster illustration, classic round black-and-white soccer ball (association football) flying over stylized mountains and a stadium, halftone dots, aged paper texture, sky blue, white, green palette with thin red accents, bold graphic shapes, " + NEG, 23, order)
 if im:
     im = im.convert("RGBA"); grad(im, 120, 230, 0); d = ImageDraw.Draw(im)
     fy = card.xfont("oswald-latin-700-normal.woff", 210, "1992")
@@ -164,7 +186,7 @@ if im:
     chip(im, "QIZIQARLI FAKT", 60, 50); iflogo(im); save(im, "2_retro_" + src)
 
 # 3) BO'LINGAN — chapda brend panel, o'ngda qiya ramkada AI surat
-im2, src = bg("Nostalgic vintage 1992 photograph, close-up of a classic leather football on fresh grass, a blue white green striped scarf beside it, shallow depth of field, warm evening light, kodak film grain, " + NEG, 37, order)
+im2, src = bg("Nostalgic vintage 1992 photograph, close-up of a classic round black-and-white soccer ball (association football, not american football) on fresh grass, a blue white green striped scarf beside it, shallow depth of field, warm evening light, kodak film grain, " + NEG, 37, order)
 if im2:
     im = Image.new("RGBA", (W, H), (8, 14, 24, 255))
     mask = Image.new("L", (W, H), 0); ImageDraw.Draw(mask).polygon([(620, 0), (W, 0), (W, H), (500, H)], fill=255)
@@ -175,7 +197,7 @@ if im2:
     iflogo(im); save(im, "3_bolingan_" + src)
 
 # 4) BADIIY — futbolchilar siluetlari, chapda matn
-im, src = bg("Epic digital painting, silhouettes of footballers running out of a stadium tunnel into bright light, blue and green light beams, dramatic, painterly brush strokes, 1990s nostalgia, faces not visible, " + NEG, 51, order)
+im, src = bg("Epic digital painting, silhouettes of soccer players in shorts running out of a stadium tunnel into bright light, blue and green light beams, dramatic, painterly brush strokes, 1990s nostalgia, faces not visible, " + NEG, 51, order)
 if im:
     im = im.convert("RGBA"); shade_left(im, 230, 20, 0.7); d = ImageDraw.Draw(im)
     chip(im, "QIZIQARLI FAKT", 60, 50); d.text((60, 110), "1992", font=card.font("black", 140), fill=(255, 255, 255))
