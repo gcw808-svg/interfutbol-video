@@ -1826,7 +1826,7 @@ function statFromPost(html, src) {
     else if ((m = l.match(/^(\d+) ta zarba/i))) tiles.push([m[1], "zarba"]);
     else if ((m = l.match(/baho:\s*([\d.,]+)/i))) tiles.push([m[1].replace(".", ","), "o'rtacha baho"]); }
   if (tiles.length < 2) return null;
-  return { name: newAlpha(nm.replace(/[⟦⟧]/g, "").trim()), sub: hd ? newAlpha(`⟦${hd[2].trim()}⟧ · ${hd[3]} · ${hd[4].trim()} holatiga`) : "", tiles: tiles.slice(0, 6).map(([v, l]) => [v, newAlpha(l)]), src: src || "FotMob, ESPN" };
+  return { name: newAlpha(nm.replace(/[⟦⟧]/g, "").trim()), sub: hd ? newAlpha(`⟦${hd[2].replace(/^[^\p{L}\p{N}]+/u, "").trim()}⟧ · ${hd[3]} · ${hd[4].trim()} holatiga`) : "", tiles: tiles.slice(0, 6).map(([v, l]) => [v, newAlpha(l)]), src: src || "FotMob, ESPN" };
 }
 async function statsPost(env, to, pick) {
   const used = await kvGet(env, "statUsed", {}); const now = Date.now();
