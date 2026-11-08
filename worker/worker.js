@@ -1079,7 +1079,7 @@ async function espnMatch(m, H, A) {
       // bir futbolchining gollari bitta qatorda: "Matheus Cunha 83', 86'"
       const grp = (list) => { const by = new Map(); for (const x of list) { const n = canonFix(x.athletesInvolved[0].displayName); const mn = String(x.clock?.displayValue || "").replace(/'/g, "").trim(); if (!by.has(n)) by.set(n, []); by.get(n).push({ m: mn ? mn + "'" : "", pen: !!x.penaltyKick, og: !!x.ownGoal }); } return [...by].map(([n, ms]) => ({ n, ms })); };
       // qizil kartochkalar (ikkinchi sariqdan bo'lgani ham)
-      const reds = (c.details || []).filter((x) => /red/i.test(x.type?.text || "") && (x.athletesInvolved || []).length && x.athletesInvolved[0].displayName);
+      const reds = (c.details || []).filter((x) => isRedCard(x) && (x.athletesInvolved || []).length && x.athletesInvolved[0].displayName);
       const rd = (id) => reds.filter((x) => String(x.team?.id) === String(id)).map((x) => ({ n: canonFix(x.athletesInvolved[0].displayName), m: String(x.clock?.displayValue || "").replace(/'/g, "").trim() + "'" }));
       const yl = espnYellows(c.details, h.team?.id, a.team?.id);
       return { eid: e.id, lg, done, sh, sa, home: grp(hg), away: grp(ag), hr: rd(h.team?.id), ar: rd(a.team?.id), hy: yl.hy, ay: yl.ay, goalsOk: done && hg.length === sh && ag.length === sa };
@@ -1090,9 +1090,11 @@ async function espnMatch(m, H, A) {
 // SARIQ KARTOCHKALAR (kartochka rasmi uchun, Bahtiyor aka tanlovi yB1, 2026-11-08): [ism, daqiqa, bizning futbolchimi]
 // bizning futbolchilar (FOCUS_PLAYERS) o'zbekcha ismi bilan va yashil ramkada; ikkinchi sariqdan qizil olgan futbolchi sariqlarda takrorlanmaydi
 function focusName(n) { const k = String(n || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase(); const p = FOCUS_PLAYERS.find((x) => x.k.some((w) => k.includes(w))); return p ? p.n.replace(/[⟦⟧]/g, "") : null; }
+// QIZIL KARTOCHKA (2026-11-08 tuzatish): "/red/i" "Penalty - Scored" so'zidagi "scoRED"ga ham mos kelib, penaltidan gol urgan futbolchi qizil kartochka olgan deb chiqardi (Sunderland 1:0 Chelsea)
+function isRedCard(x) { return x?.redCard === true || /\bred card\b/i.test(x?.type?.text || ""); }
 function espnYellows(details, hid, aid) {
-  const D = details || []; const red = new Set(D.filter((x) => /red/i.test(x.type?.text || "")).map((x) => x.athletesInvolved?.[0]?.displayName));
-  const ys = D.filter((x) => /yellow/i.test(x.type?.text || "") && !/red/i.test(x.type?.text || "") && x.athletesInvolved?.[0]?.displayName && !red.has(x.athletesInvolved[0].displayName));
+  const D = details || []; const red = new Set(D.filter((x) => isRedCard(x)).map((x) => x.athletesInvolved?.[0]?.displayName));
+  const ys = D.filter((x) => /yellow/i.test(x.type?.text || "") && !isRedCard(x) && x.athletesInvolved?.[0]?.displayName && !red.has(x.athletesInvolved[0].displayName));
   const f = (id) => ys.filter((x) => String(x.team?.id) === String(id)).map((x) => { const n = x.athletesInvolved[0].displayName; const fz = focusName(n); return [fz || canonFix(n), String(x.clock?.displayValue || "").replace(/'/g, "").trim() + "'", fz ? 1 : 0]; });
   return { hy: f(hid), ay: f(aid) };
 }
