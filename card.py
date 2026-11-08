@@ -110,6 +110,22 @@ def get_logo(url, size):
         return None
 
 
+def monogram(name, size):
+    # zaxira: logotip hech qayerdan yuklanmasa bo'sh joy qolmasin — klub bosh harflari doirada (2026-11-08)
+    w = [x for x in (name or "?").replace("-", " ").split() if x[:1].isalpha()] or ["?"]
+    ini = (w[0][0] + (w[1][0] if len(w) > 1 else "")).upper()
+    im = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    d.ellipse([2, 2, size - 3, size - 3], fill=(70, 82, 104, 255), outline=(235, 238, 245, 255), width=max(3, size // 30))
+    d.text((size / 2, size / 2), ini, font=font("black", int(size * 0.38)), fill=(245, 247, 250), anchor="mm")
+    print("LOGO-ZAXIRA", name)
+    return im
+
+
+def crest(url, size, name):
+    return get_logo(url, size) or monogram(name, size)
+
+
 def paste_glow(im, lg, x, y, strength=110, radius=18):
     # to'q fonda ham aniq ko'rinishi uchun logotip ortida yumshoq oq yorug'lik
     pad = radius * 2
@@ -276,7 +292,7 @@ def club_name(im, cx, top, name, col, box):
 def render_card_plain(j):
     # gol bo'lmasa (0:0) — oddiy shisha kartochka; ikki alohida panel, katta liga logotipi, klub nomlari klub rangida
     Wd, Hd = 1280, 720
-    hl, al = get_logo(j.get("homeLogo"), 180), get_logo(j.get("awayLogo"), 180)
+    hl, al = crest(j.get("homeLogo"), 180, j.get("home")), crest(j.get("awayLogo"), 180, j.get("away"))
     c1 = main_color(hl) if hl else (30, 60, 140)
     c2 = main_color(al) if al else (140, 30, 40)
     im = glass_bg(c1, c2)
@@ -370,7 +386,7 @@ def render_card(j):
     if not (hrows or arows or hy or ay or hr_ or ar_):
         return render_card_plain(j)
     Wd = 1280
-    hl, al = get_logo(j.get("homeLogo"), 140), get_logo(j.get("awayLogo"), 140)
+    hl, al = crest(j.get("homeLogo"), 140, j.get("home")), crest(j.get("awayLogo"), 140, j.get("away"))
     c1 = main_color(hl) if hl else (30, 60, 140)
     c2 = main_color(al) if al else (140, 30, 40)
     yc = bool(hy or ay or hr_ or ar_)
@@ -438,6 +454,11 @@ def render_card(j):
                 y += 24
             for ck, ln in yl[side]:
                 txt = ",  ".join(a_ + " " + b_ for a_, b_, _ in ln)
+                fy = font("bold", 19)
+                k_ = 19
+                while k_ > 14 and d.textlength(txt, font=fy) + 26 > 400:  # uzun ism panel chetidan chiqmasin
+                    k_ -= 1
+                    fy = font("bold", k_)
                 w = d.textlength(txt, font=fy) + 26
                 x = cx - w / 2
                 if ck == "r":
@@ -674,7 +695,7 @@ def _story_meta(j):
 
 def render_story_result(j):
     Wd, Hd = 1080, 1920
-    hl, al = get_logo(j.get("homeLogo"), 170), get_logo(j.get("awayLogo"), 170)
+    hl, al = crest(j.get("homeLogo"), 170, j.get("home")), crest(j.get("awayLogo"), 170, j.get("away"))
     # rangsiz (qora-oq) logotipda fon kulrang, chiziq oq bo'ladi
     mc = lambda lg_: (lambda c: None if c == (40, 60, 120) else c)(main_color(lg_)) if lg_ else None
     c1, c2 = mc(hl), mc(al)
