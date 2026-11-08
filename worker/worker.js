@@ -1482,7 +1482,7 @@ const TOPICS = [
 ];
 const topicsOf = (t) => TOPICS.filter(([, re]) => re.test(String(t || ""))).map(([k]) => k);
 // post turi (kanal postining matnidan)
-const postKind = (t) => { t = String(t || ""); return /#Natija\b/i.test(t) ? "result" : /#OyinOldidan/i.test(t) ? "preview" : /#Topurarlar/i.test(t) ? "scorers" : /#Legionerlar/i.test(t) ? "legion" : /#FutbolTarixi/i.test(t) ? "hist" : /#QiziqarliFakt/i.test(t) ? "fact" : /yin(lar)? jadvali/i.test(t) ? "fixtures" : /tarkib/i.test(t) && /#/.test(t) && /\d+\./.test(t) ? "lineup" : "news"; };
+const postKind = (t) => { t = String(t || ""); return /#Natija\b/i.test(t) ? "result" : /#OyinOldidan/i.test(t) ? "preview" : /#Topurarlar/i.test(t) ? "scorers" : /#Legionerlar/i.test(t) ? "legion" : /#OzbekFutboli/i.test(t) ? "uzfact" : /#FutbolTarixi/i.test(t) ? "hist" : /#QiziqarliFakt/i.test(t) ? "fact" : /yin(lar)? jadvali/i.test(t) ? "fixtures" : /tarkib/i.test(t) && /#/.test(t) && /\d+\./.test(t) ? "lineup" : "news"; };
 const viewsNum = (x) => { const m = String(x || "").trim().match(/^([\d.,]+)\s*([KM]?)/i); if (!m) return 0; const n = parseFloat(m[1].replace(",", ".")); return Math.round(n * (/k/i.test(m[2]) ? 1e3 : /m/i.test(m[2]) ? 1e6 : 1)); };
 // kanal ochiq sahifasidan (t.me/s) har bir postning ko'rishlar soni — 24–96 soat o'tgan postlar hisobga olinadi
 async function engCollect(env) {
@@ -1514,7 +1514,7 @@ async function engCollect(env) {
   await kvPut(env, "topicW", topicW); await kvPut(env, "engStats", { t: Date.now(), n: recent.length, avg: Math.round(all), typeStats, topicStats, typeW, topicW });
   return added;
 }
-const TYPE_UZ = { result: "natijalar", news: "yangiliklar", preview: "o'yin oldidan", scorers: "to'purarlar", legion: "legionerlar", hist: "tarixda bugun", fact: "qiziqarli fakt", fixtures: "o'yinlar jadvali", lineup: "tarkiblar" };
+const TYPE_UZ = { result: "natijalar", news: "yangiliklar", preview: "o'yin oldidan", scorers: "to'purarlar", legion: "legionerlar", uzfact: "o'zbek futboli fakti", hist: "tarixda bugun", fact: "qiziqarli fakt", fixtures: "o'yinlar jadvali", lineup: "tarkiblar" };
 const TOPIC_UZ = { uz: "o'zbek futboli", transfer: "transferlar", injury: "jarohatlar", coach: "murabbiylar", rumor: "mish-mishlar", result: "o'yin natijalari", record: "rekordlar", ronaldo: "Ronaldo", messi: "Messi", mbappe: "Mbappé", yamal: "Yamal", haaland: "Haaland", salah: "Salah", "c:mu": "Manchester United", "c:mc": "Manchester City", "c:liv": "Liverpool", "c:ars": "Arsenal", "c:che": "Chelsea", "c:rma": "Real Madrid", "c:bar": "Barcelona", "c:atm": "Atlético Madrid", "c:int": "Inter", "c:mil": "Milan", "c:juv": "Juventus", "c:bay": "Bayern", "c:bvb": "Dortmund", "c:psg": "PSG", "c:nas": "Al-Nassr", "c:mia": "Inter Miami" };
 async function engReport(env, chat) {
   const s = await kvGet(env, "engStats", null); const admin = chat || (await getAdmins(env))[0]; if (!s || !admin) return;
@@ -1573,6 +1573,67 @@ async function legionWeekly(env, force, to) {
   const tot = L.reduce((s, x) => s + x.min, 0), goals = L.reduce((s, x) => s + x.g, 0);
   const post = `<b>O'zbek legionerlari: hafta yakunlari</b>\n\n${uzDay(addDays(d, -7)).split(",")[0]} — ${uzDay(addDays(d, -1)).split(",")[0]}, ${d.slice(0, 4)}-yil. Legionerlarimiz jami ${tot} daqiqa maydonda bo'ldi${goals ? ", " + goals + " ta gol urdi" : ""}.\n\n${blocks}\n\n#Legionerlar #Ozbekiston`;
   await resultJob(env, post, to || null, { kind: "news" }); return "ok";
+}
+
+// ---------------- O'ZBEK FUTBOLI FAKTLARI (Bahtiyor aka tanlovi, 2026-11-08): har kuni 15:00 ----------------
+// Manbalar ko'p: Vikipediya (ingliz, rus, o'zbek) — terma jamoa, klublar, chempionat, afsonalar, turnirlar; FotMob — legionerlar karyerasi, sovrinlari, mavsum statistikasi.
+// Har bir post nazoratchidan (factCheck) o'tadi; rasm — doim brend kartochka (haqiqiy futbolchi surati qo'yilmaydi).
+const UZF_WIKI = [
+  ["en", "Uzbekistan national football team"], ["en", "Pakhtakor Tashkent FK"], ["en", "FC Bunyodkor"], ["en", "FC Nasaf"], ["en", "Navbahor Namangan"], ["en", "FC AGMK"],
+  ["en", "Neftchi Fergana"], ["en", "Uzbekistan Super League"], ["en", "Uzbekistan national under-23 football team"], ["en", "Uzbekistan national under-20 football team"],
+  ["en", "Uzbekistan Football Association"], ["en", "Server Djeparov"], ["en", "Mirjalol Qosimov"], ["en", "Maksim Shatskikh"], ["en", "Odil Ahmedov"], ["en", "Timur Kapadze"],
+  ["en", "Ignatiy Nesterov"], ["en", "Milliy Stadium"], ["en", "Uzbekistan Cup"], ["en", "2011 AFC Asian Cup"], ["en", "2018 AFC U-23 Championship"], ["en", "2023 AFC U-20 Asian Cup"],
+  ["en", "Eldor Shomurodov"], ["en", "Abdukodir Khusanov"], ["en", "Jaloliddin Masharipov"], ["en", "Abbosbek Fayzullaev"],
+  ["ru", "Сборная Узбекистана по футболу"], ["ru", "Пахтакор (футбольный клуб)"], ["ru", "Чемпионат Узбекистана по футболу"], ["ru", "Шацких, Максим Александрович"],
+  ["ru", "Джепаров, Сервер Ризаевич"], ["ru", "Касымов, Мирджалол Мирзаевич"], ["ru", "Бунёдкор"], ["ru", "Насаф (футбольный клуб)"], ["ru", "Кубок Узбекистана по футболу"],
+  ["uz", "Oʻzbekiston milliy futbol terma jamoasi"], ["uz", "Paxtakor (futbol klubi)"],
+];
+async function uzfSource(env) {
+  const used = (await kvGet(env, "uzfUsed", [])).filter((u) => Date.now() - u.t < 20 * 86400e3).map((u) => u.k);
+  for (let tries = 0; tries < 4; tries++) {
+    if (Math.random() < 0.4) { // FotMob: legioner karyerasi
+      const P = FOCUS_PLAYERS.filter((p) => p.fm && !p.star && !used.includes("fm" + p.fm)); if (!P.length) continue; const p = P[Math.floor(Math.random() * P.length)];
+      let j; try { j = await (await fetch("https://www.fotmob.com/api/data/playerData?id=" + p.fm, { headers: { "user-agent": "Mozilla/5.0 InterFutbolBot" } })).json(); } catch (e) { continue; }
+      const ce = j.careerHistory?.careerItems || {}; const yr = (d) => (d ? String(d).slice(0, 4) : "hozirgacha");
+      const row = (x) => `${x.team} (${yr(x.startDate)}–${x.endDate ? yr(x.endDate) : "hozirgacha"}${x.transferType?.text ? ", " + x.transferType.text : ""}): ${x.appearances || "?"} matches, ${x.goals || 0} goals${x.assists ? ", " + x.assists + " assists" : ""}`;
+      const senior = (ce.senior?.teamEntries || []).map(row).join("\n"), nat = (ce["national team"]?.teamEntries || []).map(row).join("\n");
+      const tro = (j.trophies?.playerTrophies || []).flatMap((t) => (t.tournaments || []).map((x) => `${t.teamName}: ${x.leagueName} — ${(x.seasonsWon || []).join(", ")}`)).join("\n");
+      const ml = j.mainLeague ? `${j.mainLeague.leagueName} ${j.mainLeague.season}: ` + (j.mainLeague.stats || []).map((x) => x.title + " " + x.value).join(", ") : "";
+      const text = `Player: ${j.name}. Born: ${String(j.birthDate?.utcTime || "").slice(0, 10)}. Position: ${j.positionDescription?.primaryPosition?.label || ""}. Current club: ${j.primaryTeam?.teamName || ""}.\nClub career (senior):\n${senior}\nNational team:\n${nat}\nTrophies:\n${tro}\nCurrent season: ${ml}`;
+      if (!senior) continue;
+      return { key: "fm" + p.fm, uzName: p.n.replace(/[⟦⟧]/g, ""), item: { title: j.name + " — karyera (FotMob)", desc: "", text, link: "https://www.fotmob.com/players/" + p.fm, source: "FotMob", img: null, date: Date.now() } };
+    }
+    const W = UZF_WIKI.filter(([l, t]) => !used.includes(l + ":" + t)); if (!W.length) continue; const [lang, title] = W[Math.floor(Math.random() * W.length)];
+    let j; try { j = await wikiJson([`https://${lang}.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&format=json&redirects=1&titles=` + encodeURIComponent(title)]); } catch (e) { continue; }
+    const pg = Object.values(j.query?.pages || {})[0] || {}; const full = String(pg.extract || ""); if (full.length < 800) continue;
+    const parts = full.split(/\n(?===+ )/).filter((x) => x.length > 500 && !/^== ?(See also|References|External links|Notes|Literature|Ссылки|Примечания|См\. также|Литература|Manbalar|Havolalar|Current squad|Состав)/i.test(x));
+    if (!parts.length) continue; const chunk = parts[Math.floor(Math.random() * parts.length)].slice(0, 5000);
+    return { key: lang + ":" + title, item: { title: pg.title || title, desc: "", text: chunk, link: `https://${lang}.wikipedia.org/wiki/` + encodeURIComponent(String(pg.title || title).replace(/ /g, "_")), source: "Wikipedia", img: null, date: Date.now() } };
+  }
+  return null;
+}
+async function uzFactMake(env, deadline) {
+  const s0 = await uzfSource(env); if (!s0) return null; const item = s0.item;
+  const prompt = `Sen o'zbek tilidagi "Inter Futbol" Telegram kanalining muharririsan. "O'zbek futboli" rukni uchun quyidagi manbadan BITTA eng qiziqarli, ko'pchilik bilmaydigan faktni top va u haqida qisqa post yoz (o'zbek tili, lotin yozuvi). Manba ingliz, rus yoki o'zbek tilida bo'lishi mumkin.
+Qoidalar:
+- FAQAT manbadagi faktlarni yoz. O'zingdan raqam, sana, ism, klub, sovrin qo'shma. Shubhali narsani yozma.
+- Qiziqarli bo'lsin: rekord, birinchi marta bo'lgan voqea, kutilmagan karyera burilishi, katta g'alaba, sovrin, raqamlar (o'yinlar, gollar). Quruq ma'lumotnoma emas, hikoya kabi.
+- "Bugun", "kecha", "hozir" so'zlarini ishlatma; vaqt o'tib o'zgaradigan raqam bo'lsa, qaysi yil yoki mavsum holatiga ko'ra ekanini yoz.
+- Tuzilishi: 1-qator: <b>qiziqtiruvchi qisqa sarlavha</b> (faktning o'zi). Bo'sh qator. 2–4 gap: tafsilot va nega qiziq. Bo'sh qator. 2–3 heshteg: #OzbekFutboli #QiziqarliFakt va futbolchi/klub nomi.
+- O'zbek futbolchilari va o'zbek klublari nomini o'zbekcha lotin yozuvida yoz (${s0.uzName ? s0.uzName + ", " : ""}Abduqodir Husanov, Eldor Shomurodov, Mirjalol Qosimov, Server Djeparov, Odil Ahmedov, Paxtakor, Bunyodkor, Nasaf). Xorijiy klub va futbolchilar nomini ORIGINAL rasmiy lotin yozuvida yoz va ⟦ ⟧ ichiga ol: ⟦Roma⟧, ⟦Manchester City⟧. Terma jamoa va davlat nomlari o'zbekcha ("O'zbekiston terma jamoasi", "Osiyo kubogi"). Inglizcha yoki ruscha so'z qoldirma.
+- Emoji ishlatma. Faqat <b> tegi. 600 belgidan oshmasin.
+Manba (${item.source}): ${item.title}
+${item.text}`;
+  const raw = await callGemini(env, prompt, 0.6, deadline, 2048, false, true);
+  const post = postClean(raw, false); const fc = await factCheck(env, item, post, deadline);
+  if (fc.bad.length) { const u = await kvGet(env, "uzfUsed", []); u.push({ k: s0.key, t: Date.now() }); await kvPut(env, "uzfUsed", u.slice(-80)); return { bad: 1 }; }
+  return { post: fc.text, fixed: fc.fixed, item, key: s0.key };
+}
+async function uzFactRun(env, to) {
+  const f = await uzFactMake(env, Date.now() + 110000); if (!f) return "none"; if (f.bad) return "err nazoratdan o'tmadi";
+  await resultJob(env, f.post, to || null, { kind: "news" });
+  if (!to) { const u = await kvGet(env, "uzfUsed", []); u.push({ k: f.key, t: Date.now() }); await kvPut(env, "uzfUsed", u.slice(-80)); }
+  return "ok " + f.key;
 }
 
 // hisob orqali chiqarish ishlari javob bermay qolsa: qayta urinish, oxirida bot orqali
@@ -2348,6 +2409,7 @@ return;
     await tg(env, "sendMessage", { chat_id: chat, text: "▶️ Bot qayta ishga tushdi." });
     ctx.waitUntil(nextManual(env, chat, false));
     } else if (/^\/nazorat\s/.test(text)) { const r = await qcCheck(env, text.replace(/^\/nazorat\s+/, ""), false).catch((e) => ({ fatal: ["tekshiruv xatosi: " + e.message], warn: [] })); await tg(env, "sendMessage", { chat_id: chat, text: "🔎 Nazoratchi (sinov, kanalga chiqmaydi):\n" + (r.fatal.length ? "🛑 To'xtatiladi:\n• " + r.fatal.join("\n• ") + "\n" : "✅ Jiddiy xato yo'q\n") + (r.warn.length ? "⚠️ Kamchilik:\n• " + r.warn.join("\n• ") : "Kamchilik yo'q") });
+    } else if (text === "/ozfakt") { await tg(env, "sendMessage", { chat_id: chat, text: "🧪 O'zbek futboli fakti tayyorlanmoqda (manba tanlanadi, nazoratchidan o'tadi, kartochka chiziladi — 1–3 daqiqa). Kanalga chiqmaydi." }); ctx.waitUntil((async () => { let r; try { r = await uzFactRun(env, chat); } catch (e) { r = "xato: " + e.message; } if (!/^ok/.test(String(r))) await tg(env, "sendMessage", { chat_id: chat, text: "Natija: " + r + " — qayta /ozfakt yozing." }); })());
     } else if (text === "/futbolchilar") { const r = await fmWatch(env, true).catch((e) => ({ err: e.message })); if (r.err) await tg(env, "sendMessage", { chat_id: chat, text: "Xato: " + r.err }); else await tg(env, "sendMessage", { chat_id: chat, text: "👟 Futbolchilar (FotMob, hozirgi klubi):\n" + FOCUS_PLAYERS.map((p) => { const x = r.T[p.fm]; const ok = x && p.club.test(x.team) && !NOT_OURS.test(x.team); return (x ? (ok ? "✅ " : "⚠️ ") : "❔ ") + p.n.replace(/[⟦⟧]/g, "") + " — " + (x ? x.team + (x.loan ? " (ijarada)" : "") + (x.inj ? ", jarohat: " + x.inj : "") : "ma'lumot yo'q"); }).join("\n") });
     } else if (text === "/tahlil") { await tg(env, "sendMessage", { chat_id: chat, text: "📊 Kanal postlari ko'rishlari yig'ilmoqda…" }); const n = await engCollect(env).catch((e) => "xato: " + e.message); await tg(env, "sendMessage", { chat_id: chat, text: "Yangi yozuvlar: " + n }); await engReport(env, chat);
     } else if (text === "/topurar") { const r = await scorersAuto(env, true, chat).catch((e) => "xato: " + e.message); if (!/^ok/.test(r)) await tg(env, "sendMessage", { chat_id: chat, text: "To'purarlar namunasi: " + r });
@@ -2974,6 +3036,7 @@ if (url.pathname === "/hook" && req.method === "POST") {
     if (on("B")) try { await autoResults(env); } catch (e) { await err("res", e); }
     if (on("B")) try { await lineupsAuto(env); } catch (e) { await err("lu", e); } if (on("B")) try { await hookWatch(env); } catch (e) { await err("hook", e); } if (on("C")) try { const ad = tashDate(Date.now()); if (tashHour() === 23 && (await kvGet(env, "auditDay", "")) !== ad) { await kvPut(env, "auditDay", ad, { expirationTtl: 3 * 86400 }); await dailyAudit(env); } } catch (e) { await err("audit", e); }
     if (on("C")) try { const xm = await kvGet(env, "fixMode", "off"); const xd = tashDate(Date.now()); if (xm !== "off" && (tashHour() === 9 || tashHour() === 10) && (await kvGet(env, "fixDay", "")) !== xd && (await autoOn(env))) { await kvPut(env, "fixDay", xd, { expirationTtl: 3 * 86400 }); try { await fixturesRun(env, xm !== "on"); } catch (e) { const ft = (await kvGet(env, "fixTry", {}))[xd] || 0; if (ft < 5) { await kvPut(env, "fixTry", { [xd]: ft + 1 }, { expirationTtl: 86400 }); await kvPut(env, "fixDay", "", { expirationTtl: 3 * 86400 }); } throw e; } } } catch (e) { await err("fix", e); }
+    if (on("C")) try { const ud = tashDate(Date.now()), uh = tashHour(); if ((uh === 15 || uh === 16) && (await kvGet(env, "uzfMode", "on")) !== "off" && (await kvGet(env, "uzfDay", "")) !== ud && (await autoOn(env))) { await kvPut(env, "uzfDay", ud, { expirationTtl: 3 * 86400 }); let r; try { r = await uzFactRun(env); } catch (e) { r = e; } if (!/^ok/.test(String(r))) { const t = (await kvGet(env, "uzfTry", {}))[ud] || 0; if (t < 5) { await kvPut(env, "uzfTry", { [ud]: t + 1 }, { expirationTtl: 86400 }); await kvPut(env, "uzfDay", "", { expirationTtl: 3 * 86400 }); } if (r instanceof Error) throw r; } } } catch (e) { await err("uzfact", e); }
     if (on("C")) try { const fm = await kvGet(env, "factMode", "off"); const fdy = tashDate(Date.now()); if (fm !== "off" && (tashHour() === 20 || tashHour() === 21) && (await kvGet(env, "factDay", "")) !== fdy && (await autoOn(env))) { await kvPut(env, "factDay", fdy, { expirationTtl: 3 * 86400 }); let fr; try { fr = await factRun(env, fm !== "on"); } catch (e) { fr = e; } if (fr === "none" || fr instanceof Error) { const ft = (await kvGet(env, "factTry", {}))[fdy] || 0; if (ft < 5) { await kvPut(env, "factTry", { [fdy]: ft + 1 }, { expirationTtl: 86400 }); await kvPut(env, "factDay", "", { expirationTtl: 3 * 86400 }); } if (fr instanceof Error) throw fr; } } } catch (e) { await err("fact", e); }
     if (on("C")) try { const hm = await kvGet(env, "histMode", "off"); const hd = tashDate(Date.now()); if (hm !== "off" && (tashHour() === 10 || tashHour() === 11) && (await kvGet(env, "histDay", "")) !== hd && (await autoOn(env))) { await kvPut(env, "histDay", hd, { expirationTtl: 3 * 86400 }); let hr; try { hr = await histRun(env, hm !== "on"); } catch (e) { hr = e; } if (hr instanceof Error || /^err/.test(String(hr))) { const ht = (await kvGet(env, "histTry", {}))[hd] || 0; if (ht < 5) { await kvPut(env, "histTry", { [hd]: ht + 1 }, { expirationTtl: 86400 }); await kvPut(env, "histDay", "", { expirationTtl: 3 * 86400 }); } if (hr instanceof Error) throw hr; } } } catch (e) { await err("hist", e); }
     if (on("C")) try { const tdy = tashDate(Date.now()); if ((await kvGet(env, "tblMode", "on")) !== "off" && tashHour() === 11 && (await kvGet(env, "tblDay", "")) !== tdy && (await autoOn(env))) { await kvPut(env, "tblDay", tdy, { expirationTtl: 3 * 86400 }); await tablesAuto(env); } } catch (e) { await err("tbl", e); }
