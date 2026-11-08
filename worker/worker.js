@@ -1977,7 +1977,7 @@ const ubKey = async (env) => (await sha("ub-" + env.BOT_TOKEN)).slice(0, 40);
 // KV jobsMode = "gh" qilinsa hamma ish yana GitHub'da.
 async function ghDispatch(env, wf, inputs, viaGh) {
   if (!viaGh && (wf === "card.yml" || wf === "ubpost.yml") && inputs && inputs.job && (await kvGet(env, "jobsMode", "modal")) !== "gh") {
-    const ju = await kvGet(env, "jobsUrl", "");
+    const ju = await kvGet(env, "jobsUrl", "https://gcw808-svg--inter-jobs-dispatch.modal.run");
     if (ju) {
       try { const r = await fetch(ju, { method: "POST", headers: { "x-key": await ubKey(env), "content-type": "application/json" }, body: JSON.stringify({ wf, job: inputs.job }), signal: AbortSignal.timeout(25000) }); if (r.ok) return true; } catch (e) {}
       try { const f = await kvGet(env, "jobsFail", { n: 0 }); await kvPut(env, "jobsFail", { n: (f.n || 0) + 1, t: Date.now(), wf }, { expirationTtl: 3 * 86400 }); } catch (e) {}
