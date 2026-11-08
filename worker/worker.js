@@ -189,7 +189,7 @@ function addLogosPart(t) {
     CLUB_RE = [];
     const ALLN = CLUB_EMOJI.flatMap(([i2, e2, ns]) => ns.map((x) => [i2, x]));
     const rq = (x) => x.replace(/[.*+?^${}()|[\]\\\/]/g, "\\$&");
-    for (const [id, em, names] of CLUB_EMOJI) for (const n of names) { const pre = ALLN.filter(([i2, x]) => i2 !== id && x.length > n.length && x.endsWith(" " + n)).map(([, x]) => rq(x.slice(0, x.length - n.length))); CLUB_RE.push([new RegExp("(^|[^\\p{L}\\p{N}])(⟦?)" + (pre.length ? "(?<!(?:" + pre.join("|") + "))" : "") + "(" + rq(n) + ")" + CLUB_SUF + "(?!\\s+(?:Futbol|Miami))", "u"), id, em, n.length]); }
+    for (const [id, em, names] of CLUB_EMOJI) for (const n of [...new Set([...names, ...names.map((x) => newAlpha(x))])]) { const pre = ALLN.filter(([i2, x]) => i2 !== id && x.length > n.length && x.endsWith(" " + n)).map(([, x]) => rq(x.slice(0, x.length - n.length))); CLUB_RE.push([new RegExp("(^|[^\\p{L}\\p{N}])(⟦?)" + (pre.length ? "(?<!(?:" + pre.join("|") + "))" : "") + "(" + rq(n) + ")" + CLUB_SUF + "(?!\\s+(?:Futbol|Miami))", "u"), id, em, n.length]); }
     CLUB_RE.sort((a, b) => b[3] - a[3]);
   }
   const used = new Set(), keep = [];
