@@ -1,6 +1,6 @@
 # Inter Futbol: rasm topilmagan yangilik uchun mavzuga mos kartochka (1280x720)
 # Natija bo'lsa: shisha uslubi (jamoa ranglari, ikki panel, klub nomi ostida klub rangidagi chiziq)
-import glob, hashlib, io, json, os, time, urllib.error, urllib.request
+import glob, hashlib, io, json, os, time, urllib.error, urllib.parse, urllib.request
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 BOT = os.environ.get("BOT_TOKEN", "")
@@ -110,6 +110,9 @@ def get_logo(url, size):
         return None
 
 
+MISSING = []  # zaxira belgi qo'yilgan klublar — workerga xabar qilinadi (admin ogohlantirishi)
+
+
 def monogram(name, size):
     # zaxira: logotip hech qayerdan yuklanmasa bo'sh joy qolmasin — klub bosh harflari doirada (2026-11-08)
     w = [x for x in (name or "?").replace("-", " ").split() if x[:1].isalpha()] or ["?"]
@@ -119,6 +122,7 @@ def monogram(name, size):
     d.ellipse([2, 2, size - 3, size - 3], fill=(70, 82, 104, 255), outline=(235, 238, 245, 255), width=max(3, size // 30))
     d.text((size / 2, size / 2), ini, font=font("black", int(size * 0.38)), fill=(245, 247, 250), anchor="mm")
     print("LOGO-ZAXIRA", name)
+    MISSING.append(name or "?")
     return im
 
 
@@ -815,7 +819,8 @@ if __name__ == "__main__":
     if job:
         j = wapi("/ub/cjob?id=" + job)
         if j:
-            wapi("/ub/card?id=" + job, render(j), "image/png")
+            img = render(j)
+            wapi("/ub/card?id=" + job + ("&miss=" + urllib.parse.quote("|".join(sorted(set(MISSING)))) if MISSING else ""), img, "image/png")
             if j.get("story") and j.get("score") and j.get("home") and j.get("away"):
                 # tik natija istoriyasi (Telegram + Instagram), faqat top o'yinlar
                 try:
