@@ -194,11 +194,7 @@ def kino(name, prompt, seed):
     for k, l in enumerate(ls): d.text((60, y0 + k * 60), l, font=f, fill=(255, 255, 255))
     d.text((60, y0 + len(ls) * 60 + 8), SUB, font=card.font("med", 24), fill=(215, 225, 235)); iflogo(im); save(im, name + "_" + src)
 
-kino("K1_stadion", "Cinematic wide shot of an old 1990s football stadium in Tashkent at golden dusk, floodlights glowing, green pitch, crowd silhouettes far away, blue white green color grading, atmospheric haze, film grain", 213)
-kino("K2_kiyinish", "Cinematic photo of a vintage 1990s football locker room, white football shirts with blue and green trim hanging on wooden hooks, dramatic warm window light beams, dust particles, moody, film still", 314)
-kino("K3_toglar", "Cinematic aerial shot at blue hour of a football stadium glowing with floodlights in a Central Asian city with snowy mountains in the background, city lights, atmospheric, epic, film still", 415)
-kino("K4_butsi", "Cinematic close-up of a pair of old leather football boots and a classic black and white soccer ball on grass at sunset, shallow depth of field, warm backlight, blue and green bokeh lights, nostalgic, film still", 516)
-kino("K5_tunnel", "Cinematic shot from inside an old concrete stadium tunnel looking out at a bright green football pitch and floodlights, light rain, dramatic contrast, nostalgic 1990s atmosphere, film still", 617)
-
+kino("K1_stadion", "Cinematic wide shot of an empty old 1990s concrete football stadium at golden dusk, bare grey stands without any signs, banners or advertising boards, floodlight towers glowing, green pitch, atmospheric haze, blue white green color grading, film grain", 1213)
+kino("K5_tunnel", "Cinematic shot from inside an empty old stadium tunnel with plain bare concrete walls, no signs, no people, looking out at a bright green football pitch under floodlights, light rain, dramatic contrast, nostalgic, film still", 1617)
 json.dump(LOG, open(f"{OUT}/log.json", "w"), ensure_ascii=False, indent=1, default=str)
 print(json.dumps(LOG, ensure_ascii=False, default=str)[:3000])
