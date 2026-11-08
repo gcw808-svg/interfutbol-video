@@ -1,6 +1,6 @@
 # Inter Futbol: rasm topilmagan yangilik uchun mavzuga mos kartochka (1280x720)
 # Natija bo'lsa: shisha uslubi (jamoa ranglari, ikki panel, klub nomi ostida klub rangidagi chiziq)
-import glob, hashlib, io, json, os, urllib.request
+import glob, hashlib, io, json, os, time, urllib.error, urllib.request
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 BOT = os.environ.get("BOT_TOKEN", "")
@@ -129,6 +129,35 @@ def is_dark(lg):
     if not px:
         return False
     return sum(0.299 * r + 0.587 * g + 0.114 * b for r, g, b in px) / len(px) < 75
+
+
+def blends(lg):
+    # logotip deyarli bir rangli (masalan Liverpool, Nottingham Forest — qizil) va o'z rangidagi fonda yo'qolib ketadi
+    c = main_color(lg)
+    sm = lg.copy()
+    sm.thumbnail((64, 64))
+    px = [(r, g, b) for r, g, b, a in sm.getdata() if a > 200]
+    if len(px) < 20:
+        return False
+    return sum(1 for p in px if sum((p[i] - c[i]) ** 2 for i in range(3)) ** 0.5 < 90) / len(px) >= 0.9
+
+
+def paste_disc(im, lg, x, y):
+    # bir rangli logotip ortida och doira — fon bilan qo'shilib ketmasin (2026-11-08)
+    cx, cy = x + lg.width / 2, y + lg.height / 2
+    lg = lg.copy()
+    lg.thumbnail((int(lg.width * 0.74), int(lg.height * 0.74)), Image.LANCZOS)
+    x, y = int(cx - lg.width / 2), int(cy - lg.height / 2)
+    r = max(lg.width, lg.height) / 2 + 13
+    sh = Image.new("L", (int(r * 2 + 60), int(r * 2 + 60)), 0)
+    ImageDraw.Draw(sh).ellipse([30, 34, 30 + r * 2, 34 + r * 2], fill=110)
+    sh = sh.filter(ImageFilter.GaussianBlur(12))
+    blk = Image.new("RGBA", sh.size, (0, 0, 0, 0))
+    blk.putalpha(sh)
+    im.paste(blk, (int(cx - r - 30), int(cy - r - 30)), blk)
+    d = ImageDraw.Draw(im, "RGBA")
+    d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(246, 247, 250, 245))
+    im.paste(lg, (x, y), lg)
 
 
 def paste_league(im, lg, x, y, strength=120, radius=12):
@@ -260,7 +289,9 @@ def render_card_plain(j):
         cx = (bx[0] + bx[2]) // 2
         if lg_:
             x_, y_ = cx - lg_.width // 2, 320 - lg_.height // 2
-            if is_dark(lg_):
+            if blends(lg_):
+                paste_disc(im, lg_, x_, y_)
+            elif is_dark(lg_):
                 paste_glow(im, lg_, x_, y_, 255, 8)
                 paste_glow(im, lg_, x_, y_, 210, 22)
             else:
@@ -296,7 +327,9 @@ def ycard(d, cx, cy, k=1.0):
 def short_name(n):
     # sariq kartochkalar qatorida faqat familiya ("El Aynaoui", "De Paul" kabi qo'shimchalar bilan)
     w = (n or "").split()
-    if len(w) >= 3 and w[-2].lower() in ("el", "de", "van", "von", "da", "di", "del", "dos", "le", "ten", "ter", "al"):
+    if len(w) >= 4 and " ".join(w[-3:-1]).lower() in ("van der", "van den", "van de", "de la", "de los", "dos santos"):
+        return " ".join(w[-3:])
+    if len(w) >= 3 and w[-2].lower() in ("el", "de", "van", "von", "da", "di", "del", "dos", "le", "la", "ten", "ter", "al", "mac", "mc", "ben", "abu", "do", "du", "st.", "san", "dal", "della"):
         return " ".join(w[-2:])
     return w[-1] if w else ""
 
@@ -368,7 +401,9 @@ def render_card(j):
         cx = (bx[0] + bx[2]) // 2
         if lg_:
             x_, y_ = cx - lg_.width // 2, ly_ - lg_.height // 2
-            if is_dark(lg_):
+            if blends(lg_):
+                paste_disc(im, lg_, x_, y_)
+            elif is_dark(lg_):
                 paste_glow(im, lg_, x_, y_, 255, 8)
                 paste_glow(im, lg_, x_, y_, 210, 22)
             else:
@@ -469,7 +504,9 @@ def render_lineup(j):
         cx = (bx[0] + bx[2]) // 2
         if lg_:
             x_, y_ = cx - lg_.width // 2, 100 - lg_.height // 2
-            if is_dark(lg_):
+            if blends(lg_):
+                paste_disc(im, lg_, x_, y_)
+            elif is_dark(lg_):
                 paste_glow(im, lg_, x_, y_, 255, 8)
                 paste_glow(im, lg_, x_, y_, 210, 18)
             else:
@@ -660,7 +697,9 @@ def render_story_result(j):
         d = ImageDraw.Draw(im, "RGBA")
         if lg_:
             x_, y_ = 90 + 40 + (170 - lg_.width) // 2, y0 + (h - lg_.height) // 2
-            if is_dark(lg_):
+            if blends(lg_):
+                paste_disc(im, lg_, x_, y_)
+            elif is_dark(lg_):
                 paste_glow(im, lg_, x_, y_, 255, 8)
                 paste_glow(im, lg_, x_, y_, 210, 22)
             else:
@@ -724,8 +763,18 @@ def render(j):
 
 def wapi(path, data=None, ctype="application/json"):
     req = urllib.request.Request(W + path, data=data, headers={"x-key": KEY, "content-type": ctype, "user-agent": "InterFutbolCard"}, method="POST" if data is not None else "GET")
-    with urllib.request.urlopen(req, timeout=60) as r:
-        return json.loads(r.read() or b"{}")
+    # vaqtinchalik 5xx/tarmoq xatosida 3 marta qayta urinadi (2026-11-08: 503 tufayli kartochka yangilanmay qolgan edi)
+    for k in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return json.loads(r.read() or b"{}")
+        except urllib.error.HTTPError as e:
+            if e.code < 500 or k == 2:
+                raise
+        except urllib.error.URLError:
+            if k == 2:
+                raise
+        time.sleep(4 * (k + 1))
 
 if __name__ == "__main__":
     job = os.environ.get("JOB")

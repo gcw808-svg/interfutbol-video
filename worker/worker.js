@@ -990,7 +990,7 @@ async function espnCardsFor(H, A, ymd) {
   const hit = (name, team) => { const a = tk(name), b = tk([team?.displayName, team?.shortDisplayName, team?.name].join(" ")); return a.some((w) => b.some((v) => v === w || v.startsWith(w) || w.startsWith(v))); };
   for (const d of [ymd, addDays(ymd, -1), addDays(ymd, 1)]) {
     let j; try { j = await (await fetch("https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard?limit=900&dates=" + d.replace(/-/g, ""), { cf: { cacheTtl: 600 } })).json(); } catch (e) { continue; }
-    for (const e of j.events || []) { const c = e.competitions?.[0] || {}; const cs = c.competitors || []; const h = cs.find((x) => x.homeAway === "home"), a = cs.find((x) => x.homeAway === "away"); if (h && a && hit(H, h.team) && hit(A, a.team)) return espnYellows(c.details, h.team?.id, a.team?.id); }
+    for (const e of j.events || []) { const c = e.competitions?.[0] || {}; const cs = c.competitors || []; const h = cs.find((x) => x.homeAway === "home"), a = cs.find((x) => x.homeAway === "away"); if (h && a && hit(H, h.team) && hit(A, a.team)) return { ...espnYellows(c.details, h.team?.id, a.team?.id), hl: h.team?.logo || "", al: a.team?.logo || "" }; }
   }
   return { hy: [], ay: [] };
 }
@@ -2124,7 +2124,7 @@ async function resRedo(env, chat, mid) {
   // sariq kartochkalar (ESPN): post sanasi matndan ("2026-yil 5-noyabr")
   let ymd = tashDate(Date.now()); { const MON = { yanvar: 1, fevral: 2, mart: 3, aprel: 4, may: 5, iyun: 6, iyul: 7, avgust: 8, sentabr: 9, oktabr: 10, noyabr: 11, dekabr: 12 }; const dm = cap.match(/(\d{4})-yil (\d{1,2})-(yanvar|fevral|mart|aprel|may|iyun|iyul|avgust|sentabr|oktabr|noyabr|dekabr)/i); if (dm) ymd = dm[1] + "-" + String(MON[dm[3].toLowerCase()]).padStart(2, "0") + "-" + dm[2].padStart(2, "0"); }
   const ycs = await espnCardsFor(H, A, ymd).catch(() => ({ hy: [], ay: [] }));
-  await kvPut(env, "cjob:" + id, { title: newAlpha(t0), home: cardNm(H), away: cardNm(A), hy: ycs.hy, ay: ycs.ay, score: sm[2] + ":" + sm[3], league: newAlpha(lgLogoName), homeLogo: hl || ESPN_CREST[H] || ESPN_CREST[Object.keys(ESPN_CREST).find((k) => norm(k) === norm(H))] || "", awayLogo: al || ESPN_CREST[A] || ESPN_CREST[Object.keys(ESPN_CREST).find((k) => norm(k) === norm(A))] || "", leagueLogo: ll || espnLgLogo(lg) || "", ...goals, chan: html, rep: mid, kind: "res", story: 0 }, { expirationTtl: 7 * 3600 });
+  await kvPut(env, "cjob:" + id, { title: newAlpha(t0), home: cardNm(H), away: cardNm(A), hy: ycs.hy, ay: ycs.ay, score: sm[2] + ":" + sm[3], league: newAlpha(lgLogoName), homeLogo: hl || ycs.hl || ESPN_CREST[H] || ESPN_CREST[Object.keys(ESPN_CREST).find((k) => norm(k) === norm(H))] || "", awayLogo: al || ycs.al || ESPN_CREST[A] || ESPN_CREST[Object.keys(ESPN_CREST).find((k) => norm(k) === norm(A))] || "", leagueLogo: ll || espnLgLogo(lg) || "", ...goals, chan: html, rep: mid, kind: "res", story: 0 }, { expirationTtl: 7 * 3600 });
   await ghDispatch(env, "card.yml", { job: id });
   await tg(env, "sendMessage", { chat_id: chat, text: "✅ ⟦" + H + "⟧ – ⟦" + A + "⟧" + ": kartochka chizilmoqda. 2–3 daqiqada kanaldagi post rasmi natija kartochkasiga almashtiriladi." });
 }
