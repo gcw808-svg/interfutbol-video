@@ -791,8 +791,8 @@ def render_news(j):
     lgl = get_logo(j.get("leagueLogo"), 240)
     # chapdagi gerb (terma jamoa — UFA va h.k.) yoki birinchi klub gerbi — kattaroq, 340 px (Bahtiyor aka tasdiqlagan, 2026-11-08)
     crest = get_logo(j.get("leftLogo"), 340) if j.get("leftLogo") else None
-    # klub rangidagi fon: chapda klub gerbi bo'lsa (terma jamoa UFA kartasi — tasdiqlangan "U1" ko'rinishida qoladi)
-    pal = club_palette(crest) if crest and "/lg/ufa" not in (j.get("leftLogo") or "") else None
+    # gerb rangidagi fon: chapda klub yoki terma jamoa (UFA) gerbi bo'lsa (Bahtiyor aka, 2026-11-08: UFA ham)
+    pal = club_palette(crest) if crest else None
     if pal:
         club_bg(im, crest, pal)
         clubs = []
