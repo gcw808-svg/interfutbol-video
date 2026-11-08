@@ -969,10 +969,30 @@ async function espnMatch(m, H, A) {
       // qizil kartochkalar (ikkinchi sariqdan bo'lgani ham)
       const reds = (c.details || []).filter((x) => /red/i.test(x.type?.text || "") && (x.athletesInvolved || []).length && x.athletesInvolved[0].displayName);
       const rd = (id) => reds.filter((x) => String(x.team?.id) === String(id)).map((x) => ({ n: canonFix(x.athletesInvolved[0].displayName), m: String(x.clock?.displayValue || "").replace(/'/g, "").trim() + "'" }));
-      return { eid: e.id, lg, done, sh, sa, home: grp(hg), away: grp(ag), hr: rd(h.team?.id), ar: rd(a.team?.id), goalsOk: done && hg.length === sh && ag.length === sa };
+      const yl = espnYellows(c.details, h.team?.id, a.team?.id);
+      return { eid: e.id, lg, done, sh, sa, home: grp(hg), away: grp(ag), hr: rd(h.team?.id), ar: rd(a.team?.id), hy: yl.hy, ay: yl.ay, goalsOk: done && hg.length === sh && ag.length === sa };
     }
   }
   return null;
+}
+// SARIQ KARTOCHKALAR (kartochka rasmi uchun, Bahtiyor aka tanlovi yB1, 2026-11-08): [ism, daqiqa, bizning futbolchimi]
+// bizning futbolchilar (FOCUS_PLAYERS) o'zbekcha ismi bilan va yashil ramkada; ikkinchi sariqdan qizil olgan futbolchi sariqlarda takrorlanmaydi
+function focusName(n) { const k = String(n || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase(); const p = FOCUS_PLAYERS.find((x) => x.k.some((w) => k.includes(w))); return p ? p.n.replace(/[⟦⟧]/g, "") : null; }
+function espnYellows(details, hid, aid) {
+  const D = details || []; const red = new Set(D.filter((x) => /red/i.test(x.type?.text || "")).map((x) => x.athletesInvolved?.[0]?.displayName));
+  const ys = D.filter((x) => /yellow/i.test(x.type?.text || "") && !/red/i.test(x.type?.text || "") && x.athletesInvolved?.[0]?.displayName && !red.has(x.athletesInvolved[0].displayName));
+  const f = (id) => ys.filter((x) => String(x.team?.id) === String(id)).map((x) => { const n = x.athletesInvolved[0].displayName; const fz = focusName(n); return [fz || canonFix(n), String(x.clock?.displayValue || "").replace(/'/g, "").trim() + "'", fz ? 1 : 0]; });
+  return { hy: f(hid), ay: f(aid) };
+}
+// eski post uchun (/kartaqayta): ESPN umumiy tablosidan o'yinni nomlar bo'yicha topib sariq kartochkalarni olish
+async function espnCardsFor(H, A, ymd) {
+  const tk = (x) => norm(x).split(" ").filter((w) => w.length >= 4);
+  const hit = (name, team) => { const a = tk(name), b = tk([team?.displayName, team?.shortDisplayName, team?.name].join(" ")); return a.some((w) => b.some((v) => v === w || v.startsWith(w) || w.startsWith(v))); };
+  for (const d of [ymd, addDays(ymd, -1), addDays(ymd, 1)]) {
+    let j; try { j = await (await fetch("https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard?limit=900&dates=" + d.replace(/-/g, ""), { cf: { cacheTtl: 600 } })).json(); } catch (e) { continue; }
+    for (const e of j.events || []) { const c = e.competitions?.[0] || {}; const cs = c.competitors || []; const h = cs.find((x) => x.homeAway === "home"), a = cs.find((x) => x.homeAway === "away"); if (h && a && hit(H, h.team) && hit(A, a.team)) return espnYellows(c.details, h.team?.id, a.team?.id); }
+  }
+  return { hy: [], ay: [] };
 }
 // ⟦ ⟧ — ism yangi alifboga o'girilmaydi (Archie -> Arçie bo'lmasin)
 const goalTxt = (g) => "⟦" + g.n + "⟧ " + g.ms.map((x) => x.m + (x.pen ? " (penalti)" : "") + (x.og ? " (o'z darvozasiga)" : "")).join(", ");
@@ -981,7 +1001,7 @@ function goalsBlock(E, H, A) {
   return "\n\n<b>Gollar:</b>" + (E.home.length ? `\n⟦${H}⟧: ${E.home.map(goalTxt).join(", ")}` : "") + (E.away.length ? `\n⟦${A}⟧: ${E.away.map(goalTxt).join(", ")}` : "");
 }
 // kartochka uchun: [[ism, ["58' (pen.)"]], ...] — kartochka yangi alifboda
-const cardGoals = (E) => { if (!E || !E.done) return {}; const f = (L) => L.map((g) => [g.n, g.ms.map((x) => x.m + (x.pen ? " (pen.)" : "") + (x.og ? " (öz darv.)" : ""))]); const r = (L) => (L || []).map((x) => [x.n, x.m]); return { ...(E.goalsOk ? { hg: f(E.home), ag: f(E.away) } : {}), hr: r(E.hr), ar: r(E.ar) }; };
+const cardGoals = (E) => { if (!E || !E.done) return {}; const f = (L) => L.map((g) => [g.n, g.ms.map((x) => x.m + (x.pen ? " (pen.)" : "") + (x.og ? " (öz darv.)" : ""))]); const r = (L) => (L || []).map((x) => [x.n, x.m]); return { ...(E.goalsOk ? { hg: f(E.home), ag: f(E.away) } : {}), hr: r(E.hr), ar: r(E.ar), hy: E.hy || [], ay: E.ay || [] }; };
 // qizil kartochka olganlar (matnda, gollardan keyin)
 function redBlock(E, H, A) {
   if (!E || !E.done || !((E.hr || []).length || (E.ar || []).length)) return "";
@@ -2101,7 +2121,10 @@ async function resRedo(env, chat, mid) {
   const lgLogoName = ESPN_FIX_LOGO[lg] || compLogoName(Object.keys(FD_COMPS).find((k) => FD_COMPS[k] === lg) || "") || lg;
   const [hl, al, ll] = await Promise.all([logoUrl(env, H, idx), logoUrl(env, A, idx), logoUrl(env, lgLogoName, idx)]);
   const id = "r" + Date.now().toString(36) + "k";
-  await kvPut(env, "cjob:" + id, { title: newAlpha(t0), home: cardNm(H), away: cardNm(A), score: sm[2] + ":" + sm[3], league: newAlpha(lgLogoName), homeLogo: hl || ESPN_CREST[H] || ESPN_CREST[Object.keys(ESPN_CREST).find((k) => norm(k) === norm(H))] || "", awayLogo: al || ESPN_CREST[A] || ESPN_CREST[Object.keys(ESPN_CREST).find((k) => norm(k) === norm(A))] || "", leagueLogo: ll || espnLgLogo(lg) || "", ...goals, chan: html, rep: mid, kind: "res", story: 0 }, { expirationTtl: 7 * 3600 });
+  // sariq kartochkalar (ESPN): post sanasi matndan ("2026-yil 5-noyabr")
+  let ymd = tashDate(Date.now()); { const MON = { yanvar: 1, fevral: 2, mart: 3, aprel: 4, may: 5, iyun: 6, iyul: 7, avgust: 8, sentabr: 9, oktabr: 10, noyabr: 11, dekabr: 12 }; const dm = cap.match(/(\d{4})-yil (\d{1,2})-(yanvar|fevral|mart|aprel|may|iyun|iyul|avgust|sentabr|oktabr|noyabr|dekabr)/i); if (dm) ymd = dm[1] + "-" + String(MON[dm[3].toLowerCase()]).padStart(2, "0") + "-" + dm[2].padStart(2, "0"); }
+  const ycs = await espnCardsFor(H, A, ymd).catch(() => ({ hy: [], ay: [] }));
+  await kvPut(env, "cjob:" + id, { title: newAlpha(t0), home: cardNm(H), away: cardNm(A), hy: ycs.hy, ay: ycs.ay, score: sm[2] + ":" + sm[3], league: newAlpha(lgLogoName), homeLogo: hl || ESPN_CREST[H] || ESPN_CREST[Object.keys(ESPN_CREST).find((k) => norm(k) === norm(H))] || "", awayLogo: al || ESPN_CREST[A] || ESPN_CREST[Object.keys(ESPN_CREST).find((k) => norm(k) === norm(A))] || "", leagueLogo: ll || espnLgLogo(lg) || "", ...goals, chan: html, rep: mid, kind: "res", story: 0 }, { expirationTtl: 7 * 3600 });
   await ghDispatch(env, "card.yml", { job: id });
   await tg(env, "sendMessage", { chat_id: chat, text: "✅ ⟦" + H + "⟧ – ⟦" + A + "⟧" + ": kartochka chizilmoqda. 2–3 daqiqada kanaldagi post rasmi natija kartochkasiga almashtiriladi." });
 }

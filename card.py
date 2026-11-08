@@ -285,44 +285,98 @@ def redcard(d, cx, cy):
     d.rounded_rectangle([cx - 7, cy - 10, cx + 7, cy + 10], radius=2, fill=(226, 48, 48, 255))
 
 
+YEL = (245, 200, 40)
+
+
+def ycard(d, cx, cy, k=1.0):
+    # sariq kartochka belgisi
+    d.rounded_rectangle([cx - 7 * k, cy - 10 * k, cx + 7 * k, cy + 10 * k], radius=2, fill=YEL + (255,))
+
+
+def short_name(n):
+    # sariq kartochkalar qatorida faqat familiya ("El Aynaoui", "De Paul" kabi qo'shimchalar bilan)
+    w = (n or "").split()
+    if len(w) >= 3 and w[-2].lower() in ("el", "de", "van", "von", "da", "di", "del", "dos", "le", "ten", "ter", "al"):
+        return " ".join(w[-2:])
+    return w[-1] if w else ""
+
+
+def yellow_lines(d, items, fy, maxw):
+    # [(nom, daqiqa, bizning futbolchimi)] -> qatorlar; bizning futbolchi doim alohida qatorda, to'liq ism bilan
+    lines, cur = [], []
+    for n, m, uz in items:
+        it = (n if uz else short_name(n), m, uz)
+        if uz:
+            if cur:
+                lines.append(cur)
+                cur = []
+            lines.append([it])
+            continue
+        test = cur + [it]
+        if cur and d.textlength(",  ".join(a + " " + b for a, b, _ in test), font=fy) > maxw:
+            lines.append(cur)
+            cur = [it]
+        else:
+            cur = test
+    if cur:
+        lines.append(cur)
+    return lines
+
+
 def render_card(j):
     # 1-variant (2026-yil 5-noyabr): ikki shisha panel; har panelda logotip, klub nomi, shu klub gollari (ism oq, daqiqa yashil) va qizil kartochkalari
     # qatorlar: gollar ("g") va qizil kartochkalar ("r")
     hrows = [("g", n, ms) for n, ms in (j.get("hg") or [])] + [("r", n, [m]) for n, m in (j.get("hr") or [])]
     arows = [("g", n, ms) for n, ms in (j.get("ag") or [])] + [("r", n, [m]) for n, m in (j.get("ar") or [])]
-    if not (hrows or arows):
+    # sariq kartochkalar (Bahtiyor aka tanlovi yB1, 2026-11-08): gollar ostida chiziq va ixcham qatorlar, bizning futbolchi yashil ramkada
+    hy = [(x[0], x[1], bool(x[2]) if len(x) > 2 else False) for x in (j.get("hy") or [])]
+    ay = [(x[0], x[1], bool(x[2]) if len(x) > 2 else False) for x in (j.get("ay") or [])]
+    if not (hrows or arows or hy or ay):
         return render_card_plain(j)
     Wd, Hd = 1280, 720
     hl, al = get_logo(j.get("homeLogo"), 140), get_logo(j.get("awayLogo"), 140)
     c1 = main_color(hl) if hl else (30, 60, 140)
     c2 = main_color(al) if al else (140, 30, 40)
     im = glass_bg(c1, c2)
-    boxes = ([50, 150, 500, 650], [Wd - 500, 150, Wd - 50, 650])
+    yc = bool(hy or ay)
+    boxes = ([50, 140, 500, 680], [Wd - 500, 140, Wd - 50, 680]) if yc else ([50, 150, 500, 650], [Wd - 500, 150, Wd - 50, 650])
     for bx in boxes:
         glass(im, bx)
-    league_top(im, j, 140, 80)
+    league_top(im, j, 120 if yc else 140, 70 if yc else 80)
     d = ImageDraw.Draw(im, "RGBA")
     lines = [n + " " + ", ".join(m) for _, n, m in hrows + arows]
     n = max(len(hrows), len(arows))
+    fy = font("bold", 19)
+    yl = {0: yellow_lines(d, hy, fy, 330), 1: yellow_lines(d, ay, fy, 330)}
+    ly = max(len(yl[0]), len(yl[1]))
     s = 26 if n <= 3 else 23 if n <= 5 else 20
+    if yc:
+        s = min(24, s)
     f = font("bold", s)
     while s > 16 and any(d.textlength(t, font=f) + 30 > 450 - 70 for t in lines):
         s -= 1
         f = font("bold", s)
     lh = min(s + 14, 165 / max(n, 1))
-    for bx, lg_, name, col, gs in ((boxes[0], hl, j["home"], c1, hrows), (boxes[1], al, j["away"], c2, arows)):
+    if yc:
+        room = 660 - 445 - (34 + ly * 30 if ly else 0)
+        lh = min(s + 10, room / max(n, 1)) if n else 0
+        while n and s > 16 and s + 6 > lh:
+            s -= 1
+            f = font("bold", s)
+    gy0, ly_ = (445, 220) if yc else (470, 250)
+    for side, (bx, lg_, name, col, gs) in enumerate(((boxes[0], hl, j["home"], c1, hrows), (boxes[1], al, j["away"], c2, arows))):
         cx = (bx[0] + bx[2]) // 2
         if lg_:
-            x_, y_ = cx - lg_.width // 2, 250 - lg_.height // 2
+            x_, y_ = cx - lg_.width // 2, ly_ - lg_.height // 2
             if is_dark(lg_):
                 paste_glow(im, lg_, x_, y_, 255, 8)
                 paste_glow(im, lg_, x_, y_, 210, 22)
             else:
                 paste_glow(im, lg_, x_, y_, 110, 20)
-        club_name(im, cx, 320, name, col, bx)
+        club_name(im, cx, 290 if yc else 320, name, col, bx)
         d = ImageDraw.Draw(im, "RGBA")
         for i, (kind, p, ms) in enumerate(gs):
-            y = 470 + i * lh
+            y = gy0 + i * lh
             t1, t2 = p + " ", ", ".join(ms)
             w = d.textlength(t1 + t2, font=f) + 30
             x = cx - w / 2
@@ -332,11 +386,33 @@ def render_card(j):
                 ball(d, x + 9, y, 9)
             d.text((x + 30, y), t1, font=f, fill=WHITE, anchor="lm")
             d.text((x + 30 + d.textlength(t1, font=f), y), t2, font=f, fill=GREEN if kind == "g" else (235, 120, 120), anchor="lm")
+        if yl[side]:
+            y = gy0 + len(gs) * lh - (lh / 2 if gs else 0) + (14 if gs else 0)
+            if gs:
+                d.line([bx[0] + 50, y, bx[2] - 50, y], fill=(255, 255, 255, 60), width=2)
+                y += 24
+            for ln in yl[side]:
+                txt = ",  ".join(a_ + " " + b_ for a_, b_, _ in ln)
+                w = d.textlength(txt, font=fy) + 26
+                x = cx - w / 2
+                ycard(d, x + 7, y, 0.8)
+                xx = x + 26
+                for k, (a_, b_, uz) in enumerate(ln):
+                    if uz:
+                        d.rounded_rectangle([xx - 6, y - 15, xx + d.textlength(a_ + " " + b_, font=fy) + 6, y + 15], radius=9, fill=GREEN + (70,), outline=GREEN + (230,), width=2)
+                    d.text((xx, y), a_ + " ", font=fy, fill=WHITE, anchor="lm")
+                    xx += d.textlength(a_ + " ", font=fy)
+                    d.text((xx, y), b_, font=fy, fill=YEL, anchor="lm")
+                    xx += d.textlength(b_, font=fy)
+                    if k < len(ln) - 1:
+                        d.text((xx, y), ",  ", font=fy, fill=WHITE, anchor="lm")
+                        xx += d.textlength(",  ", font=fy)
+                y += 30
     a, b = j["score"].split(":")
     d.text((Wd // 2, 330), f"{a} - {b}", font=font("black", 120), fill=WHITE, anchor="mm")
     d.text((Wd // 2, 430), "ÖYIN YAKUNLANDI", font=font("bold", 22), fill=(230, 235, 240), anchor="mm")
     lg = logo(64, False)
-    im.paste(lg, (Wd // 2 - 32, 600), lg)
+    im.paste(lg, (Wd // 2 - 32, 610 if yc else 600), lg)
     return im
 
 
