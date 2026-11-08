@@ -49,7 +49,29 @@ def gen_gemini(prompt, seed):
     raise Exception(last)
 
 
+HFC = {}
+def gen_hf(prompt, seed):
+    from gradio_client import Client
+    last = None
+    for sp in ["black-forest-labs/FLUX.1-schnell", "black-forest-labs/FLUX.1-dev"]:
+        try:
+            if sp not in HFC:
+                HFC[sp] = Client(sp, token=os.environ.get("HF_TOKEN") or None)
+            kw = dict(prompt=prompt, seed=seed, randomize_seed=False, width=1344, height=768, api_name="/infer")
+            if "schnell" in sp: kw["num_inference_steps"] = 4
+            else: kw.update(guidance_scale=3.5, num_inference_steps=28)
+            out = HFC[sp].predict(**kw)
+            path = out[0] if isinstance(out, (list, tuple)) else out
+            if isinstance(path, dict): path = path.get("path") or path.get("url")
+            LOG.append(["hf ok", sp])
+            return open(path, "rb").read()
+        except Exception as e:
+            last = sp + " " + str(e)[:200]
+    raise Exception(last)
+
+
 def gen_poll(prompt, seed):
+    time.sleep(16)
     raw, ct = http("https://image.pollinations.ai/prompt/" + urllib.parse.quote(prompt) + f"?width=1280&height=720&seed={seed}&nologo=true&model=flux", timeout=180)
     if "image" not in ct:
         raise Exception("rasm emas: " + ct)
@@ -101,60 +123,76 @@ def brand(im, rubric):
     d.text((60 + 18, 77), rubric, font=f, fill=(255, 255, 255), anchor="lm")
 
 
-TITLE = "O'zbekiston milliy futbol terma jamoasi 1992-yilda tashkil etilgan"
 TITLE_NA = "Özbekiston milliy futbol terma jamoasi 1992-yilda taşkil etilgan"
-NEG = "no text, no letters, no logos, no watermark, no real identifiable people"
+SUB = "Ilk yilda faqat 4 raqib: Tojikiston, Turkmaniston, Qozoğiston, Qirğiziston"
+NEG = "no text, no letters, no numbers, no logos, no watermark, no identifiable real people"
+order = [("hf", gen_hf), ("pollinations", gen_poll)]
+GREEN = (91, 182, 55)
 
-variants = [
-    ("A_kino", "Cinematic wide shot of an old Soviet-era football stadium in Tashkent at golden dusk in 1992, floodlights glowing, empty green pitch, "
-     "subtle blue, white and green color grading, atmospheric haze, film grain, highly detailed, " + NEG, 11),
-    ("B_retro", "Retro 1990s sports poster illustration, vintage leather football ball in the center, stylized map silhouette of Central Asia in the background, "
-     "halftone texture, aged paper, palette of sky blue, white, green and thin red lines, bold graphic shapes, " + NEG, 23),
-    ("C_foto", "Nostalgic vintage 1992 photograph look, close-up of a classic black and white leather football on fresh grass, a blue-white-green striped scarf lying beside it, "
-     "shallow depth of field, warm evening light, kodak film grain, " + NEG, 37),
-    ("D_badiiy", "Epic digital painting, silhouettes of footballers running out of a stadium tunnel into bright light, blue and green light beams, "
-     "dramatic, dynamic, painterly brush strokes, 1990s nostalgia, faces not visible, " + NEG, 51),
-]
-order = [("cf", gen_cf), ("gemini", gen_gemini), ("pollinations", gen_poll)]
-for key, prompt, seed in variants:
-    im, src = bg(prompt, seed, order)
-    if im is None:
-        continue
-    im = im.filter(ImageFilter.GaussianBlur(0.5))
-    shade_left(im)
-    d = ImageDraw.Draw(im)
-    # yil — katta ochiq raqam
-    fy = card.font("black", 150)
-    d.text((60, 120), "1992", font=fy, fill=(255, 255, 255, 255))
-    d.rectangle([60, 300, 66, 470], fill=(91, 182, 55))
-    title_block(im, TITLE_NA, 90, 300, 600, 46)
-    brand(im, "QIZIQARLI FAKT")
-    d.text((60, H - 40), "Rasm sun'iy intellekt yordamida yaratilgan (" + src + ")", font=card.font("med", 16), fill=(200, 205, 215))
-    im.save(f"{OUT}/{key}_{src}.jpg", quality=92)
+def grad(im, top, bottom, y0=0):
+    sh = Image.new("RGBA", (W, H), (0, 0, 0, 0)); d = ImageDraw.Draw(sh)
+    for y in range(y0, H):
+        t = (y - y0) / max(1, H - y0); d.line([0, y, W, y], fill=(6, 10, 18, int(top + (bottom - top) * t)))
+    im.paste(sh, (0, 0), sh)
 
-# E — AI'siz, mavzuga mos dizayn: bayroqlar (ilk raqiblar), katta "1992"
-try:
-    im = Image.new("RGB", (W, H), (8, 14, 24))
-    d = ImageDraw.Draw(im, "RGBA")
-    for i, c in enumerate([(30, 144, 206), (255, 255, 255), (30, 160, 70)]):
-        d.polygon([(760 + i * 70, 0), (900 + i * 70, 0), (620 + i * 70, H), (480 + i * 70, H)], fill=c + (38,))
-    fy = card.font("black", 260)
-    d.text((W - 60, 40), "1992", font=fy, fill=(255, 255, 255, 30), anchor="ra")
-    raw, _ = http("https://flagcdn.com/w320/uz.png")
-    uz = Image.open(io.BytesIO(raw)).convert("RGBA").resize((200, 100))
-    im.paste(uz, (60, 70), uz)
-    title_block(im, TITLE_NA, 60, 200, 700, 52)
-    d.text((60, 470), "Ilk yilda faqat 4 raqib:", font=card.font("bold", 26), fill=(91, 182, 55))
-    for i, cc in enumerate(["tj", "tm", "kz", "kg"]):
-        raw, _ = http(f"https://flagcdn.com/w160/{cc}.png")
-        fl = Image.open(io.BytesIO(raw)).convert("RGBA").resize((96, 64))
-        d.rounded_rectangle([60 + i * 120 - 4, 516 - 4, 60 + i * 120 + 100, 516 + 68], radius=8, fill=(255, 255, 255, 40))
-        im.paste(fl, (60 + i * 120, 516), fl)
-    lg = card.logo(84, False)
-    im.paste(lg, (W - 84 - 42, H - 84 - 36), lg)
-    im.save(f"{OUT}/E_dizayn_noAI.jpg", quality=92)
-except Exception as e:
-    LOG.append(["E", str(e)[:200]])
+def chip(im, text, x, y):
+    d = ImageDraw.Draw(im, "RGBA"); f = card.font("bold", 22); tw = d.textlength(text, font=f)
+    d.rounded_rectangle([x, y, x + tw + 36, y + 42], radius=21, fill=GREEN + (240,)); d.text((x + 18, y + 21), text, font=f, fill=(255, 255, 255), anchor="lm")
+
+def iflogo(im, size=84):
+    lg = card.logo(size, False); im.paste(lg, (W - size - 42, H - size - 36), lg)
+
+def save(im, name):
+    im.convert("RGB").save(f"{OUT}/{name}.jpg", quality=92); LOG.append(["saqlandi", name])
+
+# 1) KINO — to'liq AI surat, pastda sarlavha (teleko'rsatuv uslubi)
+im, src = bg("Cinematic wide shot of an old 1990s football stadium in Tashkent at golden dusk, floodlights glowing, green pitch, crowd silhouettes far away, blue white green color grading, atmospheric haze, film grain, " + NEG, 11, order)
+if im:
+    im = im.convert("RGBA"); grad(im, 0, 245, 300); chip(im, "QIZIQARLI FAKT", 60, 50)
+    d = ImageDraw.Draw(im); y = title_block(im, TITLE_NA, 60, 470, 1000, 50)
+    d.text((60, y + 6), SUB, font=card.font("med", 24), fill=(215, 225, 235)); iflogo(im); save(im, "1_kino_" + src)
+
+# 2) RETRO PLAKAT — markazda katta yil, ostida sarlavha
+im, src = bg("Retro 1990s sports poster illustration, vintage leather football ball flying over stylized mountains and a stadium, halftone dots, aged paper texture, sky blue, white, green palette with thin red accents, bold graphic shapes, " + NEG, 23, order)
+if im:
+    im = im.convert("RGBA"); grad(im, 120, 230, 0); d = ImageDraw.Draw(im)
+    fy = card.xfont("oswald-latin-700-normal.woff", 210, "1992")
+    d.text((W // 2 + 4, 250 + 4), "1992", font=fy, fill=(0, 0, 0, 160), anchor="mm"); d.text((W // 2, 250), "1992", font=fy, fill=(255, 255, 255), anchor="mm", stroke_width=3, stroke_fill=GREEN)
+    f = card.font("black", 44); ls = card.wrap(d, TITLE_NA, f, 1000)
+    for k, l in enumerate(ls): d.text((W // 2, 430 + k * 56), l, font=f, fill=(255, 255, 255), anchor="mm")
+    d.text((W // 2, 430 + len(ls) * 56 + 10), SUB, font=card.font("med", 22), fill=(220, 230, 240), anchor="mm")
+    chip(im, "QIZIQARLI FAKT", 60, 50); iflogo(im); save(im, "2_retro_" + src)
+
+# 3) BO'LINGAN — chapda brend panel, o'ngda qiya ramkada AI surat
+im2, src = bg("Nostalgic vintage 1992 photograph, close-up of a classic leather football on fresh grass, a blue white green striped scarf beside it, shallow depth of field, warm evening light, kodak film grain, " + NEG, 37, order)
+if im2:
+    im = Image.new("RGBA", (W, H), (8, 14, 24, 255))
+    mask = Image.new("L", (W, H), 0); ImageDraw.Draw(mask).polygon([(620, 0), (W, 0), (W, H), (500, H)], fill=255)
+    im.paste(im2.convert("RGBA"), (0, 0), mask); d = ImageDraw.Draw(im)
+    d.line([(620, 0), (500, H)], fill=GREEN, width=8)
+    chip(im, "QIZIQARLI FAKT", 60, 50); d.text((60, 120), "1992", font=card.font("black", 120), fill=GREEN)
+    y = title_block(im, TITLE_NA, 60, 270, 470, 40); d.text((60, y + 10), "Ilk yilda faqat 4 raqib", font=card.font("med", 24), fill=(200, 210, 220))
+    iflogo(im); save(im, "3_bolingan_" + src)
+
+# 4) BADIIY — futbolchilar siluetlari, chapda matn
+im, src = bg("Epic digital painting, silhouettes of footballers running out of a stadium tunnel into bright light, blue and green light beams, dramatic, painterly brush strokes, 1990s nostalgia, faces not visible, " + NEG, 51, order)
+if im:
+    im = im.convert("RGBA"); shade_left(im, 230, 20, 0.7); d = ImageDraw.Draw(im)
+    chip(im, "QIZIQARLI FAKT", 60, 50); d.text((60, 110), "1992", font=card.font("black", 140), fill=(255, 255, 255))
+    d.rectangle([60, 290, 66, 470], fill=GREEN); title_block(im, TITLE_NA, 90, 290, 560, 44); iflogo(im); save(im, "4_badiiy_" + src)
+
+# 5) DIZAYN (AI'siz) — mavzuga mos: bayroqlar, katta yil fonda
+im = Image.new("RGBA", (W, H), (8, 14, 24, 255)); d = ImageDraw.Draw(im, "RGBA")
+for k, c in enumerate([(30, 144, 206), (255, 255, 255), (30, 160, 70)]):
+    d.polygon([(860 + k * 70, 0), (1000 + k * 70, 0), (720 + k * 70, H), (580 + k * 70, H)], fill=c + (34,))
+big = Image.new("RGBA", (W, H), (0, 0, 0, 0)); ImageDraw.Draw(big).text((W - 50, H // 2), "1992", font=card.font("black", 250), fill=(255, 255, 255, 40), anchor="rm"); im = Image.alpha_composite(im, big); d = ImageDraw.Draw(im, "RGBA")
+raw, _ = http("https://flagcdn.com/w320/uz.png"); uz = Image.open(io.BytesIO(raw)).convert("RGBA").resize((150, 75)); im.paste(uz, (60, 60), uz)
+y = title_block(im, TITLE_NA, 60, 170, 640, 48)
+d.text((60, y + 30), "Ilk yilda faqat 4 raqib:", font=card.font("bold", 26), fill=GREEN)
+for k, cc in enumerate(["tj", "tm", "kz", "kg"]):
+    raw, _ = http(f"https://flagcdn.com/w160/{cc}.png"); fl = Image.open(io.BytesIO(raw)).convert("RGBA").resize((96, 64))
+    d.rounded_rectangle([60 + k * 120 - 4, y + 76, 60 + k * 120 + 100, y + 76 + 72], radius=8, fill=(255, 255, 255, 40)); im.paste(fl, (60 + k * 120, y + 80), fl)
+iflogo(im); save(im, "5_dizayn_AIsiz")
 
 json.dump(LOG, open(f"{OUT}/log.json", "w"), ensure_ascii=False, indent=1, default=str)
 print(json.dumps(LOG, ensure_ascii=False, default=str)[:3000])
