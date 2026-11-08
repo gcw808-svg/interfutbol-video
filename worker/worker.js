@@ -1288,6 +1288,8 @@ async function autoResults(env) {
     const post = `${PF && PF.focusHead ? "<b>" + PF.headline + "</b>\n\n" + scoreLine + "\n" : scoreLine + "\n\n"}${dt}, ${comp}${stage ? ", " + stage : ""}. ${line}${PF ? PF.block : ""}${pens ? "" : goalsBlock(E, H, A)}${redBlock(E, H, A)}\n\n#Natija ${tag(H)} ${tag(A)}`;
     const cg = cardGoals(E); if (pens) { delete cg.hg; delete cg.ag; }
     await resultJob(env, post, null, { goals: cg, league: compLogoName(m.competition?.code) || ESPN_FIX_LOGO[m.competition?.name] || comp, compName: comp, home: H, away: A, score: ft.home + ":" + ft.away });
+    // natija ham "so'nggi yangiliklar"ga yoziladi — keyin xuddi shu o'yin haqida natija-yangilik (masalan "PSG Troyesni 1:0 hisobida yengdi") takror chiqmasin (2026-11-08)
+    try { const rn = (await kvGet(env, "recentNews", [])).filter((x) => Date.now() - x.t < 48 * 3600e3); rn.push({ t: Date.now(), n: [H, A].map((x) => String(x).toLowerCase()), h: H + " " + ft.home + ":" + ft.away + " " + A + " hisobida" }); await kvPut(env, "recentNews", rn.slice(-40), { expirationTtl: 3 * 86400 }); } catch (e) {}
     posted++;
     if (PF && PF.rows && PF.rows.some((r) => !r.star)) { try { const L = await kvGet(env, "pfLog", []); for (const r of PF.rows.filter((r) => !r.star)) L.push({ t: Date.now(), d: tashDate(m.utcDate), ...r, H, A, sc: ft.home + ":" + ft.away, comp }); await kvPut(env, "pfLog", L.slice(-120), { expirationTtl: 30 * 86400 }); } catch (e) {} }
   }
