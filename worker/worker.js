@@ -2473,7 +2473,7 @@ async function ubRoute(env, req, url) {
         const j = await kvGet(env, "ujob:" + b.id, null);
     await env.STATE.delete("ujob:" + b.id);
     if (j && j.repId) { const rw = await kvGet(env, "repWait", []); const e0 = rw.find((x) => x.id === j.repId);
-      if (b.ok || !e0) { if (e0) await kvPut(env, "repWait", rw.filter((x) => x !== e0)); }
+      if (b.ok || !e0 || /not modified/i.test(String(b.err || ""))) { if (e0) await kvPut(env, "repWait", rw.filter((x) => x !== e0)); } // rasm o'zgarmagan bo'lsa ham — muvaffaqiyat
       else if ((e0.n || 0) < 1) { e0.n = 1; e0.t = Date.now(); await kvPut(env, "repWait", rw); await kvPut(env, "ujob:" + b.id, { ...j, t: Date.now() }, { expirationTtl: 86400 }); await ghDispatch(env, "ubpost.yml", { job: b.id }, true); return J({ ok: true }); }
       else { await kvPut(env, "repWait", rw.filter((x) => x !== e0)); if (admin) await tg(env, "sendMessage", { chat_id: admin, text: "⚠️ " + e0.mid + "-post rasmi 2 marta urinib ham almashmadi: " + String(b.err || "xato").slice(0, 150) + ". Qayta: /rasm " + e0.mid }); } }
     if (j && j.edits) { if (admin || j.chat) await tg(env, "sendMessage", { chat_id: j.chat || admin, text: b.ok ? "✅ Logotiplar qo'yildi: " + (b.edited || 0) + " ta post tahrirlandi." + (b.failed && b.failed.length ? "\nTahrirlanmadi: " + b.failed.join(", ") : "") : "⚠️ Logotiplarni qo'yib bo'lmadi: " + (b.err || "xato") }); return J({ ok: true }); }
