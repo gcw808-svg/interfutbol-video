@@ -17,6 +17,16 @@ def http(url, data=None, headers=None, timeout=120):
         return r.read(), r.headers.get("content-type", "")
 
 
+def gen_cfw(prompt, seed):
+    # botning o'zidagi Cloudflare Workers AI (env.AI) orqali
+    import hashlib
+    key = hashlib.sha256(("ub-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:40]
+    raw, ct = http("https://inter-futbol-bot.gcw808.workers.dev/ub/aiimg", json.dumps({"prompt": prompt, "seed": seed}).encode(), {"x-key": key, "content-type": "application/json", "user-agent": "InterFutbolImg"}, 120)
+    if "image" not in ct:
+        raise Exception(raw[:200])
+    return raw
+
+
 def gen_cf(prompt, seed):
     acc, tok = os.environ.get("CF_ACC"), os.environ.get("CF")
     raw, _ = http(f"https://api.cloudflare.com/client/v4/accounts/{acc}/ai/run/@cf/black-forest-labs/flux-1-schnell",
@@ -148,7 +158,7 @@ def brand(im, rubric):
 TITLE_NA = "Özbekiston milliy futbol terma jamoasi 1992-yilda taşkil etilgan"
 SUB = "Ilk yilda faqat 4 raqib: Tojikiston, Turkmaniston, Qozoğiston, Qirğiziston"
 NEG = "association football (soccer) only, absolutely no text, no letters, no numbers, no signs, no banners, no logos, no watermark, no identifiable real people"
-order = [("hf", gen_hf), ("pollinations", gen_poll)]
+order = [("cf", gen_cfw), ("hf", gen_hf)]
 GREEN = (91, 182, 55)
 
 def grad(im, top, bottom, y0=0):

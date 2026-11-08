@@ -2335,6 +2335,8 @@ async function ubRoute(env, req, url) {
   if (req.headers.get("x-key") !== (await ubKey(env))) return new Response("forbidden", { status: 403 });
   const J = (o) => new Response(JSON.stringify(o), { headers: { "content-type": "application/json; charset=utf-8" } });
   const admin = (await getAdmins(env))[0];
+  // Cloudflare Workers AI (bepul, kuniga ~10 ming "neuron") — kartochka uchun AI fon rasmi (FLUX schnell), 2026-11-08
+  if (url.pathname === "/ub/aiimg" && req.method === "POST") { const b = await req.json().catch(() => ({})); if (!env.AI || !b.prompt) return new Response("no", { status: 400 }); try { const r = await env.AI.run("@cf/black-forest-labs/flux-1-schnell", { prompt: String(b.prompt).slice(0, 2000), steps: Math.min(8, +b.steps || 8), seed: +b.seed || Math.floor(Math.random() * 1e6) }); const bin = Uint8Array.from(atob(r.image), (c) => c.charCodeAt(0)); return new Response(bin, { headers: { "content-type": "image/jpeg" } }); } catch (e) { return new Response("ai xato: " + String(e.message || e).slice(0, 300), { status: 502 }); } }
   if (url.pathname === "/ub/limits" && req.method === "POST") { const b = await req.json().catch(() => ({})); return J(await limitsReport(env, b, admin)); }
   if (url.pathname === "/ub/job") {
     const j = await kvGet(env, "ujob:" + url.searchParams.get("id"), null);
