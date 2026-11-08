@@ -3156,8 +3156,18 @@ const TBL_KB = { inline_keyboard: [
   [{ text: "📋 Barchasi", callback_data: "fd:t:ALL" }],
 ] };
 
+// KV yozuvlarini kuzatish (2026-11-08): har yozish/o'chirish jurnalga (console) kalit turi bilan yoziladi —
+// wrangler tail orqali qaysi kalit eng ko'p yozilishini aniqlash uchun (bepul limit: kuniga 1000 yozish)
+function kvSpy(env) {
+  if (!env || !env.STATE || env.__spy) return env;
+  const S = env.STATE;
+  const tag = (k) => String(k).split(/[:_]/)[0].slice(0, 24);
+  const st = { put: (k, ...a) => { console.log("KVW " + tag(k)); return S.put(k, ...a); }, delete: (k) => { console.log("KVD " + tag(k)); return S.delete(k); }, get: (...a) => S.get(...a), list: (...a) => S.list(...a), getWithMetadata: (...a) => S.getWithMetadata(...a) };
+  const e = Object.create(env); Object.defineProperty(e, "STATE", { value: st }); Object.defineProperty(e, "__spy", { value: 1 }); return e;
+}
 export default {
     async fetch(req, env, ctx) {
+    env = kvSpy(env);
     const url = new URL(req.url);
     const secret = (await sha("if-" + env.BOT_TOKEN)).slice(0, 32);
 
@@ -3211,6 +3221,7 @@ if (url.pathname === "/hook" && req.method === "POST") {
     },
 
     async scheduled(event, env, ctx) {
+    env = kvSpy(env);
     ctx.waitUntil((async () => {
     const err = async (k, e) => { try { const v = { k, t: Date.now(), e: String((e && (e.stack || e.message)) || e).slice(0, 300) }; const L = await kvGet(env, "cronLog", []); const p = L.filter((x) => x.k === k).pop(); if (p && v.t - p.t < 1800e3) return; L.push(v); await kvPut(env, "cronLog", L.slice(-40), { expirationTtl: 3 * 86400 }); await kvPut(env, "cronErr", v, { expirationTtl: 3 * 86400 }); } catch (x) {} }; const G = ({ "*/10 * * * *": "A", "2-59/10 * * * *": "B", "5-59/10 * * * *": "C" })[event.cron] || "all"; const on = (g) => G === "all" || G === g;
     let st = null;

@@ -1,0 +1,46 @@
+name: kvtail
+# Bot jurnalini (wrangler tail) N daqiqa tinglab, xotiraga (KV) eng ko'p yozayotgan kalitlarni sanaydi (bepul limitni tejash uchun)
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        default: "25"
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: tail
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 02978f487b30cf4acdedbfa8d728325f
+          MIN: ${{ inputs.minutes }}
+        run: |
+          timeout $((MIN*60)) npx -y wrangler@3 tail inter-futbol-bot --format json > /tmp/t.json 2>/tmp/err.txt || true
+          tail -5 /tmp/err.txt
+          python3 - <<'PY'
+          import json, collections
+          W, D, inv = collections.Counter(), collections.Counter(), collections.Counter()
+          for line in open("/tmp/t.json", errors="ignore"):
+              pass
+          raw = open("/tmp/t.json", errors="ignore").read()
+          dec = json.JSONDecoder(); i = 0; n = 0
+          while i < len(raw):
+              while i < len(raw) and raw[i] in " \n\r\t": i += 1
+              if i >= len(raw): break
+              try:
+                  o, j = dec.raw_decode(raw, i)
+              except Exception:
+                  break
+              i = j; n += 1
+              ev = o.get("event") or {}
+              kind = "cron " + ev["cron"] if "cron" in ev else ("http " + (ev.get("request") or {}).get("url", "").split("?")[0][-30:])
+              inv[kind.split(" ")[0] + " " + kind.split(" ")[1][:20]] += 1
+              for l in o.get("logs") or []:
+                  m = " ".join(str(x) for x in l.get("message") or [])
+                  if m.startswith("KVW "): W[m[4:]] += 1
+                  elif m.startswith("KVD "): D[m[4:]] += 1
+          print("hodisalar:", n, dict(inv.most_common(12)))
+          print("YOZISH jami:", sum(W.values())); [print("  W", k, v) for k, v in W.most_common(40)]
+          print("O'CHIRISH jami:", sum(D.values())); [print("  D", k, v) for k, v in D.most_common(20)]
+          PY
