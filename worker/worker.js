@@ -418,6 +418,7 @@ O'yin natijasi haqida bo'lsa, hisobni sarlavhaga "2:0 hisobida" ko'rinishida yoz
     - Post 700 belgidan oshmasin.
     - Faqat FUTBOL yangiligi bo'lsin. Agar yangilikning O'ZI boshqa sport turi haqida bo'lsa (tennis, MMA, boks, basketbol, F1, xokkey va h.k.) yoki yangilikning o'zi stavka/bukmeker yoki chipta sotish reklamasi bo'lsa, faqat SKIP so'zini qaytar. Sayt sahifasidagi reklama bannerlari, yosh tasdiqlash, cookie va shunga o'xshash xizmat matnlarini e'tiborga olma — ular sababli SKIP QILMA. Futbol o'yini, futbolchi, klub, murabbiy yoki transfer haqidagi yangilik hech qachon SKIP qilinmaydi.
     ${variant ? `- Bu ${variant}-variant: oldingi variantlardan boshqacha uslubda, boshqacha sarlavha va gap tuzilishi bilan yoz.` : ""}
+    ${item.style ? `- YANGI POST SHAKLI (sinov): ${item.style} Faktlar FAQAT shu manbadan olinadi, o'ylab topilmaydi. Oxirgi heshteglar qatoriga ${item.tag} ni ham qo'sh.` : ""}
 ${item.video ? `- Bu VIDEO (rasmiy YouTube kanalidan). Birinchi qatorni qalin sarlavha "<b>...</b>" ko'rinishida yoz ("VIDEO" so'zini va 🎬 belgisini yozma), keyin 1–3 gapda videoda nima ko'rsatilganini qiziqarli qilib ayt (faqat sarlavha va tavsifga asoslan). Matnni to'g'ridan-to'g'ri video mazmunidan boshla: «InterFutbol TV», «Inter Futbol», «kanal», «videorolik», «loyiha» so'zlarini va kanal nomini umuman yozma (heshteglarda ham). Tavsifdagi reklama va havolalarni (Telegram, Instagram va h.k.) e'tiborga olma. Video futbolga oid bo'lsa (gol, lavha, qiziq holat, intervyu, mashg'ulot) SKIP qilma; faqat reklama yoki jonli efir e'loni bo'lsa SKIP.` : ""}
 
     Manba: ${item.source}
@@ -875,6 +876,115 @@ if (item.video && (item.source !== "InterFutbol TV" || !(await fetch("https://ww
     // ---------------- AVTOMATIK REJIM: yangiliklar va o'yin natijalari kanalga o'zi chiqadi ----------------
 const AUTO_DAY_LIMIT = 15, AUTO_GAP_MIN = 60, ECO_DAY_LIMIT = 8; // ECO — tejash rejimida (bepul limit 85% dan oshganda) kunlik yangiliklar soni; // 2026-11-08 Bahtiyor aka qarori: kuniga 10 dan 15 taga, orasi 90 dan 60 daqiqaga
 const tashHour = () => (new Date().getUTCHours() + 5) % 24;
+// ---------------- SANA NAZORATI (2026-11-08) ----------------
+// Kecha topilgan xatolar: "2025-yil 25-oktabr" (to'g'risi 2026), "1-noyabr kuni Villa – United" (to'g'risi 8-noyabr).
+// 1) Yil: post sanasi o'tgan yilniki, lekin shu kun-oy joriy yilda ±60 kun ichida va manbada o'tgan yil yo'q bo'lsa — joriy yilga tuzatiladi.
+// 2) O'yin sanasi: gapda sana va ikki klub bo'lsa, ESPN jamoa jadvalidan shu juftlik o'yini qidiriladi; ±30 kunda yagona o'yin topilib,
+//    sanasi postdagidan farq qilsa (±1 kun vaqt mintaqasi uchun ruxsat) — postdagi sana rasmiy sanaga almashtiriladi.
+const UZ_MON = ["yanvar", "fevral", "mart", "aprel", "may", "iyun", "iyul", "avgust", "sentabr", "oktabr", "noyabr", "dekabr"];
+const DATE_RE = /(\d{4})-yil\s+(\d{1,2})-(yanvar|fevral|mart|aprel|may|iyun|iyul|avgust|sentabr|oktabr|noyabr|dekabr)/gi;
+const DC_LG = [[/Premier League|Premyer[- ]liga|\bAPL\b/i, "eng.1"], [/LaLiga|La Liga/i, "esp.1"], [/Serie A|Seriya A/i, "ita.1"], [/Bundesliga/i, "ger.1"], [/Ligue 1/i, "fra.1"], [/[CÇ]h?empionlar ligasi|Champions League/i, "uefa.champions"], [/Yevropa ligasi|Europa League/i, "uefa.europa"], [/Konferensiya|Conference League/i, "uefa.europa.conf"], [/S[üu]per Lig/i, "tur.1"], [/Saudiya|Roshn|Saudi Pro/i, "ksa.1"], [/\bMLS\b/i, "usa.1"], [/Eredivisie/i, "ned.1"], [/Primeira|Portugaliya chempionati/i, "por.1"], [/Championship/i, "eng.2"]];
+async function dateCheck(env, post, item) {
+  let text = String(post); const fixes = [];
+  const now = Date.now(), y0 = new Date(now + 5 * 3600e3).getUTCFullYear();
+  const src = [item?.title, item?.desc, item?.text].join(" ");
+  for (const m of [...text.matchAll(DATE_RE)]) {
+    const y = +m[1], d = +m[2], mo = UZ_MON.indexOf(m[3].toLowerCase());
+    if (y !== y0 - 1) continue;
+    const cur = Date.UTC(y0, mo, d);
+    if (Math.abs(cur - now) > 60 * 86400e3 || src.includes(String(y))) continue;
+    text = text.split(m[0]).join(y0 + "-yil " + d + "-" + UZ_MON[mo]); fixes.push(m[0] + " → " + y0 + "-yil");
+  }
+  // o'yin sanasi: gaplarga bo'lib, har gapda sana + klublar
+  const names = [...new Set(CLUB_EMOJI.flatMap(([, , ns]) => ns))].filter((n) => n.length >= 4).sort((a, b) => b.length - a.length);
+  const plain = text.replace(/<[^>]+>/g, "").replace(/[⟦⟧]/g, "");
+  const sl = DC_LG.filter(([re]) => re.test(plain)).map(([, x]) => x); const slugs = [...new Set([...sl, "eng.1", "esp.1", "ita.1", "ger.1", "fra.1", "uefa.champions"])].slice(0, 4);
+  let checks = 0;
+  for (const sent of plain.split(/(?<=[.!?])\s+|\n+/)) {
+    const dm = [...sent.matchAll(DATE_RE)]; if (dm.length !== 1) continue;
+    const y = +dm[0][1], d = +dm[0][2], mo = UZ_MON.indexOf(dm[0][3].toLowerCase()); const D = Date.UTC(y, mo, d);
+    if (D < now - 14 * 86400e3 || D > now + 45 * 86400e3) continue;
+    let rest = sent; const clubs = [];
+    for (const n of names) { const re = new RegExp("(^|[^\\p{L}])" + n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![\\p{L}])", "u"); if (re.test(rest)) { clubs.push(n); rest = rest.replace(re, "$1 "); } if (clubs.length > 2) break; }
+    if (clubs.length !== 2 || ++checks > 2) continue;
+    const ev = await pairMatches(slugs, clubs[0], clubs[1]); if (!ev.length) continue;
+    const near = ev.filter((t) => Math.abs(t - D) <= 1.5 * 86400e3); if (near.length) continue;
+    const win = ev.filter((t) => Math.abs(t - D) <= 30 * 86400e3); if (win.length !== 1) continue;
+    const td = new Date(win[0]); const good = td.getUTCFullYear() + "-yil " + td.getUTCDate() + "-" + UZ_MON[td.getUTCMonth()];
+    const re = new RegExp(dm[0][0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g");
+    text = text.replace(re, good); fixes.push(dm[0][0] + " → " + good + " (" + clubs.join(" – ") + ", ESPN)");
+  }
+  return { text, fixes };
+}
+// ikki klub o'yinlari sanalari (Toshkent vaqti bo'yicha kun boshi, ms) — ESPN liga jamoalari ro'yxati va jamoa jadvalidan
+async function pairMatches(slugs, A, B) {
+  const nk = (x) => norm(ESPN_NAME[x] || x);
+  for (const sl of slugs) {
+    let tl; try { tl = await (await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${sl}/teams`, { cf: { cacheTtl: 86400 } })).json(); } catch (e) { continue; }
+    const teams = (tl.sports?.[0]?.leagues?.[0]?.teams || []).map((t) => t.team);
+    const hit = (n) => teams.find((t) => [t.displayName, t.shortDisplayName, t.name].some((x) => x && (nk(x) === nk(n) || norm(n) === norm(x))));
+    const ta = hit(A), tb = hit(B); if (!ta || !tb) continue;
+    const out = [];
+    for (const fx of ["?fixture=true", ""]) {
+      let j; try { j = await (await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${sl}/teams/${ta.id}/schedule${fx}`, { cf: { cacheTtl: 3600 } })).json(); } catch (e) { continue; }
+      for (const e of j.events || []) { const cs = e.competitions?.[0]?.competitors || []; if (cs.some((c) => String(c.team?.id || c.id) === String(tb.id))) { const t = Date.parse(e.date) + 5 * 3600e3; const dd = new Date(t); out.push(Date.UTC(dd.getUTCFullYear(), dd.getUTCMonth(), dd.getUTCDate())); } }
+    }
+    return [...new Set(out)];
+  }
+  return [];
+}
+
+// ---------------- G'OYALAR DVIGATELI (2026-11-08, Bahtiyor aka: "kanal o'zini o'zi rivojlantirsin, yangi g'oyalar") ----------------
+// Har dushanba AI kanal statistikasiga qarab 2 ta yangi post SHAKLI o'ylab topadi (faktlar baribir real yangilikdan olinadi).
+// Har kuni 18:00 da bitta navbatdagi yangilik shu shakllardan birida chiqadi (kunlik 15 ta ichida). 7 kun va kamida 5 post
+// o'lchangach: o'rtacha ko'rishi yangiliklardan past bo'lmasa — "doimiy", aks holda — "to'xtatildi". Adminga har bir g'oya
+// "❌ Kerak emas" tugmasi bilan keladi — bosilsa taqiqlar ro'yxatiga tushadi va boshqa taklif qilinmaydi.
+const IDEA_BAN0 = ["so'rovnoma / ovoz berish / bashorat (Bahtiyor aka rad etgan)", "o'yin davomida jonli gol xabarlari (rad etilgan)", "Hafta futbolchisi (hozircha qiziq emas)", "terma jamoa bo'limi (hozircha qiziq emas)", "Rossiya ichki futboli: RPL, Rossiya terma jamoasi, rus ekspertlari fikri", "stavka/bukmeker", "futbolchi reytinglari (baholar)"];
+async function ideaGen(env) {
+  const ideas = await kvGet(env, "ideas", []); const live = ideas.filter((x) => x.st === "test");
+  if (live.length >= 2) return "bor";
+  const ban = [...IDEA_BAN0, ...(await kvGet(env, "ideaBan", []))]; const es = (await kvGet(env, "engStats", null)) || {};
+  const prompt = `Sen "Inter Futbol" o'zbek Telegram futbol kanalining kontent strategisan. Kanal: yangiliklar (kuniga 15 ta), o'yin natijalari kartochka bilan, chet eldagi o'zbek futbolchilari (asosiy noyob yo'nalish), Ronaldo va Messi, top klublar, tarixiy va qiziqarli faktlar, raqamlar.
+Statistika (post turi: o'rtacha ko'rish): ${JSON.stringify(es.typeStats || {})}; mavzular: ${JSON.stringify(es.topicStats || {})}.
+Mavjud shakllar: ${ideas.map((x) => x.name + " (" + x.st + ")").join(", ") || "yo'q"}.
+TAQIQLANGAN (taklif qilma): ${ban.join("; ")}.
+Vazifa: kanalga kirgan odam zerikmasligi va obuna bo'lishi uchun 2 ta YANGI yangilik POST SHAKLI taklif qil. Shakl real yangilik matnini qayta ishlaydi (yangi fakt o'ylab topilmaydi): masalan sarlavha uslubi, "3 ta asosiy narsa" ro'yxati, o'zbek muxlisi uchun ahamiyati, kontekst/tarix bilan bog'lash, savol bilan tugash va h.k. Har biri qisqa, o'zbek lotin yozuvida.
+Faqat JSON qaytar: [{"name":"qisqa nom","style":"AI muharrirga 1-2 gaplik aniq ko'rsatma","tag":"#CamelCaseUzbekHeshteg"}]`;
+  let arr; try { const t = await callGemini(env, prompt, 0.9, Date.now() + 40000, 1024, false, true); arr = JSON.parse((t.match(/\[[\s\S]*\]/) || ["[]"])[0]); } catch (e) { return "ai xato"; }
+  const admin = (await getAdmins(env))[0]; let n = 0;
+  for (const x of (arr || []).slice(0, 2 - live.length)) {
+    if (!x || !x.name || !x.style || !/^#[A-Za-z][A-Za-z0-9]{3,30}$/.test(String(x.tag || ""))) continue;
+    if (ideas.some((y) => y.tag.toLowerCase() === x.tag.toLowerCase() || y.name.toLowerCase() === String(x.name).toLowerCase())) continue;
+    const id = "i" + Date.now().toString(36) + n; ideas.push({ id, name: String(x.name).slice(0, 60), style: String(x.style).slice(0, 400), tag: x.tag, st: "test", t0: Date.now(), made: 0 }); n++;
+    if (admin) await tg(env, "sendMessage", { chat_id: admin, text: "💡 Yangi g'oya sinovga olindi: «" + x.name + "»\n" + x.style + "\nHeshteg: " + x.tag + "\n\nBir hafta davomida kuniga 1 ta yangilik shu shaklda chiqadi; ko'rishlar yaxshi bo'lsa doimiy qoladi, bo'lmasa o'zi to'xtaydi.", reply_markup: { inline_keyboard: [[{ text: "❌ Kerak emas", callback_data: "idea:ban:" + id }]] } });
+  }
+  if (n) await kvPut(env, "ideas", ideas.slice(-30));
+  return "ok " + n;
+}
+// kuniga bitta yangilikni sinovdagi/doimiy shaklga o'tkazadi: navbatdagi mos yangilik nusxasi shakl bilan navbat boshiga qo'yiladi
+async function ideaApply(env) {
+  const ideas = (await kvGet(env, "ideas", [])).filter((x) => x.st === "test" || x.st === "keep"); if (!ideas.length) return "yo'q";
+  const st = await kvGet(env, "st", null); if (!st || !st.queue?.length) return "navbat bo'sh";
+  const i = st.queue.findIndex((it) => !it.video && !it.style && Date.now() - it.date < 4 * 3600e3 && isFocus(it)); if (i < 0) return "mos yangilik yo'q";
+  const idea = ideas.sort((a, b) => (a.st === "test" ? 0 : 1) - (b.st === "test" ? 0 : 1) || (a.made || 0) - (b.made || 0))[0];
+  const it = { ...st.queue[i], style: idea.style, tag: idea.tag, idea: idea.id }; st.queue.splice(i, 1); st.queue.unshift(it); await kvPut(env, "st", st);
+  const all = await kvGet(env, "ideas", []); const k = all.find((x) => x.id === idea.id); if (k) { k.made = (k.made || 0) + 1; await kvPut(env, "ideas", all); }
+  return "ok " + idea.name;
+}
+// haftalik baho (engCollect'dan keyin): 7+ kun va 5+ o'lchangan post — o'rtacha yangiliklar o'rtachasidan past emasmi
+async function ideaEval(env) {
+  const ideas = await kvGet(env, "ideas", []); const L = await kvGet(env, "engLog", []); const out = [];
+  const news = L.filter((x) => x.k === "news" && Date.now() - x.t < 14 * 86400e3); const nAvg = news.length ? news.reduce((s, x) => s + x.v, 0) / news.length : 0;
+  let ch = false;
+  for (const x of ideas) {
+    if (x.st !== "test" && x.st !== "keep") continue;
+    const a = L.filter((e) => e.ig === x.id); const avg = a.length ? a.reduce((s, e) => s + e.v, 0) / a.length : 0;
+    if (x.st === "test" && Date.now() - x.t0 > 7 * 86400e3 && a.length >= 5) { x.st = avg >= nAvg * 0.9 ? "keep" : "drop"; ch = true; }
+    out.push(`${x.name}: ${a.length} ta post, o'rtacha ${Math.round(avg)} ko'rish (yangiliklar ${Math.round(nAvg)}) — ${x.st === "keep" ? "doimiy" : x.st === "drop" ? "to'xtatildi" : "sinovda"}`);
+  }
+  if (ch) await kvPut(env, "ideas", ideas);
+  return out;
+}
 async function autoOn(env) { return (await kvGet(env, "auto", 1)) === 1 && !(await kvGet(env, "paused", false)); }
 const newsNames = (p) => [...new Set([...String(p).matchAll(/⟦([^⟧]+)⟧/g)].map((m) => m[1].toLowerCase()))];
 const newsHead = (p) => String(p).split("\n")[0].replace(/<[^>]+>/g, "").replace(/[⟦⟧]/g, "").trim();
@@ -918,6 +1028,8 @@ const headSig = (p) => { const h = head1(p); const s = (h.match(/(\d+)\s*[:–-]
     try { fc = await factCheck(env, item, post, Date.now() + 45000); } catch (e) { Q.unshift(item); await kvPut(env, "st", st); return "busy"; }
     if (fc.bad.length) continue;
     const hs0 = headSig(post), hs1 = headSig(fc.text); if ((hs0 && hs1 && hs0 !== hs1) || (await resultDup(env, fc.text)) || (await scoreGuard(fc.text).catch(() => "unknown")) === "bad") { const lgw = await kvGet(env, "autoLog", []); lgw.push({ t: Date.now(), title: item.title, skip: "hisob/g'olib o'zgardi yoki takror natija" }); await kvPut(env, "autoLog", lgw.slice(-40), { expirationTtl: 7 * 86400 }); continue; } post = fc.text;
+    // sana nazorati (2026-11-08): o'yin sanasi rasmiy jadval (ESPN) bilan solishtiriladi, yil xatosi manbaga qarab tuzatiladi
+    try { const dc = await dateCheck(env, post, item); if (dc.fixes.length) { post = dc.text; const L0 = await kvGet(env, "dateFix", []); L0.push({ t: Date.now(), h: newsHead(post).slice(0, 80), f: dc.fixes }); await kvPut(env, "dateFix", L0.slice(-30), { expirationTtl: 30 * 86400 }); } } catch (e) {}
     // takror yangilik (boshqa manbadan kelgan xuddi shu voqea) chiqmasin
     if (await dupNews(env, post)) { const lgd = await kvGet(env, "autoLog", []); lgd.push({ t: Date.now(), title: item.title, dup: 1 }); await kvPut(env, "autoLog", lgd.slice(-40), { expirationTtl: 7 * 86400 }); continue; }
     const pb = await pickBranded(env, item, Date.now() + 30000).catch(() => null);
@@ -1518,8 +1630,10 @@ const topicsOf = (t) => TOPICS.filter(([, re]) => re.test(String(t || ""))).map(
 const postKind = (t) => { t = String(t || ""); return /#Natija\b/i.test(t) ? "result" : /#OyinOldidan/i.test(t) ? "preview" : /#Topurarlar/i.test(t) ? "scorers" : /#Legionerlar/i.test(t) ? "legion" : /#OzbekFutboli/i.test(t) ? "uzfact" : /#Raqamlarda/i.test(t) ? "stats" : /#FutbolTarixi/i.test(t) ? "hist" : /#QiziqarliFakt/i.test(t) ? "fact" : /yin(lar)? jadvali/i.test(t) ? "fixtures" : /tarkib/i.test(t) && /#/.test(t) && /\d+\./.test(t) ? "lineup" : "news"; };
 const viewsNum = (x) => { const m = String(x || "").trim().match(/^([\d.,]+)\s*([KM]?)/i); if (!m) return 0; const n = parseFloat(m[1].replace(",", ".")); return Math.round(n * (/k/i.test(m[2]) ? 1e3 : /m/i.test(m[2]) ? 1e6 : 1)); };
 // kanal ochiq sahifasidan (t.me/s) har bir postning ko'rishlar soni — 24–96 soat o'tgan postlar hisobga olinadi
+let IDEAS_C = [];
 async function engCollect(env) {
   const ch = String(env.CHANNEL || "").replace("@", ""); if (!ch) return 0;
+  IDEAS_C = await kvGet(env, "ideas", []);
   const L = await kvGet(env, "engLog", []); const have = new Set(L.map((x) => x.id)); let before = "", added = 0;
   for (let pg = 0; pg < 8; pg++) {
     let h; try { h = await (await fetch(`https://t.me/s/${ch}${before ? "?before=" + before : ""}`, { headers: { "user-agent": "Mozilla/5.0 InterFutbolBot" } })).text(); } catch (e) { break; }
@@ -1531,7 +1645,7 @@ async function engCollect(env) {
       const v = viewsNum((p.match(/tgme_widget_message_views">([^<]+)</) || [])[1]);
       const txt = ((p.match(/js-message_text[^>]*>([\s\S]*?)<\/div>/) || [])[1] || "").replace(/<br\s*\/?>/g, "\n").replace(/<[^>]+>/g, "").replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, "&").trim();
       const age = Date.now() - t; if (age < 24 * 3600e3 || age > 96 * 3600e3 || !v || have.has(id)) continue;
-      have.add(id); added++; L.push({ id, t, v, k: postKind(txt), tp: topicsOf(txt), h: txt.split("\n")[0].slice(0, 80) });
+      const ig = (IDEAS_C || []).find((x) => txt.includes(x.tag)); have.add(id); added++; L.push({ id, t, v, k: postKind(txt), tp: topicsOf(txt), h: txt.split("\n")[0].slice(0, 80), ...(ig ? { ig: ig.id } : {}) });
     }
     if (!isFinite(minId) || oldest < Date.now() - 96 * 3600e3) break; before = minId;
   }
@@ -1554,7 +1668,8 @@ async function engReport(env, chat) {
   // haftalik sifat ko'rsatkichlari (2026-11-08): to'xtatilgan postlar, nazorat ogohlantirishlari, ish xatolari, tejash rejimi
   const wk = Date.now() - 7 * 86400e3; const held = (await kvGet(env, "qcHeld", [])).filter((x) => x.t > wk).length; const warns = (await kvGet(env, "qcSeen", [])).length; const errs = (await kvGet(env, "cronLog", [])).filter((x) => x.t > wk); const eco = await kvGet(env, "ecoMode", 0); const jf = await kvGet(env, "jobsFail", null);
   const errK = {}; for (const e of errs) errK[e.k] = (errK[e.k] || 0) + 1;
-  const qual = `\n\n🛡 Sifat nazorati (7 kun):\n• To'xtatilgan postlar: ${held}\n• Kamchilik ogohlantirishlari (oxirgi 3 kun): ${warns}\n• Ish xatolari: ${errs.length ? Object.entries(errK).map(([k, v]) => k + " — " + v).join(", ") : "yo'q"}\n• Modal ishlamay GitHub'ga o'tilgan holatlar: ${jf ? jf.n : 0}\n• Tejash rejimi: ${eco ? "yoqilgan" : "o'chiq"}`;
+  const ide = await ideaEval(env).catch(() => []); const dfx = (await kvGet(env, "dateFix", [])).filter((x) => x.t > wk).length;
+  const qual = `\n\n🛡 Sifat nazorati (7 kun):\n• To'xtatilgan postlar: ${held}\n• Kamchilik ogohlantirishlari (oxirgi 3 kun): ${warns}\n• Ish xatolari: ${errs.length ? Object.entries(errK).map(([k, v]) => k + " — " + v).join(", ") : "yo'q"}\n• Modal ishlamay GitHub'ga o'tilgan holatlar: ${jf ? jf.n : 0}\n• Tejash rejimi: ${eco ? "yoqilgan" : "o'chiq"}\n• Avtomatik tuzatilgan sanalar: ${dfx}` + (ide.length ? "\n\n💡 Yangi shakllar sinovi:\n• " + ide.join("\n• ") : "");
   const ty = Object.entries(s.typeStats).sort((a, b) => b[1].avg - a[1].avg).map(([k, v]) => `${TYPE_UZ[k] || k} — ${v.avg} (${v.n} ta)`).join("\n");
   const tp = Object.entries(s.topicStats).filter(([, v]) => v.n >= 3).sort((a, b) => b[1].avg - a[1].avg); const up = tp.slice(0, 5).map(([k, v]) => `${TOPIC_UZ[k] || k} — ${v.avg}`).join(", "), dn = tp.slice(-3).reverse().map(([k, v]) => `${TOPIC_UZ[k] || k} — ${v.avg}`).join(", ");
   await tg(env, "sendMessage", { chat_id: admin, text: `📊 Kanal tahlili (oxirgi 14 kun, ${s.n} ta post)\nO'rtacha ko'rish: ${s.avg}\n\nPost turlari:\n${ty}\n\nEng ko'p ko'rilgan mavzular: ${up || "—"}\nEng kam: ${dn || "—"}\n\nBot yangiliklar tartibini va qo'shimcha post turlari sonini shu natijalarga qarab o'zi moslashtirdi.` + qual });
@@ -2596,6 +2711,7 @@ return;
       const token = await telegraphToken(env);
       const r = await (await fetch("https://api.telegra.ph/editPage/" + encodeURIComponent(path), { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ access_token: token, title: newAlpha(canonFix(title || g.result.title)).slice(0, 250), author_name: "Inter Futbol", author_url: g.result.author_url || "", content: JSON.stringify(naNodes(nodes)), return_content: "false" }) })).json();
       await tg(env, "sendMessage", { chat_id: chat, text: r.ok ? "✅ Maqola tuzatildi: " + r.result.url : "⚠️ Maqola tuzatilmadi: " + r.error });
+    } else if (text === "/goyalar") { const r = await ideaGen(env).catch((e) => "xato: " + e.message); const all = await kvGet(env, "ideas", []); const UZ = { test: "sinovda", keep: "doimiy", drop: "to'xtatildi", ban: "rad etilgan" }; await tg(env, "sendMessage", { chat_id: chat, text: "💡 Post shakllari (g'oyalar dvigateli):\n" + (all.map((x) => "• " + x.name + " " + x.tag + " — " + (UZ[x.st] || x.st) + ", " + (x.made || 0) + " marta").join("\n") || "hali yo'q") + "\n\nYangi g'oya: " + r });
     } else if (text === "/limitlar") { const ok = await ghDispatch(env, "limits.yml", { force: "1" }); await tg(env, "sendMessage", { chat_id: chat, text: ok ? "📊 Limitlar hisoboti tayyorlanmoqda (1–2 daqiqa)." : "Hisobotni ishga tushirib bo'lmadi." });
     } else if (text === "/futbolchilar") { const r = await fmWatch(env, true).catch((e) => ({ err: e.message })); if (r.err) await tg(env, "sendMessage", { chat_id: chat, text: "Xato: " + r.err }); else await tg(env, "sendMessage", { chat_id: chat, text: "👟 Futbolchilar (FotMob, hozirgi klubi):\n" + FOCUS_PLAYERS.map((p) => { const x = r.T[p.fm]; const ok = x && p.club.test(x.team) && !NOT_OURS.test(x.team); return (x ? (ok ? "✅ " : "⚠️ ") : "❔ ") + p.n.replace(/[⟦⟧]/g, "") + " — " + (x ? x.team + (x.loan ? " (ijarada)" : "") + (x.inj ? ", jarohat: " + x.inj : "") : "ma'lumot yo'q"); }).join("\n") });
     } else if (text === "/tahlil") { await tg(env, "sendMessage", { chat_id: chat, text: "📊 Kanal postlari ko'rishlari yig'ilmoqda…" }); const n = await engCollect(env).catch((e) => "xato: " + e.message); await tg(env, "sendMessage", { chat_id: chat, text: "Yangi yozuvlar: " + n }); await engReport(env, chat);
@@ -2704,6 +2820,7 @@ return;
     }
     return;
     }
+    if (/^idea:ban:/.test(q.data || "")) { const id = q.data.slice(9); const all = await kvGet(env, "ideas", []); const x = all.find((y) => y.id === id); if (x) { x.st = "ban"; await kvPut(env, "ideas", all); const b = await kvGet(env, "ideaBan", []); b.push(x.name + " (" + x.style.slice(0, 80) + ")"); await kvPut(env, "ideaBan", b.slice(-40)); } await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: x ? "❌ To'xtatildi — boshqa taklif qilinmaydi" : "Topilmadi" }); try { await tg(env, "editMessageReplyMarkup", { chat_id: chat, message_id: q.message.message_id, reply_markup: { inline_keyboard: [] } }); } catch (e) {} return; }
     if (/^qc(pub|skip):/.test(q.data || "")) {
       const [cd, qid] = q.data.split(":"); const h = await kvGet(env, "qch:" + qid, null);
       if (!h) { await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Bu post endi faol emas." }); return; }
@@ -3253,6 +3370,8 @@ if (url.pathname === "/hook" && req.method === "POST") {
       if (hh === 13 && [0, 4].includes(new Date(xd + "T00:00:00Z").getUTCDay()) && (await kvGet(env, "statDay", "")) !== xd) { await kvPut(env, "statDay", xd, { expirationTtl: 3 * 86400 }); await statsPost(env); }
       if (hh === 15 && (await kvGet(env, "scDay", "")) !== xd) { await kvPut(env, "scDay", xd, { expirationTtl: 3 * 86400 }); await scorersAuto(env); }
       if (hh === 7) await fmWatch(env);
+      if (hh === 11 && new Date(xd + "T00:00:00Z").getUTCDay() === 1 && (await kvGet(env, "ideaGenDay", "")) !== xd) { await kvPut(env, "ideaGenDay", xd, { expirationTtl: 3 * 86400 }); await ideaGen(env); }
+      if (hh === 18 && (await kvGet(env, "ideaDay", "")) !== xd) { await kvPut(env, "ideaDay", xd, { expirationTtl: 3 * 86400 }); await ideaApply(env); }
       if (hh === 12 && (await kvGet(env, "lgwDay", "")) !== xd) { await kvPut(env, "lgwDay", xd, { expirationTtl: 3 * 86400 }); await legionWeekly(env); }
       if (hh === 23 && (await kvGet(env, "engDay", "")) !== xd) { await kvPut(env, "engDay", xd, { expirationTtl: 3 * 86400 }); await engCollect(env); if (new Date(xd + "T00:00:00Z").getUTCDay() === 0) await engReport(env); }
     } } catch (e) { await err("extra", e); }
