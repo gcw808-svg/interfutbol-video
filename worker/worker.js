@@ -991,6 +991,15 @@ function redBlock(E, H, A) {
 // liga logotipi qidiriladigan nom (lgidx kalitlari)
 const LOGO_COMP = { CL: "Champions League", WC: "FIFA World Cup", EC: "UEFA European Championship" };
 const compLogoName = (c) => LOGO_COMP[c] || FD_COMPS[c] || "";
+// yangilik kartochkasi uchun liga logotipi: lgidx (nom yoki uning boshqa yozuvlari, musobaqa kodi orqali) -> ESPN/FotMob
+async function leagueLogoUrl(env, name, idx) {
+  if (!name) return "";
+  const al = (CLUB_EMOJI.find(([, , ns]) => ns.includes(name)) || [, , [name]])[2];
+  for (const n of al) { const u = await logoUrl(env, n, idx); if (u) return u; }
+  const code = Object.keys(FD_COMPS).find((k) => al.includes(FD_COMPS[k]) || al.includes(LOGO_COMP[k] || ""));
+  if (code) { const u = await logoUrl(env, compLogoName(code), idx); if (u) return u; }
+  return espnLgLogo(name) || "";
+}
 const tashHM = (utc) => new Date(Date.parse(utc) + 5 * 3600e3).toISOString().slice(11, 16);
 // asosiy tarkib tartibi: darvozabon, himoya, yarim himoya, hujum; har qatorda o'ngdan chapga
 function lineupOrder(L) {
@@ -1276,7 +1285,7 @@ async function healthCheck(env) { const now = Date.now(), d = tashDate(now), h =
   const crest = (n) => ESPN_CREST[n] || ESPN_CREST[Object.keys(ESPN_CREST).find((k) => norm(k) === norm(n))] || "";
   homeLogo = homeLogo || crest(ci.home); awayLogo = awayLogo || crest(ci.away);
   const clubLogos = extra.home ? [] : (await Promise.all((ci.clubs || []).map(async (n) => (await logoUrl(env, n, idx)) || crest(n)))).filter(Boolean).slice(0, 4);
-  if ((extra.home && extra.away) && (!homeLogo || !awayLogo)) { try { const ad = (await getAdmins(env))[0]; if (ad) await tg(env, "sendMessage", { chat_id: ad, text: "⚠️ Nazorat: natija kartochkasida klub logotipi topilmadi — " + [!homeLogo && ci.home, !awayLogo && ci.away].filter(Boolean).join(", ") + ". Claude logotipni qo'shib, /kartaqayta bilan kartochkani yangilaydi." }); } catch (e) {} } leagueLogo = leagueLogo || espnLgLogo(extra.compName || lgName) || "";
+  if ((extra.home && extra.away) && (!homeLogo || !awayLogo)) { try { const ad = (await getAdmins(env))[0]; if (ad) await tg(env, "sendMessage", { chat_id: ad, text: "⚠️ Nazorat: natija kartochkasida klub logotipi topilmadi — " + [!homeLogo && ci.home, !awayLogo && ci.away].filter(Boolean).join(", ") + ". Claude logotipni qo'shib, /kartaqayta bilan kartochkani yangilaydi." }); } catch (e) {} } leagueLogo = leagueLogo || espnLgLogo(extra.compName || lgName) || (await leagueLogoUrl(env, lgName, idx)) || "";
   await kvPut(env, "cjob:" + id, { ...ci, home: cardNm(ci.home), away: cardNm(ci.away), league: newAlpha(lgName || ""), homeLogo, awayLogo, leagueLogo, clubLogos, ...(extra.goals || {}), chan: post, to: to || null, url: extra.url || null, kind: extra.kind || "res", story: (!to && (extra.kind || "res") === "res" && STORY_BIG.test(ci.home + " " + ci.away + " " + (lgName || ""))) ? await storyQuota(env) : 0 }, { expirationTtl: 7 * 3600 });
   if (to) return ghDispatch(env, "card.yml", { job: id });
   const w = await kvGet(env, "resWait", []); w.push({ id, post, t: Date.now(), url: extra.url || null, kind: extra.kind || "res" }); await kvPut(env, "resWait", w.slice(-20));
@@ -2019,7 +2028,7 @@ async function cardJob(env, pk, pend) {
   const idx = await kvGet(env, "lgidx", {});
   const ci = cardInfo(pend.post, idx);
   const [homeLogo, awayLogo, leagueLogo0] = await Promise.all([logoUrl(env, ci.home, idx), logoUrl(env, ci.away, idx), logoUrl(env, ci.league, idx)]);
-  const leagueLogo = leagueLogo0 || espnLgLogo(ci.league) || "";
+  const leagueLogo = leagueLogo0 || (await leagueLogoUrl(env, ci.league, idx)) || "";
   const clubLogos = (await Promise.all((ci.clubs || []).map(async (n) => (await logoUrl(env, n, idx)) || ESPN_CREST[n] || ""))).filter(Boolean).slice(0, 4);
   await kvPut(env, "cjob:" + id, { ...ci, home: cardNm(ci.home), away: cardNm(ci.away), league: newAlpha(ci.league), homeLogo, awayLogo, leagueLogo, clubLogos, pk, chat: pend.chat, msg: pend.msg }, { expirationTtl: 3600 });
   return ghDispatch(env, "card.yml", { job: id });
@@ -2495,7 +2504,7 @@ return;
       const t0 = m.caption != null ? m.caption : m.text; const e0 = m.caption != null ? m.caption_entities : m.entities;
       const html = hashFix(CANON.reduce((a, [re, v]) => a.replace(re, v), entHtmlNoLogo(t0 || "", e0)));
       const idx = await kvGet(env, "lgidx", {}); const ci = cardInfo(html, idx);
-      const [leagueLogo0, ...cls] = await Promise.all([logoUrl(env, ci.league, idx), ...(ci.clubs || []).map((n) => logoUrl(env, n, idx))]);
+      const [leagueLogo0, ...cls] = await Promise.all([leagueLogoUrl(env, ci.league, idx), ...(ci.clubs || []).map((n) => logoUrl(env, n, idx))]);
       const clubLogos = cls.map((u, k) => u || ESPN_CREST[ci.clubs[k]] || "").filter(Boolean).slice(0, 4);
       const id = "n" + Date.now().toString(36) + "r";
       await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", clubLogos, chan: html, rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 });
