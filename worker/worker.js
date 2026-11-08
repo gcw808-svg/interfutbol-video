@@ -1436,7 +1436,7 @@ async function healthCheck(env) { const now = Date.now(), d = tashDate(now), h =
 // Suratlarni faqat Bahtiyor aka qo'shadi — bot internetdan surat yig'maydi.
 const LIB_CHAT = -1004498416461;
 const HOOK_UPD = ["message", "callback_query", "channel_post", "edited_channel_post"];
-const isFaceName = (x) => { const t = String(x || "").trim(); return t.length >= 3 && t.length <= 40 && !/[0-9@#!?:;"«»“”()]/.test(t) && !/\p{Extended_Pictographic}/u.test(t) && t.split(/\s+/).length <= 5; };
+const isFaceName = (x) => { const t = String(x || "").trim(); return t.length >= 3 && t.length <= 40 && !/[0-9@#!?:;"«»“”()]/.test(t) && !/[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}]/u.test(t) && t.split(/\s+/).length <= 5; };
 const pnorm = (x) => String(x || "").toLowerCase().replace(/ş/g, "sh").replace(/ç/g, "ch").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[ʻʼ‘’'`]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 async function libReply(env, m, text) { await tg(env, "sendMessage", { chat_id: LIB_CHAT, text, reply_to_message_id: m.message_id, disable_notification: true }).catch(() => null); }
 async function libIndex(env, m, edited) {
