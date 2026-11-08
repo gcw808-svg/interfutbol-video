@@ -86,6 +86,78 @@ def wrap(d, text, f, maxw):
     return lines
 
 
+UA = "InterFutbolBot/1.1 (https://t.me/Inter_Futbol_TV)"
+
+
+def jget(url):
+    req = urllib.request.Request(url, headers={"user-agent": UA, "api-user-agent": UA})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return json.loads(r.read())
+
+
+def has_alpha(im):
+    # haqiqiy logotip odatda shaffof fonda (stadion surati emas)
+    a = im.split()[3]
+    return a.getextrema()[0] < 30
+
+
+def alt_logo(name, size):
+    # asosiy manzil ishlamasa — boshqa manbalardan qidiradi (2026-11-08):
+    # 1) ESPN qidiruvi  2) Wikidata (P154 — rasmiy logotip fayli)  3) Vikipediya maqolasi rasmi (faqat shaffof fonli bo'lsa)
+    q = urllib.parse.quote(name or "")
+    if not q:
+        return None
+    try:
+        j = jget("https://site.web.api.espn.com/apis/search/v2?query=" + q + "&limit=6")
+        for g in j.get("results") or []:
+            if g.get("type") != "team":
+                continue
+            for c in g.get("contents") or []:
+                if "women" in (c.get("subtitle") or "").lower():
+                    continue
+                tid = (c.get("uid") or "").split("~t:")[-1]
+                if tid.isdigit():
+                    lg = get_logo("https://a.espncdn.com/i/teamlogos/soccer/500/" + tid + ".png", size)
+                    if lg:
+                        print("LOGO-ESPN", name, tid)
+                        return lg
+    except Exception as e:
+        print("alt espn", e)
+    try:
+        j = jget("https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&language=en&type=item&limit=5&search=" + q)
+        ids = [x["id"] for x in j.get("search") or []]
+        if ids:
+            e = jget("https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&props=claims&ids=" + "|".join(ids))
+            for i in ids:
+                cl = e.get("entities", {}).get(i, {}).get("claims", {})
+                p31 = [c["mainsnak"].get("datavalue", {}).get("value", {}).get("id") for c in cl.get("P31", [])]
+                if "Q476028" not in p31 and "Q103229495" not in p31:  # futbol klubi
+                    continue
+                for c in cl.get("P154", []):
+                    f = c["mainsnak"].get("datavalue", {}).get("value")
+                    if f:
+                        lg = get_logo("https://commons.wikimedia.org/wiki/Special:FilePath/" + urllib.parse.quote(f.replace(" ", "_")) + "?width=500", size)
+                        if lg:
+                            print("LOGO-WIKIDATA", name, f)
+                            return lg
+    except Exception as e:
+        print("alt wikidata", e)
+    try:
+        j = jget("https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&srlimit=1&srsearch=" + urllib.parse.quote((name or "") + " football club"))
+        t = (j.get("query", {}).get("search") or [{}])[0].get("title")
+        if t:
+            sm = jget("https://en.wikipedia.org/api/rest_v1/page/summary/" + urllib.parse.quote(t.replace(" ", "_")))
+            src = (sm.get("thumbnail") or {}).get("source")
+            if src:
+                lg = get_logo(src, size)
+                if lg and has_alpha(lg):
+                    print("LOGO-WIKI", name, t)
+                    return lg
+    except Exception as e:
+        print("alt wiki", e)
+    return None
+
+
 def get_logo(url, size):
     if not url:
         return None
@@ -93,7 +165,7 @@ def get_logo(url, size):
         # 3 marta urinish: logotip yuklanmay qolsa kartochka xunuk chiqmasin
         for k in range(3):
             try:
-                req = urllib.request.Request(url, headers={"user-agent": "InterFutbolCard"})
+                req = urllib.request.Request(url, headers={"user-agent": UA})
                 with urllib.request.urlopen(req, timeout=30) as r:
                     im = Image.open(io.BytesIO(r.read())).convert("RGBA")
                 break
@@ -127,7 +199,8 @@ def monogram(name, size):
 
 
 def crest(url, size, name):
-    return get_logo(url, size) or monogram(name, size)
+    # logotip zanjiri: berilgan manzil -> ESPN qidiruv -> Wikidata -> Vikipediya -> bosh harfli zaxira belgi
+    return get_logo(url, size) or alt_logo(name, size) or monogram(name, size)
 
 
 def paste_glow(im, lg, x, y, strength=110, radius=18):
@@ -816,6 +889,12 @@ def wapi(path, data=None, ctype="application/json"):
 
 if __name__ == "__main__":
     job = os.environ.get("JOB")
+    if job and job.startswith("logotest:"):
+        # sinov: zaxira logotip manbalari ishlayaptimi (yuklamaydi, faqat jurnalga yozadi)
+        for nm in job[9:].split("|"):
+            lg = alt_logo(nm, 140)
+            print("TEST", nm, "->", lg.size if lg else "TOPILMADI")
+        job = None
     if job:
         j = wapi("/ub/cjob?id=" + job)
         if j:
