@@ -72,7 +72,7 @@ def gen_hf(prompt, seed):
 
 def gen_poll(prompt, seed):
     time.sleep(16)
-    raw, ct = http("https://image.pollinations.ai/prompt/" + urllib.parse.quote(prompt) + f"?width=1280&height=720&seed={seed}&nologo=true&model=flux", timeout=180)
+    raw, ct = http("https://image.pollinations.ai/prompt/" + urllib.parse.quote(prompt) + f"?width=1280&height=720&seed={seed}&nologo=true&model=flux&referrer=interfutbol", timeout=180)
     if "image" not in ct:
         raise Exception("rasm emas: " + ct)
     return raw
@@ -148,7 +148,7 @@ def brand(im, rubric):
 TITLE_NA = "Özbekiston milliy futbol terma jamoasi 1992-yilda taşkil etilgan"
 SUB = "Ilk yilda faqat 4 raqib: Tojikiston, Turkmaniston, Qozoğiston, Qirğiziston"
 NEG = "association football (soccer) only, absolutely no text, no letters, no numbers, no signs, no banners, no logos, no watermark, no identifiable real people"
-order = [("hf", gen_hf)]
+order = [("hf", gen_hf), ("pollinations", gen_poll)]
 GREEN = (91, 182, 55)
 
 def grad(im, top, bottom, y0=0):
@@ -167,54 +167,25 @@ def iflogo(im, size=84):
 def save(im, name):
     im.convert("RGB").save(f"{OUT}/{name}.jpg", quality=92); LOG.append(["saqlandi", name])
 
-# 1) KINO — to'liq AI surat, pastda sarlavha (teleko'rsatuv uslubi)
-im, src = bg("Cinematic wide shot of an old 1990s football stadium in Tashkent at golden dusk, floodlights glowing, green pitch, crowd silhouettes far away, blue white green color grading, atmospheric haze, film grain, " + NEG, 11, order)
-if im:
-    im = im.convert("RGBA"); grad(im, 0, 245, 300); chip(im, "QIZIQARLI FAKT", 60, 50)
-    d = ImageDraw.Draw(im); y = title_block(im, TITLE_NA, 60, 470, 1000, 50)
-    d.text((60, y + 6), SUB, font=card.font("med", 24), fill=(215, 225, 235)); iflogo(im); save(im, "1_kino_" + src)
+# KINO uslubi (Bahtiyor aka tanlovi V1): to'liq AI surat, pastda qorong'i o'tish, sarlavha va izoh, iF; rukn yozuvi yo'q
+def kino(name, prompt, seed):
+    im, src = bg(prompt + ", " + NEG, seed, order)
+    if not im:
+        LOG.append(["kino", name, "rasm yo'q"]); return
+    im = im.convert("RGBA")
+    gr_ = noise_layer = Image.effect_noise((W, H), 22).convert("L").point(lambda v: 128 + (v - 128) // 6)
+    grain = Image.merge("RGBA", (gr_, gr_, gr_, Image.new("L", (W, H), 18))); im.alpha_composite(grain)
+    grad(im, 0, 248, 300)
+    d = ImageDraw.Draw(im); f = card.font("black", 50); ls = card.wrap(d, TITLE_NA, f, 1020)[:2]
+    y0 = 600 - len(ls) * 60
+    for k, l in enumerate(ls): d.text((60, y0 + k * 60), l, font=f, fill=(255, 255, 255))
+    d.text((60, y0 + len(ls) * 60 + 8), SUB, font=card.font("med", 24), fill=(215, 225, 235)); iflogo(im); save(im, name + "_" + src)
 
-# 2) RETRO PLAKAT — markazda katta yil, ostida sarlavha
-im, src = bg("Retro 1990s sports poster illustration, classic round black-and-white soccer ball (association football) flying over stylized mountains and a stadium, halftone dots, aged paper texture, sky blue, white, green palette with thin red accents, bold graphic shapes, " + NEG, 23, order)
-if im:
-    im = im.convert("RGBA"); grad(im, 120, 230, 0); d = ImageDraw.Draw(im)
-    fy = card.xfont("oswald-latin-700-normal.woff", 210, "1992")
-    d.text((W // 2 + 4, 250 + 4), "1992", font=fy, fill=(0, 0, 0, 160), anchor="mm"); d.text((W // 2, 250), "1992", font=fy, fill=(255, 255, 255), anchor="mm", stroke_width=3, stroke_fill=GREEN)
-    f = card.font("black", 44); ls = card.wrap(d, TITLE_NA, f, 1000)
-    for k, l in enumerate(ls): d.text((W // 2, 430 + k * 56), l, font=f, fill=(255, 255, 255), anchor="mm")
-    d.text((W // 2, 430 + len(ls) * 56 + 10), SUB, font=card.font("med", 22), fill=(220, 230, 240), anchor="mm")
-    chip(im, "QIZIQARLI FAKT", 60, 50); iflogo(im); save(im, "2_retro_" + src)
-
-# 3) BO'LINGAN — chapda brend panel, o'ngda qiya ramkada AI surat
-im2, src = bg("Nostalgic vintage 1992 photograph, close-up of a classic round black-and-white soccer ball (association football, not american football) on fresh grass, a blue white green striped scarf beside it, shallow depth of field, warm evening light, kodak film grain, " + NEG, 37, order)
-if im2:
-    im = Image.new("RGBA", (W, H), (8, 14, 24, 255))
-    mask = Image.new("L", (W, H), 0); ImageDraw.Draw(mask).polygon([(620, 0), (W, 0), (W, H), (500, H)], fill=255)
-    im.paste(im2.convert("RGBA"), (0, 0), mask); d = ImageDraw.Draw(im)
-    d.line([(620, 0), (500, H)], fill=GREEN, width=8)
-    chip(im, "QIZIQARLI FAKT", 60, 50); d.text((60, 120), "1992", font=card.font("black", 120), fill=GREEN)
-    y = title_block(im, TITLE_NA, 60, 270, 470, 40); d.text((60, y + 10), "Ilk yilda faqat 4 raqib", font=card.font("med", 24), fill=(200, 210, 220))
-    iflogo(im); save(im, "3_bolingan_" + src)
-
-# 4) BADIIY — futbolchilar siluetlari, chapda matn
-im, src = bg("Epic digital painting, silhouettes of soccer players in shorts running out of a stadium tunnel into bright light, blue and green light beams, dramatic, painterly brush strokes, 1990s nostalgia, faces not visible, " + NEG, 51, order)
-if im:
-    im = im.convert("RGBA"); shade_left(im, 230, 20, 0.7); d = ImageDraw.Draw(im)
-    chip(im, "QIZIQARLI FAKT", 60, 50); d.text((60, 110), "1992", font=card.font("black", 140), fill=(255, 255, 255))
-    d.rectangle([60, 290, 66, 470], fill=GREEN); title_block(im, TITLE_NA, 90, 290, 560, 44); iflogo(im); save(im, "4_badiiy_" + src)
-
-# 5) DIZAYN (AI'siz) — mavzuga mos: bayroqlar, katta yil fonda
-im = Image.new("RGBA", (W, H), (8, 14, 24, 255)); d = ImageDraw.Draw(im, "RGBA")
-for k, c in enumerate([(30, 144, 206), (255, 255, 255), (30, 160, 70)]):
-    d.polygon([(860 + k * 70, 0), (1000 + k * 70, 0), (720 + k * 70, H), (580 + k * 70, H)], fill=c + (34,))
-big = Image.new("RGBA", (W, H), (0, 0, 0, 0)); ImageDraw.Draw(big).text((W - 50, H // 2), "1992", font=card.font("black", 250), fill=(255, 255, 255, 40), anchor="rm"); im = Image.alpha_composite(im, big); d = ImageDraw.Draw(im, "RGBA")
-raw, _ = http("https://flagcdn.com/w320/uz.png"); uz = Image.open(io.BytesIO(raw)).convert("RGBA").resize((150, 75)); im.paste(uz, (60, 60), uz)
-y = title_block(im, TITLE_NA, 60, 170, 640, 48)
-d.text((60, y + 30), "Ilk yilda faqat 4 raqib:", font=card.font("bold", 26), fill=GREEN)
-for k, cc in enumerate(["tj", "tm", "kz", "kg"]):
-    raw, _ = http(f"https://flagcdn.com/w160/{cc}.png"); fl = Image.open(io.BytesIO(raw)).convert("RGBA").resize((96, 64))
-    d.rounded_rectangle([60 + k * 120 - 4, y + 76, 60 + k * 120 + 100, y + 76 + 72], radius=8, fill=(255, 255, 255, 40)); im.paste(fl, (60 + k * 120, y + 80), fl)
-iflogo(im); save(im, "5_dizayn_AIsiz")
+kino("K1_stadion", "Cinematic wide shot of an old 1990s football stadium in Tashkent at golden dusk, floodlights glowing, green pitch, crowd silhouettes far away, blue white green color grading, atmospheric haze, film grain", 213)
+kino("K2_kiyinish", "Cinematic photo of a vintage 1990s football locker room, white football shirts with blue and green trim hanging on wooden hooks, dramatic warm window light beams, dust particles, moody, film still", 314)
+kino("K3_toglar", "Cinematic aerial shot at blue hour of a football stadium glowing with floodlights in a Central Asian city with snowy mountains in the background, city lights, atmospheric, epic, film still", 415)
+kino("K4_butsi", "Cinematic close-up of a pair of old leather football boots and a classic black and white soccer ball on grass at sunset, shallow depth of field, warm backlight, blue and green bokeh lights, nostalgic, film still", 516)
+kino("K5_tunnel", "Cinematic shot from inside an old concrete stadium tunnel looking out at a bright green football pitch and floodlights, light rain, dramatic contrast, nostalgic 1990s atmosphere, film still", 617)
 
 json.dump(LOG, open(f"{OUT}/log.json", "w"), ensure_ascii=False, indent=1, default=str)
 print(json.dumps(LOG, ensure_ascii=False, default=str)[:3000])
