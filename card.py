@@ -678,7 +678,108 @@ def paste_league_free(im, j, size, cx, cy):
         im.paste(ll, (x0, y0), ll)
 
 
+def club_palette(lg):
+    # KLUB RANGIDAGI FON (Bahtiyor aka tanlovi "C1 klub to'q", 2026-11-08): ranglar logoning o'zidan olinadi.
+    # Qaytaradi: (to'q asos rang, och urg'u rang) yoki None (logo rangsiz — oq/qora/kulrang bo'lsa eski fon qoladi).
+    import colorsys
+    sm = lg.convert("RGBA").resize((80, 80))
+    cnt = {}
+    for r, g, b, a in sm.getdata():
+        if a < 200:
+            continue
+        h, l, s_ = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
+        if s_ < 0.35 or l < 0.12 or l > 0.88:
+            continue
+        k = (r // 24, g // 24, b // 24)
+        cnt[k] = cnt.get(k, 0) + 1
+    tot = sum(cnt.values())
+    if tot < 120:  # rangli qism juda kam (masalan Juventus, Real Madrid) — eski to'q fon
+        return None
+    cols = [tuple(c * 24 + 12 for c in k) for k, n in sorted(cnt.items(), key=lambda x: -x[1]) if n >= tot * 0.03][:8]
+    hls = lambda c: colorsys.rgb_to_hls(*(v / 255 for v in c))
+    def tune(c, f=1.2, lmin=None, lmax=None):
+        h, l, s_ = hls(c)
+        s_ = min(1, s_ * f)
+        if lmin is not None: l = max(l, lmin)
+        if lmax is not None: l = min(l, lmax)
+        return tuple(int(v * 255) for v in colorsys.hls_to_rgb(h, l, s_))
+    base = min(cols, key=sum)
+    cand = [c for c in cols if 0.4 < hls(c)[1] < 0.82] or cols
+    acc = tune(max(cand, key=lambda c: hls(c)[2]), 1.2, lmin=0.55, lmax=0.72)
+    return tune(base, 1.1, lmax=0.3), acc
+
+
+def club_bg(im, lg, pal):
+    # to'q gradient + logoning orqasida urg'u rangidagi nur + formadagidek nozik diagonal chiziqlar + o'ngda juda xira katta logo
+    Wd, Hd = im.size
+    import colorsys
+    base, acc = pal
+    mono = blends(lg)  # bir rangli gerb (Liverpool kabi): fon to'qroq, ortida oq nur — gerb fonga qo'shilib ketmasin
+    sc = lambda c, mx: tuple(int(v * mx / max(1, max(c))) for v in c)
+    top, bot = (sc(base, 40), sc(base, 14)) if mono else (sc(base, 72), sc(base, 26))
+    h_, l_, s_ = colorsys.rgb_to_hls(*(v / 255 for v in base))
+    glow = (228, 232, 240) if mono else tuple(int(v * 255) for v in colorsys.hls_to_rgb(h_, 0.42, min(1, s_)))  # nur — asos rangning yorug'i
+    d = ImageDraw.Draw(im)
+    for y in range(Hd):
+        t = y / Hd
+        d.line([0, y, Wd, y], fill=tuple(int(top[i] + (bot[i] - top[i]) * t) for i in range(3)))
+    gl = Image.new("RGBA", (Wd, Hd), (0, 0, 0, 0))
+    ImageDraw.Draw(gl).ellipse([270 - 330, Hd // 2 - 330, 270 + 330, Hd // 2 + 330], fill=glow + (90 if mono else 150,))
+    gl = gl.filter(ImageFilter.GaussianBlur(120))
+    im.paste(gl, (0, 0), gl)
+    st = Image.new("RGBA", (Wd, Hd), (0, 0, 0, 0))
+    sd = ImageDraw.Draw(st)
+    for k in range(-Hd, Wd, 46):
+        sd.line([k, Hd, k + Hd, 0], fill=acc + (14,), width=18)
+    im.paste(st, (0, 0), st)
+    big = lg.convert("RGBA").resize((560, 560))
+    big.putalpha(big.getchannel("A").point(lambda v: int(v * 0.045)))
+    im.paste(big, (880, 30), big)
+
+
+def stat_block(im, st, acc):
+    # RAQAMLARDA o'ng qismi: rukn, ism, liga/mavsum/sana, raqamli plitkalar (2 ustun), manba
+    d = ImageDraw.Draw(im, "RGBA")
+    d.text((610, 150), "RAQAMLARDA", font=font("bold", 24), fill=acc)
+    nm = st.get("name") or ""
+    s = 56
+    while s > 36 and d.textlength(nm, font=font("black", s)) > 620:
+        s -= 2
+    d.text((610, 182 + (56 - s)), nm, font=font("black", s), fill=WHITE)
+    sub = st.get("sub") or ""
+    fs = 20
+    while fs > 14 and d.textlength(sub, font=font("med", fs)) > 620:
+        fs -= 1
+    d.text((610, 252), sub, font=font("med", fs), fill=(200, 215, 235))
+    tiles = (st.get("tiles") or [])[:6]
+    rows = (len(tiles) + 1) // 2
+    th = 120 if rows <= 2 else 84
+    gap = 20 if rows <= 2 else 14
+    fv_s = 58 if rows <= 2 else 44
+    tl = Image.new("RGBA", im.size, (0, 0, 0, 0))
+    td = ImageDraw.Draw(tl)
+    pos = []
+    for k in range(len(tiles)):
+        x, y = 610 + (k % 2) * 300, 300 + (k // 2) * (th + gap)
+        pos.append((x, y))
+        td.rounded_rectangle([x, y, x + 280, y + th], radius=16, fill=(255, 255, 255, 18), outline=acc + (70,), width=2)
+    im.paste(tl, (0, 0), tl)
+    d = ImageDraw.Draw(im, "RGBA")
+    for k, (v, l) in enumerate(tiles):
+        x, y = pos[k]
+        fv = font("black", fv_s)
+        d.text((x + 22, y + th // 2), v, font=fv, fill=acc if k == 0 else WHITE, anchor="lm")
+        lx = x + 36 + d.textlength(v, font=fv)
+        fl = 22
+        while fl > 14 and lx + d.textlength(l, font=font("bold", fl)) > x + 268:
+            fl -= 1
+        d.text((lx, y + th // 2 + 4), l, font=font("bold", fl), fill=(200, 215, 235), anchor="lm")
+    if st.get("src"):
+        d.text((610, 300 + rows * (th + gap) - gap + 18), "Manba: " + st["src"], font=font("med", 16), fill=(160, 175, 195))
+
+
 def render_news(j):
+    # 2026-11-08 qo'shimcha: chapda klub gerbi bo'lsa fon klub ranglarida (club_palette/club_bg), "Raqamlarda" — plitkalar (stat_block)
     # YANGILIK KARTOCHKASI (Bahtiyor aka tasdiqlagan dizayn, 2026-11-08):
     # fonda yangilikda tilga olingan klublarning xira logotiplari (4 tagacha), chapda katta liga logotipi
     # (liga bo'lmasa - birinchi klub, u ham bo'lmasa - iF), o'ngda yashil chiziq va sarlavha, o'ng pastki burchakda kattaroq iF.
@@ -690,6 +791,11 @@ def render_news(j):
     lgl = get_logo(j.get("leagueLogo"), 240)
     # chapdagi gerb (terma jamoa — UFA va h.k.) yoki birinchi klub gerbi — kattaroq, 340 px (Bahtiyor aka tasdiqlagan, 2026-11-08)
     crest = get_logo(j.get("leftLogo"), 340) if j.get("leftLogo") else None
+    # klub rangidagi fon: chapda klub gerbi bo'lsa (terma jamoa UFA kartasi — tasdiqlangan "U1" ko'rinishida qoladi)
+    pal = club_palette(crest) if crest and "/lg/ufa" not in (j.get("leftLogo") or "") else None
+    if pal:
+        club_bg(im, crest, pal)
+        clubs = []
     if not lgl and not crest and len(clubs) > 1:
         clubs = clubs[1:]  # chapdagi katta logotip (birinchi klub) fonda takrorlanmasin
     def faint(lg, pct):
@@ -703,16 +809,17 @@ def render_news(j):
         for k, c in enumerate(clubs):
             f = faint(c, 22)
             im.paste(f, (x0 + k * step + (360 - c.width) // 2, 180 + (k % 2) * 60 + (360 - c.height) // 2), f)
-    elif crest or lgl:
+    elif (crest or lgl) and not pal:
         big = get_logo(j.get("leftLogo") if crest else j.get("leagueLogo"), 700)
         if big:
             f = faint(big, 12)
             im.paste(f, (Wd - f.width + 120, (Hd - f.height) // 2), f)
-    sh = Image.new("RGBA", (Wd, Hd), (0, 0, 0, 0))
-    sd = ImageDraw.Draw(sh)
-    for x in range(Wd):
-        sd.line([x, 0, x, Hd], fill=(8, 10, 16, int(235 - 120 * x / Wd)))
-    im.paste(sh, (0, 0), sh)
+    if not pal:
+        sh = Image.new("RGBA", (Wd, Hd), (0, 0, 0, 0))
+        sd = ImageDraw.Draw(sh)
+        for x in range(Wd):
+            sd.line([x, 0, x, Hd], fill=(8, 10, 16, int(235 - 120 * x / Wd)))
+        im.paste(sh, (0, 0), sh)
     left = crest or lgl or (get_logo(urls[0], 340) if urls else None)
     if left:
         glow_ = False
@@ -729,13 +836,30 @@ def render_news(j):
             wl.putalpha(halo)
             im.paste(wl, (270 - halo.width // 2, Hd // 2 - halo.height // 2), wl)
             paste_glow(im, left, x_, y_, 255, 12)
+        elif pal:
+            # gerb ostida yumshoq soya (C1 dizayni)
+            m = left.getchannel("A").point(lambda v: int(v * 0.66))
+            sh_ = Image.new("RGBA", (Wd, Hd), (0, 0, 0, 0))
+            blk = Image.new("RGBA", left.size, (0, 0, 0, 255))
+            blk.putalpha(m)
+            sh_.paste(blk, (x_, y_ + 15), blk)
+            sh_ = sh_.filter(ImageFilter.GaussianBlur(18))
+            im.paste(sh_, (0, 0), sh_)
+            im.paste(left, (x_, y_), left)
         else:
             paste_glow(im, left, x_, y_, 70, 16)
     else:
         big = logo(220, False)
         im.paste(big, (270 - 110, Hd // 2 - 110), big)
+    acc = pal[1] if pal else GREEN
     d = ImageDraw.Draw(im, "RGBA")
-    d.rectangle([560, 150, 566, 570], fill=GREEN + (255,))
+    d.rectangle([560, 150, 566, 570], fill=acc + (255,))
+    st = j.get("stat")
+    if st and st.get("tiles"):
+        stat_block(im, st, acc)
+        mk = logo(84, False)
+        im.paste(mk, (Wd - 80 - 42, Hd - 70 - 42), mk)
+        return im
     title = j.get("title") or "Inter Futbol"
     size = 56
     f = font("black", size)
