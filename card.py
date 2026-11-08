@@ -359,19 +359,22 @@ def yellow_lines(d, items, fy, maxw):
 def render_card(j):
     # 1-variant (2026-yil 5-noyabr): ikki shisha panel; har panelda logotip, klub nomi, shu klub gollari (ism oq, daqiqa yashil) va qizil kartochkalari
     # qatorlar: gollar ("g") va qizil kartochkalar ("r")
-    hrows = [("g", n, ms) for n, ms in (j.get("hg") or [])] + [("r", n, [m]) for n, m in (j.get("hr") or [])]
-    arows = [("g", n, ms) for n, ms in (j.get("ag") or [])] + [("r", n, [m]) for n, m in (j.get("ar") or [])]
+    # chiziqdan TEPADA faqat gollar; qizil va sariq kartochkalar chiziqdan PASTDA (Bahtiyor aka, 2026-11-08)
+    hrows = [("g", n, ms) for n, ms in (j.get("hg") or [])]
+    arows = [("g", n, ms) for n, ms in (j.get("ag") or [])]
+    hr_ = [(n, m, False) for n, m in (j.get("hr") or [])]
+    ar_ = [(n, m, False) for n, m in (j.get("ar") or [])]
     # sariq kartochkalar (Bahtiyor aka tanlovi yB1, 2026-11-08): gollar ostida chiziq va ixcham qatorlar, bizning futbolchi yashil ramkada
     hy = [(x[0], x[1], bool(x[2]) if len(x) > 2 else False) for x in (j.get("hy") or [])]
     ay = [(x[0], x[1], bool(x[2]) if len(x) > 2 else False) for x in (j.get("ay") or [])]
-    if not (hrows or arows or hy or ay):
+    if not (hrows or arows or hy or ay or hr_ or ar_):
         return render_card_plain(j)
     Wd, Hd = 1280, 720
     hl, al = get_logo(j.get("homeLogo"), 140), get_logo(j.get("awayLogo"), 140)
     c1 = main_color(hl) if hl else (30, 60, 140)
     c2 = main_color(al) if al else (140, 30, 40)
     im = glass_bg(c1, c2)
-    yc = bool(hy or ay)
+    yc = bool(hy or ay or hr_ or ar_)
     boxes = ([50, 140, 500, 680], [Wd - 500, 140, Wd - 50, 680]) if yc else ([50, 150, 500, 650], [Wd - 500, 150, Wd - 50, 650])
     for bx in boxes:
         glass(im, bx)
@@ -380,7 +383,8 @@ def render_card(j):
     lines = [n + " " + ", ".join(m) for _, n, m in hrows + arows]
     n = max(len(hrows), len(arows))
     fy = font("bold", 19)
-    yl = {0: yellow_lines(d, hy, fy, 330), 1: yellow_lines(d, ay, fy, 330)}
+    yl = {0: [("r", l) for l in yellow_lines(d, hr_, fy, 330)] + [("y", l) for l in yellow_lines(d, hy, fy, 330)],
+          1: [("r", l) for l in yellow_lines(d, ar_, fy, 330)] + [("y", l) for l in yellow_lines(d, ay, fy, 330)]}
     ly = max(len(yl[0]), len(yl[1]))
     s = 26 if n <= 3 else 23 if n <= 5 else 20
     if yc:
@@ -426,18 +430,21 @@ def render_card(j):
             if gs:
                 d.line([bx[0] + 50, y, bx[2] - 50, y], fill=(255, 255, 255, 60), width=2)
                 y += 24
-            for ln in yl[side]:
+            for ck, ln in yl[side]:
                 txt = ",  ".join(a_ + " " + b_ for a_, b_, _ in ln)
                 w = d.textlength(txt, font=fy) + 26
                 x = cx - w / 2
-                ycard(d, x + 7, y, 0.8)
+                if ck == "r":
+                    d.rounded_rectangle([x + 7 - 5.6, y - 8, x + 7 + 5.6, y + 8], radius=2, fill=(226, 48, 48, 255))
+                else:
+                    ycard(d, x + 7, y, 0.8)
                 xx = x + 26
                 for k, (a_, b_, uz) in enumerate(ln):
                     if uz:
                         d.rounded_rectangle([xx - 6, y - 15, xx + d.textlength(a_ + " " + b_, font=fy) + 6, y + 15], radius=9, fill=GREEN + (70,), outline=GREEN + (230,), width=2)
                     d.text((xx, y), a_ + " ", font=fy, fill=WHITE, anchor="lm")
                     xx += d.textlength(a_ + " ", font=fy)
-                    d.text((xx, y), b_, font=fy, fill=YEL, anchor="lm")
+                    d.text((xx, y), b_, font=fy, fill=(240, 110, 110) if ck == "r" else YEL, anchor="lm")
                     xx += d.textlength(b_, font=fy)
                     if k < len(ln) - 1:
                         d.text((xx, y), ",  ", font=fy, fill=WHITE, anchor="lm")
