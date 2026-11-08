@@ -1436,6 +1436,7 @@ async function healthCheck(env) { const now = Date.now(), d = tashDate(now), h =
 // Suratlarni faqat Bahtiyor aka qo'shadi — bot internetdan surat yig'maydi.
 const LIB_CHAT = -1004498416461;
 const HOOK_UPD = ["message", "callback_query", "channel_post", "edited_channel_post"];
+const isFaceName = (x) => { const t = String(x || "").trim(); return t.length >= 3 && t.length <= 40 && !/[0-9@#!?:;"«»“”()]/.test(t) && !/\p{Extended_Pictographic}/u.test(t) && t.split(/\s+/).length <= 5; };
 const pnorm = (x) => String(x || "").toLowerCase().replace(/ş/g, "sh").replace(/ç/g, "ch").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[ʻʼ‘’'`]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 async function libReply(env, m, text) { await tg(env, "sendMessage", { chat_id: LIB_CHAT, text, reply_to_message_id: m.message_id, disable_notification: true }).catch(() => null); }
 async function libIndex(env, m, edited) {
@@ -1445,12 +1446,15 @@ async function libIndex(env, m, edited) {
   if (!cap && m.media_group_id) cap = (await kvGet(env, "fgrp:" + m.media_group_id, "")) || "";
   else if (cap && m.media_group_id && !edited) await kvPut(env, "fgrp:" + m.media_group_id, cap, { expirationTtl: 900 });
   if (!cap) { if (!m.media_group_id) await libReply(env, m, "⚠️ Izohga ism yozing (masalan: Erling Haaland). Izohni tahrirlasangiz ham bo'ladi."); return; }
+  // izoh ism bo'lmasa (uzun matn, raqam, emoji — boshqa kanaldan uzatilgan post) — namuna deb hisoblanadi, bazaga qo'shilmaydi
+  if (!isFaceName(cap.split("\n")[0].split("|")[0]) || cap.split("\n").length > 2) return;
   const [main, rest] = cap.split("\n")[0].split("|");
   const name = main.trim(); const key = pnorm(name);
   if (!key) { if (name === "-" && edited) { const F0 = await kvGet(env, "faces", {}); let hit = 0; for (const k of Object.keys(F0)) { const n0 = F0[k].ph.length; F0[k].ph = F0[k].ph.filter((p) => p.m !== m.message_id); hit += n0 - F0[k].ph.length; if (!F0[k].ph.length) delete F0[k]; } if (hit) { await kvPut(env, "faces", F0); await libReply(env, m, "🗑 Surat bazadan olib tashlandi."); } } return; }
   const al = [name, ...String(rest || "").split(",")].map((x) => x.trim()).filter(Boolean);
   const small = ph.width && ph.height && Math.min(ph.width, ph.height) < 500;
   const F = await kvGet(env, "faces", {});
+  for (const k of Object.keys(F)) if (!isFaceName(F[k].n)) delete F[k]; // eski noto'g'ri yozuvlarni tozalash
   // tahrir: shu post boshqa ismga yozilgan bo'lsa — o'sha yerdan olib tashlanadi
   for (const k of Object.keys(F)) { F[k].ph = (F[k].ph || []).filter((p) => p.m !== m.message_id || k === key); if (!F[k].ph.length && k !== key) delete F[k]; }
   const P = (F[key] = F[key] || { n: name, al: [], ph: [], u: 0 });
@@ -1463,7 +1467,7 @@ async function libIndex(env, m, edited) {
 function faceFor(F, text) {
   const t = " " + pnorm(String(text || "").replace(/<[^>]+>/g, " ").split("\n").slice(0, 2).join(" ")) + " ";
   let best = null;
-  for (const [k, P] of Object.entries(F || {})) for (const a of [P.n, ...(P.al || [])]) { const q = pnorm(a); if (q.length < 3) continue; const mm = new RegExp(" " + q.replace(/ /g, " ") + "(?:ga|ni|ning|niki|dan|da|day|lar|larni)? ").exec(t); const i = mm ? mm.index : -1; if (i >= 0 && (!best || i < best.i || (i === best.i && q.length > best.l))) best = { k, i, l: q.length }; }
+  for (const [k, P] of Object.entries(F || {})) if (isFaceName(P.n)) for (const a of [P.n, ...(P.al || [])]) { const q = pnorm(a); if (q.length < 3) continue; const mm = new RegExp(" " + q.replace(/ /g, " ") + "(?:ga|ni|ning|niki|dan|da|day|lar|larni)? ").exec(t); const i = mm ? mm.index : -1; if (i >= 0 && (!best || i < best.i || (i === best.i && q.length > best.l))) best = { k, i, l: q.length }; }
   return best ? best.k : null;
 }
 // ESKI POST RASMINI ALMASHTIRISH NAZORATI (/rasm, /kartaqayta; 2026-11-09, 126-post holatidan keyin):
