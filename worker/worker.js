@@ -2095,7 +2095,7 @@ async function resRedo(env, chat, mid) {
   const m = fw && fw.result; if (!m) throw new Error("kanalda bu raqamli xabar topilmadi");
   await tg(env, "deleteMessage", { chat_id: chat, message_id: m.message_id }).catch(() => null);
   // logotiplar (custom emoji) matnda oddiy emoji bo'lib keladi — olib tashlanadi, addLogos ularni qayta qo'yadi
-  let cap = String(m.caption || m.text || "").replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}\uFE0F\u200D]/gu, "").replace(/[ \t]{2,}/g, " ").split("\n").map((l) => l.trim()).join("\n");
+  let cap = String(m.caption || m.text || "").replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}\uFE0F\u200D\u{E0000}-\u{E007F}]/gu, "").replace(/[ \t]{2,}/g, " ").split("\n").map((l) => l.trim()).join("\n");
   for (const [a, b] of Object.entries(ESPN_NAME)) if (a !== b && !cap.includes(b)) cap = cap.replace(new RegExp("(^|[^\\p{L}])" + a.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![\\p{L}])", "gu"), "$1" + b);
   let L = cap.split("\n"); let t0 = (L.find((l) => /^.+?\s+\d{1,2}:\d{1,2}\s+.+$/.test(l.trim())) || L[0] || "").trim();
   // qisqartirilgan klub nomi logotip to'plamida bo'lmasa — rasmiy to'liq nomga ("Charlotte" -> "Charlotte FC")
