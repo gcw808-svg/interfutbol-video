@@ -1653,11 +1653,11 @@ async function statPlayer(env, p) {
   const lgName = ml.leagueName; const [slug, fdc] = LG_SLUG[lgName] || [];
   const src = { fm: { g: st.Goals, a: st.Assists } };
   if (slug) { try { const ids = await kvGet(env, "espnIds", {}); let id = ids[p.fm]; if (!id) { const sj = await (await fetch("https://site.web.api.espn.com/apis/search/v2?limit=3&query=" + encodeURIComponent(fm.name || p.n))).json(); const c = (sj.results || []).find((r) => r.type === "player")?.contents?.[0]; id = c && String(c.uid || "").split("~a:")[1]; if (id) { ids[p.fm] = id; await kvPut(env, "espnIds", ids); } }
-    if (id) { const ej = await (await fetch(`https://site.web.api.espn.com/apis/common/v3/sports/soccer/${slug}/athletes/${id}`)).json(); const g = findStat(ej.athlete?.statsSummary || ej, "totalGoals"), a = findStat(ej.athlete?.statsSummary || ej, "goalAssists"), sh = findStat(ej.athlete?.statsSummary || ej, "totalShots"); if (g != null) src.espn = { g, a, sh }; } } catch (e) {} }
+    if (id) { const ej = await (await fetch(`https://site.web.api.espn.com/apis/common/v3/sports/soccer/${slug}/athletes/${id}`)).json(); const g = findStat(ej.athlete?.statsSummary || ej, "totalGoals"), a = findStat(ej.athlete?.statsSummary || ej, "goalAssists"), sh = findStat(ej.athlete?.statsSummary || ej, "totalShots"); if (g != null) src.espn = { g, a, sh }; else src.espnErr = "statistika yo'q"; } else src.espnErr = "ID topilmadi"; } catch (e) { src.espnErr = String(e.message || e).slice(0, 60); } }
   if (fdc) { try { const j = await fd(env, `/competitions/${fdc}/scorers?limit=60`, 6 * 3600); const r = (j.scorers || []).find((x) => nk(x.player?.name) === nk(fm.name || p.n)); src.fd = r ? { g: r.goals, a: r.assists ?? null } : null; } catch (e) {} }
   const agree = (k) => { const v = Object.values(src).filter(Boolean).map((x) => x[k]).filter((x) => x != null); for (const x of v) if (v.filter((y) => y === x).length >= 2) return x; return null; };
   const g = agree("g"), a = agree("a"); if (g == null) return null;
-  return { p, name: fm.name || p.n, club: fm.primaryTeam?.teamName || "", lg: lgName, season: ml.season, g, a, mp: st.Matches, min: st["Minutes played"], rating: st.Rating, sh: src.espn?.sh, n: Object.values(src).filter(Boolean).length };
+  return { p, name: fm.name || p.n, club: fm.primaryTeam?.teamName || "", lg: lgName, season: ml.season, g, a, mp: st.Matches, min: st["Minutes played"], rating: st.Rating, sh: src.espn?.sh, n: Object.values(src).filter(Boolean).length, srcs: Object.keys(src).filter((k) => src[k]).join("+") + (src.espnErr ? " (ESPN: " + src.espnErr + ")" : "") };
 }
 async function statsPost(env, to, pick) {
   const used = await kvGet(env, "statUsed", {}); const now = Date.now();
@@ -1674,7 +1674,7 @@ async function statsPost(env, to, pick) {
     const post = `<b>Raqamlarda: ${nm}</b>\n\n⟦${r.club}⟧, ${r.lg}, ${String(r.season || "").replace("/", "/")}-mavsum — ${d.slice(0, 4)}-yil ${uzDay(d).split(",")[0]} holatiga:\n${L.join("\n")}\n\n#Raqamlarda #${String(r.name).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\p{L}\p{N}]/gu, "")}`;
     await resultJob(env, post, to || null, { kind: "news" });
     if (!to) { used[p.fm] = now; await kvPut(env, "statUsed", used); }
-    return "ok " + r.name + " (" + r.n + " manba)";
+    return "ok " + r.name + " (" + r.n + " manba: " + r.srcs + ")";
   }
   return "none";
 }
