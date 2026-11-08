@@ -1,0 +1,29 @@
+name: aibind
+# Bir martalik: botga Cloudflare Workers AI ulanishini (env.AI) qo'shish — mavjud barcha ulanish va kalitlar "inherit" bilan saqlanadi.
+# mode=show — faqat ulanish nomlari va turlarini ko'rsatadi (qiymatlar chiqarilmaydi)
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        default: show
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CF: ${{ secrets.CF_API_TOKEN }}
+      ACC: 02978f487b30cf4acdedbfa8d728325f
+      SCRIPT: inter-futbol-bot
+      MODE: ${{ inputs.mode }}
+    steps:
+      - name: ulash
+        run: |
+          echo "::add-mask::$CF"
+          curl -sS "https://api.cloudflare.com/client/v4/accounts/$ACC/workers/scripts/$SCRIPT/settings" -H "Authorization: Bearer $CF" > /tmp/s.json
+          jq -c '{success, errors, bindings: [.result.bindings[] | {type, name}], compat: .result.compatibility_date, flags: .result.compatibility_flags}' /tmp/s.json
+          if [ "$MODE" != "apply" ]; then exit 0; fi
+          jq -e '[.result.bindings[] | select(.type=="ai")] | length == 0' /tmp/s.json > /dev/null || { echo "AI ulanishi allaqachon bor"; exit 0; }
+          jq -c '{bindings: ([.result.bindings[] | {type: "inherit", name}] + [{type: "ai", name: "AI"}])}' /tmp/s.json > /tmp/new.json
+          curl -sS -X PATCH "https://api.cloudflare.com/client/v4/accounts/$ACC/workers/scripts/$SCRIPT/settings" -H "Authorization: Bearer $CF" -F "settings=@/tmp/new.json;type=application/json" > /tmp/r.json
+          jq -c '{success, errors, bindings: [.result.bindings[]? | {type, name}]}' /tmp/r.json
+          sleep 3; curl -sS -o /dev/null -w "bot javobi: %{http_code}\n" "https://$SCRIPT.gcw808.workers.dev/"
