@@ -496,6 +496,7 @@ Vazifa: quyidagi ${kind === "article" ? "maqola" : "post"}dagi HAR BIR aniq fakt
 - "Bugun", "kecha", "ertaga" yoki faqat hafta kuni ("chorshanba oqshomi") kabi nisbiy ifodalar bo'lsa — aniq sana yili bilan almashtir (masalan "2026-yil 4-noyabr kuni kechqurun").
 - Imlo, grammatika va uslub xatolarini ham tuzat (qo'shimchalar, kelishiklar, tinish belgilari, g'aliz yoki tarjimaga o'xshash jumlalar) — ma'noni o'zgartirmasdan, ravon adabiy o'zbek tilida.
 - Yilni hozirgi sanaga nisbatan hisobla: manbada yil yozilmagan bo'lsa ham, sanadan aniq kelib chiqadigan yilni xato dema (masalan noyabrda aytilgan "yanvar" — keyingi yil yanvari; 2026-yil noyabrida bu 2027-yil yanvari).
+- HAR BIR SANANI ALOHIDA TEKSHIR (2026-11-08, LaLiga xatosidan keyin): kun, oy va YIL manbadagi bilan aynan bir xil bo'lsin. Manbada aniq sana emas oraliq ("2–4-dekabr", "dekabrning birinchi haftasi") yoki "hali tasdiqlanmagan" deyilgan bo'lsa — matnda ham oraliqni va "aniq sana hali rasman tasdiqlanmagan" degan izohni qoldir, bitta sanani o'ylab topma. "Yil boshi/oxiri" kabi noaniq ifoda o'rniga manbadagi aniq oy yozilsin ("2027-yil fevralidagi"). Manbada "rasman" deyilmagan bo'lsa "rasman e'lon qildi" yozma. Bir voqeaning sanasi bilan boshqasinikini aralashtirma.
 - Davlat va terma jamoa nomlari o'zbekcha bo'lishi shart (O'zbekiston, Italiya, Saudiya Arabistoni, Ispaniya); inglizcha yoki ruscha shakli (Uzbekistan, Italy, Saudi Arabia) xato — tuzat va ⟦ ⟧ ichiga olma.
 - Ruscha yoki inglizcha so'z va kalkalar bo'lsa (podbor, udar, vratar, trener, sostav, kambek, assist qildi) — o'zbekcha futbol atamasi bilan almashtir (qaytgan to'p, zarba, darvozabon, murabbiy, tarkib, vaziyatni o'zgartirib g'alaba qozondi, gol uzatmasini berdi). Har bir jumla nuqta bilan tugasin; turkcha "ı" harfi ishlatilmasin (faqat rasmiy nomlarda bo'lishi mumkin).
 - O'yin hisobi va g'olibni FAQAT manbada aniq yozilgan bo'lsa o'zgartir: «АЕК – Реал» yoki «A – B» kabi yozuv faqat uy egasi va mehmonni bildiradi, g'olibni emas; g'olibni taxmin qilma, manbada aniq bo'lmasa yozilganini o'zgartirma. - Faqat xato joyni tuzat: uslub, tuzilish, <b> teglari, ⟦ ⟧ belgilari, heshteglar, "#" sarlavhalar va bo'sh qatorlar o'zgarmasin.
@@ -1899,6 +1900,10 @@ async function qcCheck(env, text, media) {
   const en = (own.match(/\b(the|and|with|has|have|been|will|from|after|their|this|that|was|were|for)\b/gi) || []).length;
   if (en >= 5) fatal.push("matnda tarjima qilinmagan inglizcha qism bor");
   if (/\*\*|__/.test(own)) warn.push("markdown belgilari (** yoki __) qolgan");
+  // sana tekshiruvi: kun-oy-yil 300 kundan uzoq kelajakda bo'lsa (shartnoma "…gacha" bundan mustasno) — yil xato bo'lishi mumkin
+  { const MON = { yanvar: 0, fevral: 1, mart: 2, aprel: 3, may: 4, iyun: 5, iyul: 6, avgust: 7, sentabr: 8, sentyabr: 8, oktabr: 9, noyabr: 10, dekabr: 11 };
+    for (const mm of plain.matchAll(/(\d{4})-yil(?:ning)?\s+(\d{1,2})(?:[–-]\d{1,2})?-(yanvar|fevral|mart|aprel|may|iyun|iyul|avgust|sentabr|sentyabr|oktabr|noyabr|dekabr)(\S*)/gi)) {
+      if (/gacha/i.test(mm[4])) continue; const t = Date.UTC(+mm[1], MON[mm[3].toLowerCase()], +mm[2]); if (t - Date.now() > 300 * 86400e3) fatal.push("sana juda uzoq kelajakda: " + mm[0].replace(/\S*$/, "") + " — yil xato bo'lishi mumkin"); } }
   if (/#Natija\b/.test(raw) && !/\d+-tur|final|guruh|pley-?off|saralash|1\/\d+|bosqich|raund/i.test(plain)) warn.push("natija postida tur ko'rsatilmagan");
   for (const [re, why] of AUDIT_RULES) if (re.test(plain.replace(/⟦[^⟧]*⟧/g, (m) => m.replace(/ı/g, "i")))) warn.push(why);
   // logotipsiz klub: ESPN ro'yxatidagi klub matnda bor, lekin logotip to'plamida (CLUB_EMOJI) yo'q
@@ -2462,6 +2467,27 @@ return;
     } else if (/^\/nazorat\s/.test(text)) { const r = await qcCheck(env, text.replace(/^\/nazorat\s+/, ""), false).catch((e) => ({ fatal: ["tekshiruv xatosi: " + e.message], warn: [] })); await tg(env, "sendMessage", { chat_id: chat, text: "🔎 Nazoratchi (sinov, kanalga chiqmaydi):\n" + (r.fatal.length ? "🛑 To'xtatiladi:\n• " + r.fatal.join("\n• ") + "\n" : "✅ Jiddiy xato yo'q\n") + (r.warn.length ? "⚠️ Kamchilik:\n• " + r.warn.join("\n• ") : "Kamchilik yo'q") });
     } else if (/^\/raqam\b/.test(text)) { const nm = text.replace(/^\/raqam\s*/, ""); ctx.waitUntil((async () => { let r; try { r = await statsPost(env, chat, nm || null); } catch (e) { r = "xato: " + e.message; } await tg(env, "sendMessage", { chat_id: chat, text: "🧪 Raqamlarda namunasi (kanalga chiqmaydi): " + r + (/^ok/.test(r) ? " — kartochka 1–3 daqiqada keladi." : "") }); })());
     } else if (text === "/ozfakt") { await tg(env, "sendMessage", { chat_id: chat, text: "🧪 O'zbek futboli fakti tayyorlanmoqda (manba tanlanadi, nazoratchidan o'tadi, kartochka chiziladi — 1–3 daqiqa). Kanalga chiqmaydi." }); ctx.waitUntil((async () => { let r; try { r = await uzFactRun(env, chat); } catch (e) { r = "xato: " + e.message; } if (!/^ok/.test(String(r))) await tg(env, "sendMessage", { chat_id: chat, text: "Natija: " + r + " — qayta /ozfakt yozing." }); })());
+    } else if (/^\/tahrir\s+\d+\s*\n/.test(text)) {
+      // kanal postini to'liq yangi matn bilan tahrirlash (logotiplar, rasmiy nomlar, yangi alifbo avtomatik; tugma va rasm saqlanadi)
+      const mid = +text.match(/^\/tahrir\s+(\d+)/)[1]; const body = text.replace(/^\/tahrir\s+\d+\s*\n/, "").trim();
+      const q = await qcCheck(env, body, true).catch(() => ({ fatal: [], warn: [] }));
+      if (q.fatal.length) { await tg(env, "sendMessage", { chat_id: chat, text: "🛑 Tahrir to'xtatildi: " + q.fatal.join("; ") }); return; }
+      CLUB_RE = null; const html = newAlpha(addLogos(hashFix(canonFix(body))));
+      const uid = "T" + Date.now().toString(36);
+      await kvPut(env, "ujob:" + uid, { html: "batch", html2: "batch", edit: "batch", edits: [{ id: mid, html }], chat, photo: null, video: null, raw: { text: "", img: null, url: null, video: null } }, { expirationTtl: 86400 });
+      await ghDispatch(env, "ubpost.yml", { job: uid });
+      await tg(env, "sendMessage", { chat_id: chat, text: "✏️ " + mid + "-post yangi matn bilan tahrirlanmoqda (2–3 daqiqa)." + (q.warn.length ? "\nEslatma: " + q.warn.join("; ") : "") });
+    } else if (/^\/maqola\s+\S+\s*\n/.test(text)) {
+      // Telegraph maqolasini tuzatish: rasm va oxirgi havola saqlanadi, matn yangilanadi ("# " bilan boshlangan qator — sarlavha)
+      const path = decodeURIComponent(text.match(/^\/maqola\s+(\S+)/)[1].replace(/^https?:\/\/telegra\.ph\//, "")); const lines = text.split("\n").slice(1).map((l) => l.trim()).filter(Boolean);
+      let title = ""; if (lines[0] && lines[0].startsWith("# ")) title = lines.shift().slice(2).trim();
+      const g = await (await fetch("https://api.telegra.ph/getPage/" + encodeURIComponent(path) + "?return_content=true")).json();
+      if (!g.ok) { await tg(env, "sendMessage", { chat_id: chat, text: "Maqola topilmadi: " + g.error }); return; }
+      const old = g.result.content || []; const head = old.filter((n) => n && n.tag === "figure").slice(0, 1); const foot = old.filter((n) => JSON.stringify(n).includes("📲")).slice(-1);
+      const nodes = [...head, ...lines.map((l) => (l.startsWith("## ") ? { tag: "h4", children: [canonFix(l.slice(3))] } : { tag: "p", children: [canonFix(l)] })), ...foot];
+      const token = await telegraphToken(env);
+      const r = await (await fetch("https://api.telegra.ph/editPage/" + encodeURIComponent(path), { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ access_token: token, title: newAlpha(canonFix(title || g.result.title)).slice(0, 250), author_name: "Inter Futbol", author_url: g.result.author_url || "", content: JSON.stringify(naNodes(nodes)), return_content: "false" }) })).json();
+      await tg(env, "sendMessage", { chat_id: chat, text: r.ok ? "✅ Maqola tuzatildi: " + r.result.url : "⚠️ Maqola tuzatilmadi: " + r.error });
     } else if (text === "/futbolchilar") { const r = await fmWatch(env, true).catch((e) => ({ err: e.message })); if (r.err) await tg(env, "sendMessage", { chat_id: chat, text: "Xato: " + r.err }); else await tg(env, "sendMessage", { chat_id: chat, text: "👟 Futbolchilar (FotMob, hozirgi klubi):\n" + FOCUS_PLAYERS.map((p) => { const x = r.T[p.fm]; const ok = x && p.club.test(x.team) && !NOT_OURS.test(x.team); return (x ? (ok ? "✅ " : "⚠️ ") : "❔ ") + p.n.replace(/[⟦⟧]/g, "") + " — " + (x ? x.team + (x.loan ? " (ijarada)" : "") + (x.inj ? ", jarohat: " + x.inj : "") : "ma'lumot yo'q"); }).join("\n") });
     } else if (text === "/tahlil") { await tg(env, "sendMessage", { chat_id: chat, text: "📊 Kanal postlari ko'rishlari yig'ilmoqda…" }); const n = await engCollect(env).catch((e) => "xato: " + e.message); await tg(env, "sendMessage", { chat_id: chat, text: "Yangi yozuvlar: " + n }); await engReport(env, chat);
     } else if (text === "/topurar") { const r = await scorersAuto(env, true, chat).catch((e) => "xato: " + e.message); if (!/^ok/.test(r)) await tg(env, "sendMessage", { chat_id: chat, text: "To'purarlar namunasi: " + r });
