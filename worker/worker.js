@@ -2186,7 +2186,7 @@ async function limitsReport(env, b, admin) {
   const rows = [];
   // "bugun" ko'rsatkichlari UTC kun boshidan — kun oxirigacha taxmin (pp) ham hisoblanadi va qaror shunga qarab qilinadi
   const hrs = Math.max(1, +b.hrs || 24);
-  const add = (name, u, l, note) => { if (u == null || !l) return; const day = /bugun/.test(name); const pp = day ? Math.round((100 * u * 24) / hrs / l) : Math.round((100 * u) / l); rows.push({ name, u, l, p: Math.max(Math.round((100 * u) / l), Math.min(pp, 999)), note: (note || "") + (day && hrs < 23 ? (note ? "; " : "") + "kun oxirigacha taxmin: " + Math.round((u * 24) / hrs) : "") }); };
+  const add = (name, u, l, note) => { if (u == null || !l) return; const day = /bugun/.test(name); const pp = day && hrs >= 12 ? Math.round((100 * u * 24) / hrs / l) : Math.round((100 * u) / l); /* kun yarmidan oldin taxmin ishonchsiz — faqat haqiqiy sarf */ rows.push({ name, u, l, p: Math.max(Math.round((100 * u) / l), Math.min(pp, 999)), note: (note || "") + (day && hrs < 23 ? (note ? "; " : "") + "kun oxirigacha taxmin: " + Math.round((u * 24) / hrs) : "") }); };
   if (b.gh) add("GitHub daqiqalari (oy boshidan)", b.gh.minutes, 2000, "oy oxirigacha taxmin: " + b.gh.proj);
   const cf = b.cf || {};
   add("Bot so'rovlari (bugun)", cf.requests, 100000);
