@@ -873,7 +873,7 @@ if (item.video && (item.source !== "InterFutbol TV" || !(await fetch("https://ww
     }
 
     // ---------------- AVTOMATIK REJIM: yangiliklar va o'yin natijalari kanalga o'zi chiqadi ----------------
-const AUTO_DAY_LIMIT = 15, AUTO_GAP_MIN = 60; // 2026-11-08 Bahtiyor aka qarori: kuniga 10 dan 15 taga, orasi 90 dan 60 daqiqaga
+const AUTO_DAY_LIMIT = 15, AUTO_GAP_MIN = 60, ECO_DAY_LIMIT = 8; // ECO — tejash rejimida (bepul limit 85% dan oshganda) kunlik yangiliklar soni; // 2026-11-08 Bahtiyor aka qarori: kuniga 10 dan 15 taga, orasi 90 dan 60 daqiqaga
 const tashHour = () => (new Date().getUTCHours() + 5) % 24;
 async function autoOn(env) { return (await kvGet(env, "auto", 1)) === 1 && !(await kvGet(env, "paused", false)); }
 const newsNames = (p) => [...new Set([...String(p).matchAll(/⟦([^⟧]+)⟧/g)].map((m) => m[1].toLowerCase()))];
@@ -902,7 +902,7 @@ const headSig = (p) => { const h = head1(p); const s = (h.match(/(\d+)\s*[:–-]
   const h = tashHour(); if (!force && h >= 1 && h < 8) return "night";
   const day = tashDate(Date.now());
   const a = (await kvGet(env, "autoN", null)) || {}; if (a.d !== day) { a.d = day; a.n = 0; }
-  if (!force && a.n >= AUTO_DAY_LIMIT) return "limit";
+  if (!force && a.n >= ((await kvGet(env, "ecoMode", 0)) ? ECO_DAY_LIMIT : AUTO_DAY_LIMIT)) return "limit";
   if (!force && Date.now() - (a.last || 0) < AUTO_GAP_MIN * 60e3) return "wait";
   const st = await kvGet(env, "st", null); if (!st || !st.queue?.length) return "empty";
   const admin = (await getAdmins(env))[0];
@@ -2175,10 +2175,43 @@ async function cardDone(env, id, png) {
   const ph = r.result?.photo || [];
   if (r.ok && ph.length) await kvPut(env, j.pk, { ...pend, img: ph[ph.length - 1].file_id });
 }
+// BEPUL LIMITLAR NAZORATCHISI (2026-11-08, Bahtiyor aka talabi): limits.yml har kuni 22:50 da GitHub va Cloudflare
+// sarfini yuboradi; bu yerda API-Football holati qo'shiladi. 70%+ — ogohlantirish; 85%+ (Cloudflare yoki API-Football) —
+// tejash rejimi (ecoMode: kuniga 8 ta yangilik); hammasi 60% dan pastga tushsa rejim o'chadi. Dushanba kuni to'liq hisobot.
+async function limitsReport(env, b, admin) {
+  const rows = [];
+  const add = (name, u, l, note) => { if (u == null || !l) return; rows.push({ name, u, l, p: Math.round((100 * u) / l), note: note || "" }); };
+  if (b.gh) add("GitHub daqiqalari (oy boshidan)", b.gh.minutes, 2000, "oy oxirigacha taxmin: " + b.gh.proj);
+  const cf = b.cf || {};
+  add("Bot so'rovlari (bugun)", cf.requests, 100000);
+  add("Xotiraga yozish (bugun)", (cf.kvWrite || 0) + (cf.kvDelete || 0), 1000);
+  add("Xotiradan o'qish (bugun)", cf.kvRead, 100000);
+  add("Xotira ro'yxati (bugun)", cf.kvList, 1000);
+  try { const k = await kvGet(env, "afKey", ""); if (k) { const j = await (await fetch("https://v3.football.api-sports.io/status", { headers: { "x-apisports-key": k } })).json(); const q = j?.response?.requests; if (q && q.limit_day) add("API-Football (bugun)", q.current, q.limit_day); } } catch (e) {}
+  const crit = rows.filter((r) => !/^GitHub/.test(r.name));
+  const max = Math.max(0, ...rows.map((r) => r.p)), cmax = Math.max(0, ...crit.map((r) => r.p));
+  const ghWarn = b.gh && b.gh.proj > 2000;
+  const was = await kvGet(env, "ecoMode", 0);
+  const eco = cmax >= 85 ? 1 : cmax < 60 ? 0 : was;
+  if (eco !== was) await kvPut(env, "ecoMode", eco);
+  await kvPut(env, "limLast", { t: Date.now(), rows, eco, cfErr: cf.err || null }, { expirationTtl: 14 * 86400 });
+  const monday = new Date(Date.now() + 5 * 3600e3).getUTCDay() === 1;
+  if (!(b.force || max >= 70 || ghWarn || eco !== was || monday || cf.err) || !admin) return { ok: true, sent: false, max };
+  const bar = (p) => "▰".repeat(Math.min(10, Math.round(p / 10))) + "▱".repeat(Math.max(0, 10 - Math.round(p / 10)));
+  const ic = (p) => (p >= 85 ? "🔴" : p >= 70 ? "🟡" : "🟢");
+  let t = "📊 Bepul limitlar hisoboti\n\n" + rows.map((r) => ic(r.p) + " " + r.name + ": " + r.u + " / " + r.l + " (" + r.p + "%)\n" + bar(r.p) + (r.note ? "\n   " + r.note : "")).join("\n\n");
+  if (cf.err) t += "\n\n⚠️ Cloudflare statistikasi olinmadi: " + String(cf.err).slice(0, 120);
+  if (ghWarn) t += "\n\n⚠️ GitHub daqiqalari oy oxirigacha yetmasligi mumkin — kartochka va postlar Modal'da ishlayapti, GitHub faqat zaxira.";
+  if (eco !== was) t += eco ? "\n\n🟠 Tejash rejimi YOQILDI: limit 85% dan oshdi — kuniga " + ECO_DAY_LIMIT + " ta yangilik (natijalar to'liq chiqadi)." : "\n\n🟢 Tejash rejimi o'chirildi — hammasi me'yorda.";
+  else if (eco) t += "\n\n🟠 Tejash rejimi davom etmoqda.";
+  await tg(env, "sendMessage", { chat_id: admin, text: t });
+  return { ok: true, sent: true, max };
+}
 async function ubRoute(env, req, url) {
   if (req.headers.get("x-key") !== (await ubKey(env))) return new Response("forbidden", { status: 403 });
   const J = (o) => new Response(JSON.stringify(o), { headers: { "content-type": "application/json; charset=utf-8" } });
   const admin = (await getAdmins(env))[0];
+  if (url.pathname === "/ub/limits" && req.method === "POST") { const b = await req.json().catch(() => ({})); return J(await limitsReport(env, b, admin)); }
   if (url.pathname === "/ub/job") {
     const j = await kvGet(env, "ujob:" + url.searchParams.get("id"), null);
         return J(j ? { html: j.edit ? j.html2 : j.html, edit: j.edit || 0, story: j.story || null, check: j.check || 0, photo: j.photo, editPhoto: j.editPhoto || null, edits: j.edits || null, video: j.video, channel: env.CHANNEL, session: await kvGet(env, "usess", null) } : {});
@@ -2554,6 +2587,7 @@ return;
       const token = await telegraphToken(env);
       const r = await (await fetch("https://api.telegra.ph/editPage/" + encodeURIComponent(path), { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ access_token: token, title: newAlpha(canonFix(title || g.result.title)).slice(0, 250), author_name: "Inter Futbol", author_url: g.result.author_url || "", content: JSON.stringify(naNodes(nodes)), return_content: "false" }) })).json();
       await tg(env, "sendMessage", { chat_id: chat, text: r.ok ? "✅ Maqola tuzatildi: " + r.result.url : "⚠️ Maqola tuzatilmadi: " + r.error });
+    } else if (text === "/limitlar") { const ok = await ghDispatch(env, "limits.yml", { force: "1" }); await tg(env, "sendMessage", { chat_id: chat, text: ok ? "📊 Limitlar hisoboti tayyorlanmoqda (1–2 daqiqa)." : "Hisobotni ishga tushirib bo'lmadi." });
     } else if (text === "/futbolchilar") { const r = await fmWatch(env, true).catch((e) => ({ err: e.message })); if (r.err) await tg(env, "sendMessage", { chat_id: chat, text: "Xato: " + r.err }); else await tg(env, "sendMessage", { chat_id: chat, text: "👟 Futbolchilar (FotMob, hozirgi klubi):\n" + FOCUS_PLAYERS.map((p) => { const x = r.T[p.fm]; const ok = x && p.club.test(x.team) && !NOT_OURS.test(x.team); return (x ? (ok ? "✅ " : "⚠️ ") : "❔ ") + p.n.replace(/[⟦⟧]/g, "") + " — " + (x ? x.team + (x.loan ? " (ijarada)" : "") + (x.inj ? ", jarohat: " + x.inj : "") : "ma'lumot yo'q"); }).join("\n") });
     } else if (text === "/tahlil") { await tg(env, "sendMessage", { chat_id: chat, text: "📊 Kanal postlari ko'rishlari yig'ilmoqda…" }); const n = await engCollect(env).catch((e) => "xato: " + e.message); await tg(env, "sendMessage", { chat_id: chat, text: "Yangi yozuvlar: " + n }); await engReport(env, chat);
     } else if (text === "/topurar") { const r = await scorersAuto(env, true, chat).catch((e) => "xato: " + e.message); if (!/^ok/.test(r)) await tg(env, "sendMessage", { chat_id: chat, text: "To'purarlar namunasi: " + r });

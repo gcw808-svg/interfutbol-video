@@ -1,0 +1,77 @@
+name: limits
+# Bepul limitlar nazoratchisi (2026-11-08): har kuni 22:50 (Toshkent) — GitHub daqiqalari (oy boshidan), Cloudflare
+# so'rovlari va xotira (KV) amallari (bugun, UTC) yig'ilib, botga yuboriladi; bot API-Football holatini qo'shib,
+# 70% dan oshsa ogohlantiradi, 85% dan oshsa tejash rejimini yoqadi. /limitlar buyrug'i ham shuni ishga tushiradi.
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "1 — hisobotni har holda yuborish"
+        default: "1"
+  schedule:
+    - cron: "50 17 * * *"
+permissions:
+  actions: read
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: yig'ish
+        env:
+          GH: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          CF: ${{ secrets.CF_API_TOKEN }}
+          ACC: 02978f487b30cf4acdedbfa8d728325f
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          FORCE: ${{ inputs.force || '0' }}
+        run: |
+          python3 - <<'PY'
+          import calendar, datetime as D, hashlib, json, math, os, urllib.request
+          def get(url, h=None, data=None):
+              req = urllib.request.Request(url, data=data, headers=h or {})
+              with urllib.request.urlopen(req, timeout=60) as r:
+                  return json.loads(r.read())
+          now = D.datetime.utcnow()
+          m0 = now.strftime("%Y-%m-01")
+          gh = {"Authorization": "Bearer " + os.environ["GH"], "Accept": "application/vnd.github+json"}
+          mins, runs, page = 0, 0, 1
+          while page <= 20:
+              j = get(f"https://api.github.com/repos/{os.environ['REPO']}/actions/runs?per_page=100&page={page}&created=>={m0}", gh)
+              w = j.get("workflow_runs", [])
+              for r in w:
+                  if not r.get("run_started_at") or not r.get("updated_at"):
+                      continue
+                  a = D.datetime.fromisoformat(r["run_started_at"].replace("Z", "+00:00"))
+                  b = D.datetime.fromisoformat(r["updated_at"].replace("Z", "+00:00"))
+                  mins += max(1, math.ceil((b - a).total_seconds() / 60))
+                  runs += 1
+              if len(w) < 100:
+                  break
+              page += 1
+          day = now.day
+          dim = calendar.monthrange(now.year, now.month)[1]
+          out = {"gh": {"minutes": mins, "runs": runs, "proj": round(mins / max(day - 1 + now.hour / 24, 0.5) * dim)}, "force": os.environ.get("FORCE") == "1"}
+          d = now.strftime("%Y-%m-%d")
+          q = """query($a:String!,$d:Date!){viewer{accounts(filter:{accountTag:$a}){
+            w:workersInvocationsAdaptive(limit:50,filter:{date_geq:$d,date_leq:$d}){sum{requests subrequests errors}}
+            kv:kvOperationsAdaptiveGroups(limit:20,filter:{date_geq:$d,date_leq:$d}){sum{requests} dimensions{actionType}}}}}"""
+          try:
+              j = get("https://api.cloudflare.com/client/v4/graphql", {"Authorization": "Bearer " + os.environ["CF"], "content-type": "application/json"},
+                      json.dumps({"query": q, "variables": {"a": os.environ["ACC"], "d": d}}).encode())
+              acc = (((j.get("data") or {}).get("viewer") or {}).get("accounts") or [{}])[0]
+              cf = {"requests": sum(x["sum"]["requests"] for x in acc.get("w") or []), "errors": sum(x["sum"]["errors"] for x in acc.get("w") or [])}
+              for x in acc.get("kv") or []:
+                  t = x["dimensions"]["actionType"]
+                  cf["kv" + t.capitalize()] = cf.get("kv" + t.capitalize(), 0) + x["sum"]["requests"]
+              if j.get("errors"):
+                  cf["err"] = str(j["errors"])[:200]
+              out["cf"] = cf
+          except Exception as e:
+              out["cf"] = {"err": str(e)[:200]}
+          print(json.dumps(out))
+          key = hashlib.sha256(("ub-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:40]
+          r = get("https://inter-futbol-bot.gcw808.workers.dev/ub/limits", {"x-key": key, "content-type": "application/json", "user-agent": "InterFutbolLimits"}, json.dumps(out).encode())
+          print(r)
+          PY
