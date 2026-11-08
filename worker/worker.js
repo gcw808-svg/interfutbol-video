@@ -1446,7 +1446,8 @@ async function libIndex(env, m, edited) {
   else if (cap && m.media_group_id && !edited) await kvPut(env, "fgrp:" + m.media_group_id, cap, { expirationTtl: 900 });
   if (!cap) { if (!m.media_group_id) await libReply(env, m, "⚠️ Izohga ism yozing (masalan: Erling Haaland). Izohni tahrirlasangiz ham bo'ladi."); return; }
   const [main, rest] = cap.split("\n")[0].split("|");
-  const name = main.trim(); const key = pnorm(name); if (!key) return;
+  const name = main.trim(); const key = pnorm(name);
+  if (!key) { if (name === "-" && edited) { const F0 = await kvGet(env, "faces", {}); let hit = 0; for (const k of Object.keys(F0)) { const n0 = F0[k].ph.length; F0[k].ph = F0[k].ph.filter((p) => p.m !== m.message_id); hit += n0 - F0[k].ph.length; if (!F0[k].ph.length) delete F0[k]; } if (hit) { await kvPut(env, "faces", F0); await libReply(env, m, "🗑 Surat bazadan olib tashlandi."); } } return; }
   const al = [name, ...String(rest || "").split(",")].map((x) => x.trim()).filter(Boolean);
   const small = ph.width && ph.height && Math.min(ph.width, ph.height) < 500;
   const F = await kvGet(env, "faces", {});
