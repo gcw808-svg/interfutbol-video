@@ -369,23 +369,19 @@ def render_card(j):
     ay = [(x[0], x[1], bool(x[2]) if len(x) > 2 else False) for x in (j.get("ay") or [])]
     if not (hrows or arows or hy or ay or hr_ or ar_):
         return render_card_plain(j)
-    Wd, Hd = 1280, 720
+    Wd = 1280
     hl, al = get_logo(j.get("homeLogo"), 140), get_logo(j.get("awayLogo"), 140)
     c1 = main_color(hl) if hl else (30, 60, 140)
     c2 = main_color(al) if al else (140, 30, 40)
-    im = glass_bg(c1, c2)
     yc = bool(hy or ay or hr_ or ar_)
-    boxes = ([50, 140, 500, 680], [Wd - 500, 140, Wd - 50, 680]) if yc else ([50, 150, 500, 650], [Wd - 500, 150, Wd - 50, 650])
-    for bx in boxes:
-        glass(im, bx)
-    league_top(im, j, 120 if yc else 140, 70 if yc else 80)
-    d = ImageDraw.Draw(im, "RGBA")
+    d = ImageDraw.Draw(Image.new("RGB", (8, 8)), "RGBA")  # o'lchash uchun
     lines = [n + " " + ", ".join(m) for _, n, m in hrows + arows]
     n = max(len(hrows), len(arows))
     fy = font("bold", 19)
-    yl = {0: [("r", l) for l in yellow_lines(d, hr_, fy, 330)] + [("y", l) for l in yellow_lines(d, hy, fy, 330)],
-          1: [("r", l) for l in yellow_lines(d, ar_, fy, 330)] + [("y", l) for l in yellow_lines(d, ay, fy, 330)]}
-    ly = max(len(yl[0]), len(yl[1]))
+    # kartochkalar RO'YXAT ko'rinishida: har futbolchi alohida qatorda (avval qizil, keyin sariq) — Bahtiyor aka, 2026-11-08
+    one = lambda items: [[(it[0] if it[2] else short_name(it[0]), it[1], it[2])] for it in items]
+    yl = {0: [("r", l) for l in one(hr_)] + [("y", l) for l in one(hy)],
+          1: [("r", l) for l in one(ar_)] + [("y", l) for l in one(ay)]}
     s = 26 if n <= 3 else 23 if n <= 5 else 20
     if yc:
         s = min(24, s)
@@ -393,14 +389,24 @@ def render_card(j):
     while s > 16 and any(d.textlength(t, font=f) + 30 > 450 - 70 for t in lines):
         s -= 1
         f = font("bold", s)
-    lh = min(s + 14, 165 / max(n, 1))
-    if yc:
-        room = 660 - 445 - (34 + ly * 30 if ly else 0)
-        lh = min(s + 10, room / max(n, 1)) if n else 0
-        while n and s > 16 and s + 6 > lh:
-            s -= 1
-            f = font("bold", s)
+    # ro'yxat uzun bo'lsa yozuv kichraymaydi — rasm bo'yiga cho'ziladi
+    lh = s + (10 if yc else 14)
     gy0, ly_ = (445, 220) if yc else (470, 250)
+    need = 0
+    for gs, cl in ((hrows, yl[0]), (arows, yl[1])):
+        y = gy0 + len(gs) * lh - (lh / 2 if gs else 0)
+        if cl:
+            y += (14 + 24 if gs else 0) + (len(cl) - 1) * 30 + 15
+        need = max(need, y)
+    bot = max(680 if yc else 650, int(need + 34))
+    Hd = bot + (40 if yc else 70)
+    im = glass_bg(c1, c2, Wd, Hd)
+    top = 140 if yc else 150
+    boxes = ([50, top, 500, bot], [Wd - 500, top, Wd - 50, bot])
+    for bx in boxes:
+        glass(im, bx)
+    league_top(im, j, 120 if yc else 140, 70 if yc else 80)
+    d = ImageDraw.Draw(im, "RGBA")
     for side, (bx, lg_, name, col, gs) in enumerate(((boxes[0], hl, j["home"], c1, hrows), (boxes[1], al, j["away"], c2, arows))):
         cx = (bx[0] + bx[2]) // 2
         if lg_:
@@ -454,7 +460,7 @@ def render_card(j):
     d.text((Wd // 2, 330), f"{a} - {b}", font=font("black", 120), fill=WHITE, anchor="mm")
     d.text((Wd // 2, 430), "ÖYIN YAKUNLANDI", font=font("bold", 22), fill=(230, 235, 240), anchor="mm")
     lg = logo(64, False)
-    im.paste(lg, (Wd // 2 - 32, 610 if yc else 600), lg)
+    im.paste(lg, (Wd // 2 - 32, Hd - 110 if yc else Hd - 120), lg)
     return im
 
 
