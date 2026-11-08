@@ -2477,6 +2477,21 @@ return;
       await kvPut(env, "ujob:" + uid, { html: "batch", html2: "batch", edit: "batch", edits: [{ id: mid, html }], chat, photo: null, video: null, raw: { text: "", img: null, url: null, video: null } }, { expirationTtl: 86400 });
       await ghDispatch(env, "ubpost.yml", { job: uid });
       await tg(env, "sendMessage", { chat_id: chat, text: "✏️ " + mid + "-post yangi matn bilan tahrirlanmoqda (2–3 daqiqa)." + (q.warn.length ? "\nEslatma: " + q.warn.join("; ") : "") });
+    } else if (/^\/rasm\s+\d+$/.test(text)) {
+      // yangilik postining rasmini tasdiqlangan dizayndagi kartochkaga almashtirish (matn va tugma saqlanadi)
+      const mid = +text.split(/\s+/)[1];
+      const fw = await tg(env, "forwardMessage", { chat_id: chat, from_chat_id: env.CHANNEL, message_id: mid, disable_notification: true }); const m = fw && fw.result;
+      if (!m) { await tg(env, "sendMessage", { chat_id: chat, text: "Kanalda bu raqamli post topilmadi." }); return; }
+      await tg(env, "deleteMessage", { chat_id: chat, message_id: m.message_id }).catch(() => null);
+      const t0 = m.caption != null ? m.caption : m.text; const e0 = m.caption != null ? m.caption_entities : m.entities;
+      const html = hashFix(CANON.reduce((a, [re, v]) => a.replace(re, v), entHtmlNoLogo(t0 || "", e0)));
+      const idx = await kvGet(env, "lgidx", {}); const ci = cardInfo(html, idx);
+      const [leagueLogo0, ...cls] = await Promise.all([logoUrl(env, ci.league, idx), ...(ci.clubs || []).map((n) => logoUrl(env, n, idx))]);
+      const clubLogos = cls.map((u, k) => u || ESPN_CREST[ci.clubs[k]] || "").filter(Boolean).slice(0, 4);
+      const id = "n" + Date.now().toString(36) + "r";
+      await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", clubLogos, chan: html, rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 });
+      await ghDispatch(env, "card.yml", { job: id });
+      await tg(env, "sendMessage", { chat_id: chat, text: "🖼 " + mid + "-post uchun yangi kartochka chizilmoqda (liga: " + (ci.league || "—") + ", klublar: " + (ci.clubs || []).join(", ") + "). 2–3 daqiqada rasm almashtiriladi." });
     } else if (/^\/maqola\s+\S+\s*\n/.test(text)) {
       // Telegraph maqolasini tuzatish: rasm va oxirgi havola saqlanadi, matn yangilanadi ("# " bilan boshlangan qator — sarlavha)
       const path = decodeURIComponent(text.match(/^\/maqola\s+(\S+)/)[1].replace(/^https?:\/\/telegra\.ph\//, "")); const lines = text.split("\n").slice(1).map((l) => l.trim()).filter(Boolean);
