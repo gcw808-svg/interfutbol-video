@@ -1995,7 +1995,9 @@ function cardInfo(post, extra = {}) {
   // yangilik kartochkasi uchun (2026-11-08 dizayni): butun matnda tilga olingan klublar (4 tagacha) va liga — fonda klublar, chapda liga
   const isLg = (ns) => ns.some((x) => /league|liga\b|ligasi|\blig\b|bundesliga|serie a|ligue|\bmls\b|eredivisie|\bcup\b|kubog|chempionat|primeira|pro league|s[uü]per lig|conference/i.test(x));
   const all = [];
-  for (const [id, em, names] of CLUB_EMOJI) { if (LEAGUES.has(id) || isLg(names)) { if (!league && NA2(names).some((x) => rx(x).test(plain))) league = names[0]; continue; } let best = -1; for (const x of NA2(names)) { const mm = plain.match(rx(x)); if (mm && (best < 0 || mm.index < best)) best = mm.index; } if (best >= 0 && !all.some((a) => a.n === names[0])) all.push({ i: best, n: names[0] }); }
+  // liga: sarlavhada bo'lsa o'sha, aks holda matnda ENG BIRINCHI tilga olingan liga (Saka postida Chempionlar ligasi, Millatlar ligasi emas)
+  if (!(found.find((f) => f.lg))) { let li = -1, ln = ""; for (const [id, em, names] of CLUB_EMOJI) { if (!(LEAGUES.has(id) || isLg(names))) continue; for (const x of NA2(names)) { const mm = plain.match(rx(x)); if (mm && (li < 0 || mm.index < li)) { li = mm.index; ln = names[0]; } } } if (ln) league = ln; }
+  for (const [id, em, names] of CLUB_EMOJI) { if (LEAGUES.has(id) || isLg(names)) continue; let best = -1; for (const x of NA2(names)) { const mm = plain.match(rx(x)); if (mm && (best < 0 || mm.index < best)) best = mm.index; } if (best >= 0 && !all.some((a) => a.n === names[0])) all.push({ i: best, n: names[0] }); }
   const cl = [...clubs.map((c) => c.n), ...all.sort((a, b) => a.i - b.i).map((a) => a.n)].filter((n, k, arr) => arr.indexOf(n) === k).slice(0, 4);
   return { title: newAlpha(canonFix(tline || title.trim())), home: clubs[0]?.n || "", away: clubs[1]?.n || "", score: sc ? sc[1] + ":" + sc[2] : "", league, clubs: cl };
 }
