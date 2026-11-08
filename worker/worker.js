@@ -2480,6 +2480,12 @@ return;
       await kvPut(env, "ujob:" + uid, { html: "batch", html2: "batch", edit: "batch", edits: [{ id: mid, html }], chat, photo: null, video: null, raw: { text: "", img: null, url: null, video: null } }, { expirationTtl: 86400 });
       await ghDispatch(env, "ubpost.yml", { job: uid });
       await tg(env, "sendMessage", { chat_id: chat, text: "✏️ " + mid + "-post yangi matn bilan tahrirlanmoqda (2–3 daqiqa)." + (q.warn.length ? "\nEslatma: " + q.warn.join("; ") : "") });
+    } else if (/^\/tugma\s+\d+\s+\S+$/.test(text)) {
+      // "Batafsil o'qish" tugmasini almashtirish yoki olib tashlash: /tugma ID https://telegra.ph/... | /tugma ID olib
+      const [, id, arg] = text.split(/\s+/); const rm = /^(olib|yo'q|-)$/i.test(arg);
+      if (!rm && !/^https:\/\/telegra\.ph\//.test(arg)) { await tg(env, "sendMessage", { chat_id: chat, text: "Havola telegra.ph maqolasi bo'lishi kerak yoki «olib»." }); return; }
+      const r = await tg(env, "editMessageReplyMarkup", { chat_id: env.CHANNEL, message_id: +id, reply_markup: rm ? { inline_keyboard: [] } : readMore(arg) });
+      await tg(env, "sendMessage", { chat_id: chat, text: r.ok ? (rm ? "✅ " + id + "-postdan tugma olib tashlandi." : "✅ " + id + "-post tugmasi yangilandi.") : "⚠️ " + (r.description || "o'zgarmadi") });
     } else if (/^\/rasm\s+\d+$/.test(text)) {
       // yangilik postining rasmini tasdiqlangan dizayndagi kartochkaga almashtirish (matn va tugma saqlanadi)
       const mid = +text.split(/\s+/)[1];
