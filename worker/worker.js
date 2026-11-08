@@ -1422,7 +1422,7 @@ async function healthCheck(env) { const now = Date.now(), d = tashDate(now), h =
   homeLogo = homeLogo || crest(ci.home); awayLogo = awayLogo || crest(ci.away);
   const clubLogos = extra.home ? [] : (await Promise.all((ci.clubs || []).map(async (n) => (await logoUrl(env, n, idx)) || crest(n)))).filter(Boolean).slice(0, 4);
   if ((extra.home && extra.away) && (!homeLogo || !awayLogo)) { try { const ad = (await getAdmins(env))[0]; if (ad) await tg(env, "sendMessage", { chat_id: ad, text: "⚠️ Nazorat: natija kartochkasida klub logotipi topilmadi — " + [!homeLogo && ci.home, !awayLogo && ci.away].filter(Boolean).join(", ") + ". Claude logotipni qo'shib, /kartaqayta bilan kartochkani yangilaydi." }); } catch (e) {} } leagueLogo = leagueLogo || espnLgLogo(extra.compName || lgName) || (await leagueLogoUrl(env, lgName, idx)) || "";
-  await kvPut(env, "cjob:" + id, { ...ci, home: cardNm(ci.home), away: cardNm(ci.away), league: newAlpha(lgName || ""), homeLogo, awayLogo, leagueLogo, clubLogos, ...(extra.goals || {}), chan: post, to: to || null, url: extra.url || null, kind: extra.kind || "res", story: (!to && (extra.kind || "res") === "res" && STORY_BIG.test(ci.home + " " + ci.away + " " + (lgName || ""))) ? await storyQuota(env) : 0 }, { expirationTtl: 7 * 3600 });
+  await kvPut(env, "cjob:" + id, { ...ci, home: cardNm(ci.home), away: cardNm(ci.away), league: newAlpha(lgName || ""), homeLogo, awayLogo, leagueLogo, leftLogo: (extra.kind || "res") === "news" ? await leftCrest(env, post) : "", clubLogos, ...(extra.goals || {}), chan: post, to: to || null, url: extra.url || null, kind: extra.kind || "res", story: (!to && (extra.kind || "res") === "res" && STORY_BIG.test(ci.home + " " + ci.away + " " + (lgName || ""))) ? await storyQuota(env) : 0 }, { expirationTtl: 7 * 3600 });
   if (to) return ghDispatch(env, "card.yml", { job: id });
   const w = await kvGet(env, "resWait", []); w.push({ id, post, t: Date.now(), url: extra.url || null, kind: extra.kind || "res" }); await kvPut(env, "resWait", w.slice(-20));
   await ghDispatch(env, "card.yml", { job: id }); // chizilmasa resFallback qayta urinadi
@@ -2129,6 +2129,16 @@ async function userPublish(env, text, img, url, video, chat, noQc) {
   return (await ghDispatch(env, "ubpost.yml", { job: id })) ? { ok: true, queued: true } : null;
 }
 // rasm topilmasa — mavzuga mos "Inter Futbol" kartochkasi (GitHub Actions'da chiziladi)
+// O'ZBEKISTON TERMA JAMOASI haqidagi post — yangilik kartochkasi chapida UFA gerbi (Bahtiyor aka tasdiqlagan, 2026-11-08: "U1 ufa fon", gerb kattalashtirilgan)
+const NAT_RE = /(O['ʻ‘’`]?zbekiston|Özbekiston|Uzbekistan)(\s+milliy)?(\s+futbol)?\s+terma\s+jamoa|#O[z]bekistonTermaJamoasi|Uzbekistan national (football )?team|\bUFA\b|O['ʻ‘’`]?zbekiston Futbol Assotsiatsiyasi|Özbekiston Futbol Assotsiatsiyasi/i;
+async function ufaCrest(env) {
+  // gerb bir marta Vikipediyadan olinib KV'da saqlanadi (lgb:ufa), keyin WURL/lg/ufa orqali beriladi
+  if (!(await env.STATE.get("lgb:ufa", { type: "arrayBuffer" }))) {
+    try { const r = await fetch("https://thumb.wikimedia.org/wikipedia/en/thumb/3/3d/Uzbekistan_Football_Association.svg/960px-Uzbekistan_Football_Association.svg.png", { headers: { "user-agent": "InterFutbolBot/1.1 (https://t.me/Inter_Futbol_TV)" } }); if (!r.ok) return ""; await env.STATE.put("lgb:ufa", await r.arrayBuffer()); } catch (e) { return ""; }
+  }
+  return WURL + "/lg/ufa";
+}
+const leftCrest = async (env, post) => (NAT_RE.test(String(post || "").replace(/<[^>]+>/g, "")) ? await ufaCrest(env) : "");
 function cardInfo(post, extra = {}) {
   const plain = String(post || "").replace(/<[^>]+>/g, "").replace(/[⟦⟧]/g, "");
   const title = plain.split("\n").find((l) => l.trim()) || "";
@@ -2183,7 +2193,7 @@ async function cardJob(env, pk, pend) {
   const [homeLogo, awayLogo, leagueLogo0] = await Promise.all([logoUrl(env, ci.home, idx), logoUrl(env, ci.away, idx), logoUrl(env, ci.league, idx)]);
   const leagueLogo = leagueLogo0 || (await leagueLogoUrl(env, ci.league, idx)) || "";
   const clubLogos = (await Promise.all((ci.clubs || []).map(async (n) => (await logoUrl(env, n, idx)) || ESPN_CREST[n] || ""))).filter(Boolean).slice(0, 4);
-  await kvPut(env, "cjob:" + id, { ...ci, home: cardNm(ci.home), away: cardNm(ci.away), league: newAlpha(ci.league), homeLogo, awayLogo, leagueLogo, clubLogos, pk, chat: pend.chat, msg: pend.msg }, { expirationTtl: 3600 });
+  await kvPut(env, "cjob:" + id, { ...ci, home: cardNm(ci.home), away: cardNm(ci.away), league: newAlpha(ci.league), homeLogo, awayLogo, leagueLogo, leftLogo: await leftCrest(env, pend.post), clubLogos, pk, chat: pend.chat, msg: pend.msg }, { expirationTtl: 3600 });
   return ghDispatch(env, "card.yml", { job: id });
 }
 // /logotip ID1 ID2 ...: kanaldagi postlarning matniga klub/liga logotiplarini (custom emoji) qayta qo'yadi — matn, qalin yozuv va havolalar saqlanadi
@@ -2701,7 +2711,7 @@ return;
       const [leagueLogo0, ...cls] = await Promise.all([leagueLogoUrl(env, ci.league, idx), ...(ci.clubs || []).map((n) => logoUrl(env, n, idx))]);
       const clubLogos = cls.map((u, k) => u || ESPN_CREST[ci.clubs[k]] || "").filter(Boolean).slice(0, 4);
       const id = "n" + Date.now().toString(36) + "r";
-      await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", clubLogos, chan: html, rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 });
+      await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", leftLogo: await leftCrest(env, html), clubLogos, chan: html, rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 });
       await ghDispatch(env, "card.yml", { job: id });
       await tg(env, "sendMessage", { chat_id: chat, text: "🖼 " + mid + "-post uchun yangi kartochka chizilmoqda (liga: " + (ci.league || "—") + ", klublar: " + (ci.clubs || []).join(", ") + "). 2–3 daqiqada rasm almashtiriladi." });
     } else if (/^\/maqola\s+\S+\s*\n/.test(text)) {

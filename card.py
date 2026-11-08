@@ -688,7 +688,9 @@ def render_news(j):
     urls = [u for u in (j.get("clubLogos") or [j.get("homeLogo"), j.get("awayLogo")]) if u][:4]
     clubs = [c for c in (get_logo(u, 360) for u in urls) if c]
     lgl = get_logo(j.get("leagueLogo"), 240)
-    if not lgl and len(clubs) > 1:
+    # chapdagi gerb (terma jamoa — UFA va h.k.) yoki birinchi klub gerbi — kattaroq, 340 px (Bahtiyor aka tasdiqlagan, 2026-11-08)
+    crest = get_logo(j.get("leftLogo"), 340) if j.get("leftLogo") else None
+    if not lgl and not crest and len(clubs) > 1:
         clubs = clubs[1:]  # chapdagi katta logotip (birinchi klub) fonda takrorlanmasin
     def faint(lg, pct):
         f = lg.copy()
@@ -701,8 +703,8 @@ def render_news(j):
         for k, c in enumerate(clubs):
             f = faint(c, 22)
             im.paste(f, (x0 + k * step + (360 - c.width) // 2, 180 + (k % 2) * 60 + (360 - c.height) // 2), f)
-    elif lgl:
-        big = get_logo(j.get("leagueLogo"), 700)
+    elif crest or lgl:
+        big = get_logo(j.get("leftLogo") if crest else j.get("leagueLogo"), 700)
         if big:
             f = faint(big, 12)
             im.paste(f, (Wd - f.width + 120, (Hd - f.height) // 2), f)
@@ -711,10 +713,10 @@ def render_news(j):
     for x in range(Wd):
         sd.line([x, 0, x, Hd], fill=(8, 10, 16, int(235 - 120 * x / Wd)))
     im.paste(sh, (0, 0), sh)
-    left = lgl or (get_logo(urls[0], 240) if urls else None)
+    left = crest or lgl or (get_logo(urls[0], 340) if urls else None)
     if left:
         glow_ = False
-        if lgl:
+        if lgl and not crest:
             left, glow_ = league_mark(left, j.get("league") or "")
         x_, y_ = 270 - left.width // 2, Hd // 2 - left.height // 2
         if glow_ or is_dark(left):
