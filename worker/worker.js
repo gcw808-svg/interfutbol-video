@@ -753,7 +753,8 @@ async function ytFill(env, st, force = false) {
   await kvPut(env, "st", st);
 }
 async function collect(env) {
-    const st = await kvGet(env, "st", { idx: 0, queue: [], seen: [], titles: [] }); const sig = (s) => s.seen.length + "|" + s.seen[s.seen.length - 1] + "|" + s.queue.length + "|" + (s.vqueue || []).length; const sig0 = sig(st); st.idx = (Math.floor(Date.now() / 600e3) * 2) % FEEDS.filter((f) => f.type !== "yt").length;
+    const st = await kvGet(env, "st", { idx: 0, queue: [], seen: [], titles: [] }); // KV tejash (2026-11-09): navbat tarkibi o'zgarsagina yoki soatda bir marta yoziladi (avval har 10 daqiqada — kuniga ~144 yozuv)
+    const sig = (s) => hash((s.queue || []).map((i) => i.link).join("|")) + "|" + (s.queue || []).length + "|" + (s.vqueue || []).length; const sig0 = sig(st); st.idx = (Math.floor(Date.now() / 600e3) * 2) % FEEDS.filter((f) => f.type !== "yt").length;
 const NEWS = FEEDS.filter((f) => f.type !== "yt");
 const feeds = [NEWS[st.idx % NEWS.length], NEWS[(st.idx + 1) % NEWS.length], NEWS[(st.idx + 2) % NEWS.length], ...FEEDS.filter((f) => f.type === "yt")];
 st.idx = (st.idx + 3) % NEWS.length;
@@ -791,7 +792,7 @@ items.push(...(feed.type === "sitemap" ? parseSitemap(xml, feed.name) : feed.typ
     st.seen = st.seen.slice(-800); st.vseen = (st.vseen || []).slice(-3000);
     st.titles = st.titles.slice(-200);
 if ((st.vqueue || []).length < 20) await ytFill(env, st);
-    if (sig(st) !== sig0) await kvPut(env, "st", st);
+    if (sig(st) !== sig0 || Date.now() - (st.sv || 0) > 3600e3) { st.sv = Date.now(); await kvPut(env, "st", st); }
     return st;
     }
     
