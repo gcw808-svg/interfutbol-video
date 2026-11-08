@@ -872,7 +872,7 @@ if (item.video && (item.source !== "InterFutbol TV" || !(await fetch("https://ww
     }
 
     // ---------------- AVTOMATIK REJIM: yangiliklar va o'yin natijalari kanalga o'zi chiqadi ----------------
-const AUTO_DAY_LIMIT = 10, AUTO_GAP_MIN = 90;
+const AUTO_DAY_LIMIT = 15, AUTO_GAP_MIN = 60; // 2026-11-08 Bahtiyor aka qarori: kuniga 10 dan 15 taga, orasi 90 dan 60 daqiqaga
 const tashHour = () => (new Date().getUTCHours() + 5) % 24;
 async function autoOn(env) { return (await kvGet(env, "auto", 1)) === 1 && !(await kvGet(env, "paused", false)); }
 const newsNames = (p) => [...new Set([...String(p).matchAll(/⟦([^⟧]+)⟧/g)].map((m) => m[1].toLowerCase()))];
