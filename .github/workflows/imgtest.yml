@@ -1,0 +1,25 @@
+name: imgtest
+# Sinov: ijodiy rasm variantlari (AI fon manbalari: Cloudflare Workers AI, Gemini, Pollinations) — natija artifact sifatida
+on:
+  workflow_dispatch:
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: (sudo apt-get update -qq > /dev/null 2>&1; sudo apt-get install -y -qq fonts-inter > /dev/null 2>&1 || true) && pip install -q pillow
+      - name: Inter shrifti
+        run: find /usr/share/fonts -iname 'Inter*Black*' | grep -q . || (curl -sSL --retry 3 -o /tmp/inter.zip https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip && sudo mkdir -p /usr/share/fonts/truetype/inter-dl && sudo unzip -o -j -q /tmp/inter.zip extras/ttf/Inter-Black.ttf extras/ttf/Inter-ExtraBold.ttf extras/ttf/Inter-Bold.ttf extras/ttf/Inter-Medium.ttf extras/ttf/Inter-Regular.ttf -d /usr/share/fonts/truetype/inter-dl) || true
+      - run: mkdir -p fonts && cd fonts && npm pack -q @fontsource/oswald@5.3.0 && for f in *.tgz; do mkdir -p ${f%.tgz} && tar xzf $f -C ${f%.tgz}; done || true
+      - name: rasmlar
+        env:
+          CF: ${{ secrets.CF_API_TOKEN }}
+          CF_ACC: 02978f487b30cf4acdedbfa8d728325f
+          GEMINI_KEY: ${{ secrets.GEMINI_KEY }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        run: python3 imgtest.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rasmlar
+          path: /tmp/out
