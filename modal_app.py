@@ -10,7 +10,7 @@ image = (modal.Image.debian_slim(python_version="3.11")
 @app.function(image=image, gpu="A10G", timeout=24 * 3600, secrets=[modal.Secret.from_name("inter-hf")])
 def train(run: str = "run4", epochs: int = 100):
     os.environ.update(DIKTOR_RUN=run, DIKTOR_EPOCHS=str(epochs), DIKTOR_PLATFORM="modal", DIKTOR_WORK="/root/work")
-    req = urllib.request.Request("https://inter-futbol-bot.gcw808.workers.dev/dsget?k=Hq7pZ2vLx9&n=script", headers={"User-Agent": "Mozilla/5.0"})
+    req = urllib.request.Request("https://inter-futbol-bot.gcw808.workers.dev/dsget?k=" + os.environ["DS_KEY"] + "&n=script", headers={"User-Agent": "Mozilla/5.0"})
     open("/root/run.py", "wb").write(urllib.request.urlopen(req, timeout=60).read())
     subprocess.run(["python", "/root/run.py"], check=True)
 

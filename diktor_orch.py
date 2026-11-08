@@ -2,11 +2,11 @@
 # Vazifasi: o'qitish tugamagan bo'lsa va hech qayerda ishlamayotgan bo'lsa — uni avval Kaggle'da,
 # Kaggle GPU vaqti tugagan bo'lsa Modal'da ishga tushiradi. Natija Hugging Face omborida saqlanadi,
 # shuning uchun har safar o'qitish to'xtagan joyidan davom etadi.
-import json, os, subprocess, sys, tempfile, urllib.parse, urllib.request
+import hashlib, json, os, subprocess, sys, tempfile, urllib.parse, urllib.request
 from huggingface_hub import HfApi, hf_hub_download
 
 W = "https://inter-futbol-bot.gcw808.workers.dev"
-K = "Hq7pZ2vLx9"
+K = hashlib.sha256(("ds-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:24]  # kalit kodda saqlanmaydi
 KERNEL = os.environ.get("KAGGLE_KERNEL", "baxtiyoraxrarov/notebookdb9f80e52d")
 EVENT = os.environ.get("GITHUB_EVENT_NAME", "schedule")
 
@@ -112,7 +112,7 @@ def launch_kaggle():
         return False, f"quota: {left:.1f} soat qoldi, yangilanish: {refresh}"
     d = tempfile.mkdtemp()
     cell = (f'!curl -s -A "Mozilla/5.0" "{W}/dsget?k={K}&n=script" -o run.py && '
-            f'DIKTOR_RUN={RUN} DIKTOR_EPOCHS={ctl["epochs"]} python run.py')
+            f'DS_KEY={K} DIKTOR_RUN={RUN} DIKTOR_EPOCHS={ctl["epochs"]} python run.py')
     nb = {"cells": [{"cell_type": "code", "execution_count": None, "metadata": {}, "outputs": [], "source": [cell]}],
           "metadata": {"kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"}},
           "nbformat": 4, "nbformat_minor": 4}
@@ -130,7 +130,7 @@ def launch_kaggle():
     return ok, out
 
 def launch_modal():
-    run('modal secret create inter-hf HF_TOKEN="$HF_TOKEN" --force > /dev/null')
+    run(f'modal secret create inter-hf HF_TOKEN="$HF_TOKEN" DS_KEY="{K}" --force > /dev/null')
     rc, out = run(f"modal run --detach modal_app.py --run {RUN} --epochs {ctl['epochs']}")
     return rc == 0, out
 

@@ -21,12 +21,14 @@ jobs:
         if: inputs.engine == 'gemini'
         env:
           GEMINI_KEY: ${{ secrets.GEMINI_KEY }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           IMGJOB: ${{ inputs.job }}
         run: python gimg.py
       - name: Multfilm rasmlari (Hugging Face)
         if: inputs.engine != 'gemini'
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           IMGJOB: ${{ inputs.job }}
         run: |
           pip install -q gradio_client

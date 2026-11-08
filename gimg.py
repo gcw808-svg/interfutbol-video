@@ -1,17 +1,18 @@
 # Montaj uchun multfilm rasmlarini Gemini orqali chizish. Vazifa (sahnalar ro'yxati) worker'dan olinadi,
 # tayyor rasmlar va holat hisoboti yana worker'ga qo'yiladi (3 kunda o'chadi).
-import base64, json, os, time, urllib.error, urllib.request
+import base64, json, os, time, urllib.error, urllib.request, hashlib
 
 KEY = os.environ["GEMINI_KEY"]
 W = "https://inter-futbol-bot.gcw808.workers.dev"
+DK = hashlib.sha256(("ds-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:24]  # kalit kodda saqlanmaydi
 H = {"User-Agent": "Mozilla/5.0"}
 API = "https://generativelanguage.googleapis.com/v1beta/models"
 
 def up(name, data):
-    urllib.request.urlopen(urllib.request.Request(W + "/dsup?k=zq8Rk2x&n=" + name, data=data, method="POST", headers=H), timeout=120).read()
+    urllib.request.urlopen(urllib.request.Request(W + "/dsup?k=" + DK + "&n=" + name, data=data, method="POST", headers=H), timeout=120).read()
 
 def get(name):
-    return urllib.request.urlopen(urllib.request.Request(W + "/dsget?k=Hq7pZ2vLx9&n=" + name, headers=H), timeout=60).read()
+    return urllib.request.urlopen(urllib.request.Request(W + "/dsget?k=" + DK + "&n=" + name, headers=H), timeout=60).read()
 
 def call(model, body):
     req = urllib.request.Request(f"{API}/{model}:generateContent", data=json.dumps(body).encode(), method="POST",

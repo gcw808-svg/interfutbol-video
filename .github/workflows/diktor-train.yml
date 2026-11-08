@@ -12,7 +12,7 @@ on:
         description: "auto | kaggle | modal"
         default: auto
   schedule:
-    - cron: "17,47 * * * *"
+    - cron: "17 */4 * * *"  # 2026-11-08: har 4 soatda (o'qitish to'xtagan paytda GitHub daqiqalarini tejash; kerak bo'lsa qo'lda darhol ishga tushiriladi)
 concurrency: diktor-train
 jobs:
   tick:
@@ -27,6 +27,7 @@ jobs:
       - name: Boshqaruvchi
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}

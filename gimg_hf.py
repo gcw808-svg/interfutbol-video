@@ -1,14 +1,15 @@
 # Multfilm rasmlarini Hugging Face'dagi bepul FLUX Space'lari orqali chizish (ZeroGPU kunlik limiti).
 # Vazifa worker'dan olinadi, rasmlar va hisobot worker'ga qo'yiladi.
-import json, os, shutil, time, urllib.request
+import json, os, shutil, time, urllib.request, hashlib
 from gradio_client import Client
 
 W = "https://inter-futbol-bot.gcw808.workers.dev"
+DK = hashlib.sha256(("ds-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:24]  # kalit kodda saqlanmaydi
 H = {"User-Agent": "Mozilla/5.0"}
 def up(name, data):
-    urllib.request.urlopen(urllib.request.Request(W + "/dsup?k=zq8Rk2x&n=" + name, data=data, method="POST", headers=H), timeout=120).read()
+    urllib.request.urlopen(urllib.request.Request(W + "/dsup?k=" + DK + "&n=" + name, data=data, method="POST", headers=H), timeout=120).read()
 def get(name):
-    return urllib.request.urlopen(urllib.request.Request(W + "/dsget?k=Hq7pZ2vLx9&n=" + name, headers=H), timeout=60).read()
+    return urllib.request.urlopen(urllib.request.Request(W + "/dsget?k=" + DK + "&n=" + name, headers=H), timeout=60).read()
 
 job = json.loads(get(os.environ.get("IMGJOB", "imgjob")))
 tok = os.environ.get("HF_TOKEN")

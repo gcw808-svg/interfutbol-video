@@ -3116,7 +3116,9 @@ export default {
     const url = new URL(req.url);
     const secret = (await sha("if-" + env.BOT_TOKEN)).slice(0, 32);
 
+    // /setup — faqat maxfiy kalit bilan (2026-11-08): kalit = sha("setup-" + BOT_TOKEN) boshidagi 16 belgi
     if (url.pathname === "/setup") {
+    if (url.searchParams.get("k") !== (await sha("setup-" + env.BOT_TOKEN)).slice(0, 16)) return new Response("forbidden", { status: 403 });
     const r = await tg(env, "setWebhook", {
     url: `${url.origin}/hook`, secret_token: secret,
     allowed_updates: ["message", "callback_query"], drop_pending_updates: true,
@@ -3142,9 +3144,11 @@ export default {
       const ct = !u8 ? "image/png" : u8[0] === 0xff && u8[1] === 0xd8 ? "image/jpeg" : u8[0] === 0x52 && u8[1] === 0x49 ? "image/webp" : "image/png";
       return b ? new Response(b, { headers: { "content-type": ct, "cache-control": "public, max-age=86400" } }) : new Response("nf", { status: 404 });
     }
-    if (url.pathname === "/dsup" && url.searchParams.get("k") === "zq8Rk2x" && req.method === "POST") { await env.STATE.put("dsp:" + url.searchParams.get("n"), await req.arrayBuffer(), { expirationTtl: 3 * 86400 }); return new Response("ok"); }
-    if (url.pathname === "/dsget" && url.searchParams.get("k") === "Hq7pZ2vLx9") { const b = await env.STATE.get("dsp:" + url.searchParams.get("n"), "arrayBuffer"); return b ? new Response(b) : new Response("", { status: 404 }); }
-    if (url.pathname === "/ftres" && url.searchParams.get("k") === "Hq7pZ2vLx9" && req.method === "POST") { const adm = (await getAdmins(env))[0]; const cap = url.searchParams.get("cap") || ""; const buf = await req.arrayBuffer(); if (!buf.byteLength) { await tg(env, "sendMessage", { chat_id: adm, text: cap }); } else { const f = new FormData(); f.append("chat_id", String(adm)); f.append("caption", cap); f.append("title", "Inter Futbol diktor (o'qitilgan)"); f.append("audio", new Blob([buf], { type: "audio/mpeg" }), "diktor.mp3"); await fetch("https://api.telegram.org/bot" + env.BOT_TOKEN + "/sendAudio", { method: "POST", body: f }); } return new Response("ok"); }
+    // diktor/montaj fayl almashinuvi: kalit kodda yozilmaydi — sha("ds-" + BOT_TOKEN) boshidagi 24 belgi (2026-11-08)
+    const dsKey = (await sha("ds-" + env.BOT_TOKEN)).slice(0, 24);
+    if (url.pathname === "/dsup" && url.searchParams.get("k") === dsKey && req.method === "POST") { await env.STATE.put("dsp:" + url.searchParams.get("n"), await req.arrayBuffer(), { expirationTtl: 3 * 86400 }); return new Response("ok"); }
+    if (url.pathname === "/dsget" && url.searchParams.get("k") === dsKey) { const b = await env.STATE.get("dsp:" + url.searchParams.get("n"), "arrayBuffer"); return b ? new Response(b) : new Response("", { status: 404 }); }
+    if (url.pathname === "/ftres" && url.searchParams.get("k") === dsKey && req.method === "POST") { const adm = (await getAdmins(env))[0]; const cap = url.searchParams.get("cap") || ""; const buf = await req.arrayBuffer(); if (!buf.byteLength) { await tg(env, "sendMessage", { chat_id: adm, text: cap }); } else { const f = new FormData(); f.append("chat_id", String(adm)); f.append("caption", cap); f.append("title", "Inter Futbol diktor (o'qitilgan)"); f.append("audio", new Blob([buf], { type: "audio/mpeg" }), "diktor.mp3"); await fetch("https://api.telegram.org/bot" + env.BOT_TOKEN + "/sendAudio", { method: "POST", body: f }); } return new Response("ok"); }
     if (url.pathname.startsWith("/ub/")) return ubRoute(env, req, url);
     if (url.pathname.startsWith("/ph/")) {
 const f = await tg(env, "getFile", { file_id: decodeURIComponent(url.pathname.slice(4)) });
