@@ -1427,6 +1427,34 @@ async function healthCheck(env) { const now = Date.now(), d = tashDate(now), h =
   const w = await kvGet(env, "resWait", []); w.push({ id, post, t: Date.now(), url: extra.url || null, kind: extra.kind || "res" }); await kvPut(env, "resWait", w.slice(-20));
   await ghDispatch(env, "card.yml", { job: id }); // chizilmasa resFallback qayta urinadi
 }
+// ESKI POST RASMINI ALMASHTIRISH NAZORATI (/rasm, /kartaqayta; 2026-11-09, 126-post holatidan keyin):
+// kartochka 6 daqiqada chizilmasa — GitHub orqali qayta, keyin zaxira chizuvchi (Modal); tahrir chiqmasa — yana bir marta; bo'lmasa adminga xabar
+async function repWatch(env, id, mid) { const rw = (await kvGet(env, "repWait", [])).filter((x) => Date.now() - x.t0 < 6 * 3600e3); rw.push({ id, mid, st: "card", t: Date.now(), t0: Date.now(), n: 0 }); await kvPut(env, "repWait", rw.slice(-30)); }
+async function repSweep(env) {
+  const rw = await kvGet(env, "repWait", []); if (!rw.length) return;
+  const admin = (await getAdmins(env))[0]; let ch = false; const left = [];
+  for (const x of rw) {
+    const age = Date.now() - x.t;
+    if (x.st === "card") {
+      const cj = await kvGet(env, "cjob:" + x.id, null);
+      if (!cj) { if (age < 20 * 60e3) left.push(x); else ch = true; continue; } // cardDone bosqichni "edit"ga o'tkazadi
+      if (age < 6 * 60e3) { left.push(x); continue; }
+      ch = true;
+      if (x.n < 1) { await ghDispatch(env, "card.yml", { job: x.id }, true); left.push({ ...x, n: 1, t: Date.now() }); continue; }
+      if (x.n < 2) { const bk = await kvGet(env, "cardBackup", ""); if (bk) { try { const r = await fetch(bk, { method: "POST", headers: { "x-key": await ubKey(env), "content-type": "application/json" }, body: JSON.stringify(cj) }); if (r.ok) { const png = await r.arrayBuffer(); if (png.byteLength > 10000) { await cardDone(env, x.id, png); const r2 = await kvGet(env, "repWait", []); const e2 = r2.find((y) => y.id === x.id); if (e2) left.push(e2); continue; } } } catch (e) {} } }
+      await env.STATE.delete("cjob:" + x.id);
+      if (admin) await tg(env, "sendMessage", { chat_id: admin, text: "⚠️ " + x.mid + "-post uchun kartochka 3 marta urinib ham chizilmadi. Qayta: /rasm " + x.mid });
+      continue;
+    }
+    if (x.st === "edit") {
+      if (age < 15 * 60e3) { left.push(x); continue; }
+      ch = true; // tahrir ishi javob bermadi (/ub/done kelmadi)
+      if (admin) await tg(env, "sendMessage", { chat_id: admin, text: "⚠️ " + x.mid + "-post rasmi almashtirilmadi (javob kelmadi). Qayta: /rasm " + x.mid });
+      continue;
+    }
+  }
+  if (ch || left.length !== rw.length) await kvPut(env, "repWait", left);
+}
 // natija FAQAT o'z kartochkasi bilan chiqadi (universal rasm bekor — Bahtiyor aka qarori): chizilmasa qayta-qayta urinamiz
 async function resFallback(env) {
   const w = await kvGet(env, "resWait", []); if (!w.length) return;
@@ -2306,7 +2334,7 @@ async function resRedo(env, chat, mid) {
   // sariq kartochkalar (ESPN): post sanasi matndan ("2026-yil 5-noyabr")
   let ymd = tashDate(Date.now()); { const MON = { yanvar: 1, fevral: 2, mart: 3, aprel: 4, may: 5, iyun: 6, iyul: 7, avgust: 8, sentabr: 9, oktabr: 10, noyabr: 11, dekabr: 12 }; const dm = cap.match(/(\d{4})-yil (\d{1,2})-(yanvar|fevral|mart|aprel|may|iyun|iyul|avgust|sentabr|oktabr|noyabr|dekabr)/i); if (dm) ymd = dm[1] + "-" + String(MON[dm[3].toLowerCase()]).padStart(2, "0") + "-" + dm[2].padStart(2, "0"); }
   const ycs = await espnCardsFor(H, A, ymd).catch(() => ({ hy: [], ay: [] }));
-  await kvPut(env, "cjob:" + id, { title: newAlpha(t0), home: cardNm(H), away: cardNm(A), hy: ycs.hy, ay: ycs.ay, score: sm[2] + ":" + sm[3], league: newAlpha(lgLogoName), homeLogo: hl || ycs.hl || ESPN_CREST[H] || ESPN_CREST[Object.keys(ESPN_CREST).find((k) => norm(k) === norm(H))] || "", awayLogo: al || ycs.al || ESPN_CREST[A] || ESPN_CREST[Object.keys(ESPN_CREST).find((k) => norm(k) === norm(A))] || "", leagueLogo: ll || espnLgLogo(lg) || "", ...goals, chan: html, rep: mid, kind: "res", story: 0 }, { expirationTtl: 7 * 3600 });
+  await kvPut(env, "cjob:" + id, { title: newAlpha(t0), home: cardNm(H), away: cardNm(A), hy: ycs.hy, ay: ycs.ay, score: sm[2] + ":" + sm[3], league: newAlpha(lgLogoName), homeLogo: hl || ycs.hl || ESPN_CREST[H] || ESPN_CREST[Object.keys(ESPN_CREST).find((k) => norm(k) === norm(H))] || "", awayLogo: al || ycs.al || ESPN_CREST[A] || ESPN_CREST[Object.keys(ESPN_CREST).find((k) => norm(k) === norm(A))] || "", leagueLogo: ll || espnLgLogo(lg) || "", ...goals, chan: html, rep: mid, kind: "res", story: 0 }, { expirationTtl: 7 * 3600 }); await repWatch(env, id, mid);
   await ghDispatch(env, "card.yml", { job: id });
   await tg(env, "sendMessage", { chat_id: chat, text: "✅ ⟦" + H + "⟧ – ⟦" + A + "⟧" + ": kartochka chizilmoqda. 2–3 daqiqada kanaldagi post rasmi natija kartochkasiga almashtiriladi." });
 }
@@ -2319,7 +2347,8 @@ async function cardDone(env, id, png) {
     await env.STATE.put("lgb:rc_" + id, png, { expirationTtl: 90 * 86400 });
     const html2 = newAlpha(addLogos(j.chan));
     const uid = "e" + Date.now().toString(36) + j.rep;
-    await kvPut(env, "ujob:" + uid, { html: html2, html2, edit: j.rep, editPhoto: WURL + "/lg/rc_" + id, photo: null, video: null, chat: null, raw: { text: j.chan, img: null, url: null, video: null }, t: Date.now(), tries: 0 }, { expirationTtl: 86400 });
+    await kvPut(env, "ujob:" + uid, { html: html2, html2, edit: j.rep, editPhoto: WURL + "/lg/rc_" + id, photo: null, video: null, chat: null, raw: { text: j.chan, img: null, url: null, video: null }, t: Date.now(), tries: 0, repId: id }, { expirationTtl: 86400 });
+    const rw = await kvGet(env, "repWait", []); const e0 = rw.find((x) => x.id === id); if (e0) { Object.assign(e0, { st: "edit", uid, t: Date.now(), n: 0 }); await kvPut(env, "repWait", rw); }
     await ghDispatch(env, "ubpost.yml", { job: uid });
     return;
   }
@@ -2443,6 +2472,10 @@ async function ubRoute(env, req, url) {
   if (url.pathname === "/ub/done" && b.id) {
         const j = await kvGet(env, "ujob:" + b.id, null);
     await env.STATE.delete("ujob:" + b.id);
+    if (j && j.repId) { const rw = await kvGet(env, "repWait", []); const e0 = rw.find((x) => x.id === j.repId);
+      if (b.ok || !e0) { if (e0) await kvPut(env, "repWait", rw.filter((x) => x !== e0)); }
+      else if ((e0.n || 0) < 1) { e0.n = 1; e0.t = Date.now(); await kvPut(env, "repWait", rw); await kvPut(env, "ujob:" + b.id, { ...j, t: Date.now() }, { expirationTtl: 86400 }); await ghDispatch(env, "ubpost.yml", { job: b.id }, true); return J({ ok: true }); }
+      else { await kvPut(env, "repWait", rw.filter((x) => x !== e0)); if (admin) await tg(env, "sendMessage", { chat_id: admin, text: "⚠️ " + e0.mid + "-post rasmi 2 marta urinib ham almashmadi: " + String(b.err || "xato").slice(0, 150) + ". Qayta: /rasm " + e0.mid }); } }
     if (j && j.edits) { if (admin || j.chat) await tg(env, "sendMessage", { chat_id: j.chat || admin, text: b.ok ? "✅ Logotiplar qo'yildi: " + (b.edited || 0) + " ta post tahrirlandi." + (b.failed && b.failed.length ? "\nTahrirlanmadi: " + b.failed.join(", ") : "") : "⚠️ Logotiplarni qo'yib bo'lmadi: " + (b.err || "xato") }); return J({ ok: true }); }
     if (j && j.check) { await kvPut(env, "healthTg", { t: Date.now(), ok: b.ok ? 1 : 0 }, { expirationTtl: 7 * 86400 }); if (!b.ok && admin) await tg(env, "sendMessage", { chat_id: admin, text: "⚠️ Telegram hisobingiz botdan uzilgan: " + (b.err || "xato") + ". Bugungi 09:00 Telegram istoriyasi chiqmaydi. Tuzatish: botga /ulanish yuboring." }); return J({ ok: true }); } if (j && j.story) { if (!b.ok) { if ((j.tries || 0) < 1 && !/auth|session|unauthori/i.test(String(b.err || ""))) { await kvPut(env, "ujob:" + b.id, { ...j, tries: (j.tries || 0) + 1 }, { expirationTtl: 86400 }); await ghDispatch(env, "ubpost.yml", { job: b.id }); } else await tg(env, "sendMessage", { chat_id: admin, text: "⚠️ Istoriya chiqmadi: " + (b.err || "xato") }); } else await kvPut(env, "storyLast", { t: Date.now(), id: b.story || 0 }); return J({ ok: true }); }
     // "Batafsil o'qish" tugmasini bot qo'shadi; bo'lmasa — hisob orqali matn ichiga havola qo'shiladi
@@ -2750,7 +2783,7 @@ return;
       const [leagueLogo0, ...cls] = await Promise.all([leagueLogoUrl(env, ci.league, idx), ...(ci.clubs || []).map((n) => logoUrl(env, n, idx))]);
       const clubLogos = cls.map((u, k) => u || ESPN_CREST[ci.clubs[k]] || "").filter(Boolean).slice(0, 4);
       const id = "n" + Date.now().toString(36) + "r";
-      await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", leftLogo: await leftCrest(env, html, ci, idx), clubLogos, stat: /#Raqamlarda/i.test(html) ? statFromPost(html) : null, chan: html, rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 });
+      await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", leftLogo: await leftCrest(env, html, ci, idx), clubLogos, stat: /#Raqamlarda/i.test(html) ? statFromPost(html) : null, chan: html, rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 }); await repWatch(env, id, mid);
       await ghDispatch(env, "card.yml", { job: id });
       await tg(env, "sendMessage", { chat_id: chat, text: "🖼 " + mid + "-post uchun yangi kartochka chizilmoqda (liga: " + (ci.league || "—") + ", klublar: " + (ci.clubs || []).join(", ") + "). 2–3 daqiqada rasm almashtiriladi." });
     } else if (/^\/maqola\s+\S+\s*\n/.test(text)) {
@@ -3429,6 +3462,7 @@ if (url.pathname === "/hook" && req.method === "POST") {
       if (hh === 23 && (await kvGet(env, "engDay", "")) !== xd) { await kvPut(env, "engDay", xd, { expirationTtl: 3 * 86400 }); await engCollect(env); if (new Date(xd + "T00:00:00Z").getUTCDay() === 0) await engReport(env); }
     } } catch (e) { await err("extra", e); }
     if (on("B")) try { await resFallback(env); } catch (e) { await err("resfb", e); }
+    if (on("B")) try { await repSweep(env); } catch (e) { await err("repsw", e); }
     if (on("B")) try { await ujobSweep(env); } catch (e) { await err("usweep", e); }
     if (on("A")) try { await sendNext(env, { st, kind: "v" }); } catch (e) { await err("sendv", e); }
     if (on("A")) try { await fillPending(env); } catch (e) {}
