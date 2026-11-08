@@ -1,0 +1,44 @@
+name: modaljobs
+# ASOSIY ish bajaruvchini (kartochka chizish + hisob orqali post chiqarish) Modal'ga joylash.
+# card.py, ub.py yoki modal_jobs.py o'zgarganda avtomatik qayta joylanadi va bot manzili KV'ga (jobsUrl) yoziladi.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["card.py", "ub.py", "modal_jobs.py"]
+concurrency:
+  group: modaljobs
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -q modal fastapi
+      - name: deploy
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+          CF: ${{ secrets.CF_API_TOKEN }}
+          ACC: 02978f487b30cf4acdedbfa8d728325f
+        run: |
+          KEY=$(python -c "import hashlib,os;print(hashlib.sha256(('ub-'+os.environ['BOT_TOKEN']).encode()).hexdigest()[:40])")
+          modal secret create inter-jobs BOT_TOKEN="$BOT_TOKEN" TG_API_ID="$TG_API_ID" TG_API_HASH="$TG_API_HASH" JOBS_KEY="$KEY" --force > /dev/null
+          modal deploy modal_jobs.py | tee /tmp/dep.txt
+          URL=$(grep -oE 'https://[a-z0-9-]+--inter-jobs-dispatch[a-z0-9-]*\.modal\.run' /tmp/dep.txt | head -1)
+          [ -n "$URL" ] || URL="https://gcw808-svg--inter-jobs-dispatch.modal.run"
+          echo "manzil: $URL"
+          code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$URL" -H "content-type: application/json" -d '{"wf":"x","job":"y"}')
+          echo "kalitsiz so'rov: $code (403 bo'lishi kerak)"
+          code2=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$URL" -H "x-key: $KEY" -H "content-type: application/json" -d '{"wf":"x","job":"y"}')
+          echo "kalit bilan noto'g'ri ish: $code2 (400 bo'lishi kerak)"
+          [ "$code" = "403" ] && [ "$code2" = "400" ] || { echo "endpoint ishlamayapti — KV o'zgartirilmadi (bot GitHub'dan foydalanishda davom etadi)"; exit 1; }
+          NS=$(curl -sS "https://api.cloudflare.com/client/v4/accounts/$ACC/workers/scripts/inter-futbol-bot/settings" -H "Authorization: Bearer $CF" | jq -r '.result.bindings[] | select(.type=="kv_namespace" and .name=="STATE") | .namespace_id')
+          curl -sS -X PUT "https://api.cloudflare.com/client/v4/accounts/$ACC/storage/kv/namespaces/$NS/values/jobsUrl" -H "Authorization: Bearer $CF" --data "\"$URL\"" | jq -c '{success}'

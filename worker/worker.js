@@ -1339,7 +1339,7 @@ async function resFallback(env) {
     }
     const nm = String(x.post || "").replace(/<[^>]+>|[⟦⟧]/g, "").split("\n")[0];
     if (Date.now() - x.t > 6 * 3600e3) { await env.STATE.delete("cjob:" + x.id); await tg(env, "sendMessage", { chat_id: admin, text: "❌ Natija kartochkasi 6 soat ichida chizilmadi, natija chiqmadi: " + nm }); continue; }
-    await ghDispatch(env, "card.yml", { job: x.id });
+    await ghDispatch(env, "card.yml", { job: x.id }, true);
     if (n + 1 === 6) await tg(env, "sendMessage", { chat_id: admin, text: "⚠️ Natija kartochkasi 6 marta chizilmadi (GitHub). Har 30 daqiqada qayta urinilmoqda: " + nm });
     left.push({ ...x, n: n + 1, lt: Date.now() });
   }
@@ -1717,7 +1717,7 @@ async function ujobSweep(env) {
     const j = await kvGet(env, k.name, null);
     if (!j || !j.t || j.edit || j.check) continue; if (j.story && Date.now() - j.t > 12 * 60e3 && (j.tries || 0) >= 2) { await env.STATE.delete(k.name); const ad = (await getAdmins(env))[0]; if (ad) await tg(env, "sendMessage", { chat_id: ad, text: "⚠️ Telegram istoriyasi 3 marta urinib ham chiqmadi (GitHub javob bermadi)." }); continue; }
     const age = Date.now() - j.t;
-    if (age > 12 * 60e3 && (j.tries || 0) < 2) { await kvPut(env, k.name, { ...j, tries: (j.tries || 0) + 1, t: Date.now() }, { expirationTtl: 86400 }); await ghDispatch(env, "ubpost.yml", { job: k.name.slice(5) }); continue; }
+    if (age > 12 * 60e3 && (j.tries || 0) < 2) { await kvPut(env, k.name, { ...j, tries: (j.tries || 0) + 1, t: Date.now() }, { expirationTtl: 86400 }); await ghDispatch(env, "ubpost.yml", { job: k.name.slice(5) }, true); continue; }
     if (age > 12 * 60e3) {
       await env.STATE.delete(k.name);
       const r = await publish(env, j.raw.text, j.raw.img, readMore(j.raw.url), j.raw.video);
@@ -1972,7 +1972,17 @@ return video ? sendVideo(env, env.CHANNEL, text, video, markup) : sendRich(env, 
 // ---------------- admin hisobi orqali chiqarish (klub logotiplari bilan; GitHub Actions + Telethon) ----------------
 const WURL = "https://inter-futbol-bot.gcw808.workers.dev";
 const ubKey = async (env) => (await sha("ub-" + env.BOT_TOKEN)).slice(0, 40);
-async function ghDispatch(env, wf, inputs) {
+// 2026-11-08: kartochka (card.yml) va hisob orqali post (ubpost.yml) ishlari AVVAL Modal'da bajariladi — GitHub bepul
+// daqiqalari (oyiga 2000) tejaladi; Modal javob bermasa yoki viaGh=true (qayta urinish) bo'lsa — GitHub (zaxira).
+// KV jobsMode = "gh" qilinsa hamma ish yana GitHub'da.
+async function ghDispatch(env, wf, inputs, viaGh) {
+  if (!viaGh && (wf === "card.yml" || wf === "ubpost.yml") && inputs && inputs.job && (await kvGet(env, "jobsMode", "modal")) !== "gh") {
+    const ju = await kvGet(env, "jobsUrl", "");
+    if (ju) {
+      try { const r = await fetch(ju, { method: "POST", headers: { "x-key": await ubKey(env), "content-type": "application/json" }, body: JSON.stringify({ wf, job: inputs.job }), signal: AbortSignal.timeout(25000) }); if (r.ok) return true; } catch (e) {}
+      try { const f = await kvGet(env, "jobsFail", { n: 0 }); await kvPut(env, "jobsFail", { n: (f.n || 0) + 1, t: Date.now(), wf }, { expirationTtl: 3 * 86400 }); } catch (e) {}
+    }
+  }
   if (!env.GH_TOKEN) return false;
   const r = await fetch(`https://api.github.com/repos/${env.GH_REPO || "gcw808-svg/interfutbol-video"}/actions/workflows/${wf}/dispatches`, { method: "POST", headers: { authorization: "Bearer " + env.GH_TOKEN, accept: "application/vnd.github+json", "user-agent": "InterFutbolBot", "content-type": "application/json" }, body: JSON.stringify({ ref: "main", inputs }) });
   return r.status === 204;
@@ -2236,7 +2246,7 @@ async function ubRoute(env, req, url) {
     }
     if (j && !b.ok && !j.edit && j.t && (j.tries || 0) < 2 && !/auth|session|unauthori|deactivat|banned/i.test(String(b.err || ""))) {
       await kvPut(env, "ujob:" + b.id, { ...j, tries: (j.tries || 0) + 1, t: Date.now() }, { expirationTtl: 86400 });
-      await ghDispatch(env, "ubpost.yml", { job: b.id });
+      await ghDispatch(env, "ubpost.yml", { job: b.id }, true);
       return J({ ok: true, retry: true });
     }
     if (j && !b.ok && !j.edit) {
