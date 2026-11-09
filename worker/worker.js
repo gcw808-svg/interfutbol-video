@@ -1440,6 +1440,11 @@ const isFaceName = (x) => { const t = String(x || "").trim(); return t.length >=
 const pnorm = (x) => String(x || "").toLowerCase().replace(/ş/g, "sh").replace(/ç/g, "ch").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[ʻʼ‘’'`]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 async function libReply(env, m, text) { await tg(env, "sendMessage", { chat_id: LIB_CHAT, text, reply_to_message_id: m.message_id, disable_notification: true }).catch(() => null); }
 async function libIndex(env, m, edited) {
+  // suratga javob qilib ism yozilsa (uzatilgan postlarning izohini tahrirlab bo'lmaydi) — o'sha surat shu ism bilan bazaga qo'shiladi
+  if (!m.photo && !m.document && m.text && m.reply_to_message && (m.reply_to_message.photo || m.reply_to_message.document)) {
+    if (!isFaceName(m.text.split("\n")[0].split("|")[0])) return;
+    return libIndex(env, { ...m.reply_to_message, caption: m.text, media_group_id: null, message_id: m.reply_to_message.message_id }, true);
+  }
   const ph = m.photo ? m.photo[m.photo.length - 1] : (m.document && /^image\//.test(m.document.mime_type || "") ? { file_id: m.document.file_id, file_unique_id: m.document.file_unique_id, width: 0, height: 0 } : null);
   if (!ph) return;
   let cap = String(m.caption || "").trim();
