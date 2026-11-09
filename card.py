@@ -983,6 +983,73 @@ def render_news_v(j):
     return im
 
 
+def render_legion_v(j):
+    # LEGIONERLAR HAFTALIGI (2026-11-09): tepada UFA gerbi va sarlavha, pastda har bir legioner — klub gerbi, ismi, klubi, o'yinlari
+    Wd, Hd = 1080, 1350
+    L = j["legion"]
+    ufa = get_logo(j.get("leftLogo"), 220)
+    pal = club_palette(ufa) if ufa else None
+    base, acc = pal if pal else ((10, 40, 30), GREEN)
+    sc = lambda c, mx: tuple(int(v * mx / max(1, max(c))) for v in c)
+    im = Image.new("RGB", (Wd, Hd))
+    d = ImageDraw.Draw(im)
+    top, bot = sc(base, 70), sc(base, 16)
+    for y in range(Hd):
+        t = y / Hd
+        d.line([0, y, Wd, y], fill=tuple(int(top[i] + (bot[i] - top[i]) * t) for i in range(3)))
+    _stripes(im, acc)
+    if ufa:
+        big = ufa.resize((int(ufa.width * 700 / max(ufa.size)), int(ufa.height * 700 / max(ufa.size))))
+        big.putalpha(big.getchannel("A").point(lambda v: int(v * 0.05)))
+        im.paste(big, (Wd - big.width + 180, -60), big)
+        _shadow_paste(im, ufa, 60, 60)
+    d = ImageDraw.Draw(im, "RGBA")
+    tx = 60 + (ufa.width + 40 if ufa else 0)
+    title = (j.get("title") or "").strip()
+    y = _title_v(d, title, tx, 80, Wd - tx - 60, 170, 56, 34)
+    if L.get("period"):
+        d.text((tx, max(y + 6, 200)), L["period"], font=font("bold", 32), fill=tuple(acc))
+    rows = L.get("rows") or []
+    y0 = 330
+    avail = Hd - y0 - 150
+    n = max(1, len(rows))
+    rh = min(300, (avail - (n - 1) * 22) // n)
+    for k, r in enumerate(rows):
+        yy = y0 + k * (rh + 22)
+        box = Image.new("RGBA", (Wd, Hd), (0, 0, 0, 0))
+        ImageDraw.Draw(box).rounded_rectangle([50, yy, Wd - 50, yy + rh], radius=28, fill=(255, 255, 255, 16), outline=tuple(acc) + (70,), width=2)
+        im.paste(box, (0, 0), box)
+        cs = min(150, rh - 50)
+        c = get_logo(r.get("crest"), cs) if r.get("crest") else None
+        if c and max(c.size) < cs:
+            kk = cs / max(c.size)
+            c = c.resize((int(c.width * kk), int(c.height * kk)), Image.LANCZOS)
+        if c:
+            _shadow_paste(im, c, 80 + (cs - c.width) // 2, yy + (rh - c.height) // 2, 10)
+        d = ImageDraw.Draw(im, "RGBA")
+        x = 80 + cs + 40
+        if rh < 170:  # legioner ko'p — ixcham: ism, ostida "klub · o'yin"
+            d.text((x, yy + 16), r.get("name") or "", font=font("black", 36), fill=WHITE)
+            ln = (r.get("club") or "") + (" · " + (r.get("lines") or [""])[0].split(" — ")[-1] if r.get("lines") else "")
+            f2 = font("bold", 24)
+            while d.textlength(ln, font=f2) > Wd - x - 80 and len(ln) > 10:
+                ln = ln[:-2]
+            d.text((x, yy + 64), ln, font=f2, fill=tuple(acc))
+            continue
+        d.text((x, yy + 26), r.get("name") or "", font=font("black", 44), fill=WHITE)
+        d.text((x, yy + 82), r.get("club") or "", font=font("bold", 28), fill=tuple(acc))
+        ly = yy + 128
+        for ln in r.get("lines") or []:
+            for w in wrap(d, ln, font("med", 26), Wd - x - 80)[:3]:
+                if ly + 34 > yy + rh - 10:
+                    break
+                d.text((x, ly), w, font=font("med", 26), fill=(215, 225, 238))
+                ly += 34
+    mk = logo(92, False)
+    im.paste(mk, (Wd - 92 - 40, Hd - 92 - 34), mk)
+    return im
+
+
 def render_news(j):
     # 2026-11-08 qo'shimcha: chapda klub gerbi bo'lsa fon klub ranglarida (club_palette/club_bg), "Raqamlarda" — plitkalar (stat_block)
     # YANGILIK KARTOCHKASI (Bahtiyor aka tasdiqlagan dizayn, 2026-11-08):
@@ -1199,7 +1266,7 @@ def render(j):
         buf = io.BytesIO()
         im.save(buf, "PNG", optimize=True)
         return buf.getvalue()
-    im = render_news(j) if j.get("hz") else render_news_v(j)  # 2026-11-09: yangilik kartochkalari tik (1080x1350)
+    im = render_legion_v(j) if (j.get("legion") or {}).get("rows") else (render_news(j) if j.get("hz") else render_news_v(j))  # 2026-11-09: yangilik kartochkalari tik (1080x1350)
     buf = io.BytesIO()
     if j.get("face"):
         im.convert("RGB").save(buf, "JPEG", quality=92)  # suratli kartochka — hajm kichik bo'lsin
