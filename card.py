@@ -740,7 +740,7 @@ def club_bg(im, lg, pal):
 def stat_block(im, st, acc):
     # RAQAMLARDA o'ng qismi: rukn, ism, liga/mavsum/sana, raqamli plitkalar (2 ustun), manba
     d = ImageDraw.Draw(im, "RGBA")
-    d.text((610, 150), "RAQAMLARDA", font=font("bold", 24), fill=acc)
+    # rukn nomi rasmda yozilmaydi (Bahtiyor aka qoidasi, 2026-11-09)
     nm = st.get("name") or ""
     s = 56
     while s > 36 and d.textlength(nm, font=font("black", s)) > 620:
