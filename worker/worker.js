@@ -1960,6 +1960,27 @@ async function statPlayer(env, p) {
   const g = agree("g"), a = agree("a"); if (g == null) return { fail: JSON.stringify(src).slice(0, 300) };
   return { p, name: fm.name || p.n, club: fm.primaryTeam?.teamName || "", lg: lgName, season: ml.season, g, a, mp: st.Matches, min: st["Minutes played"], rating: st.Rating, sh: src.espn?.sh, n: Object.values(src).filter(Boolean).length, srcs: Object.keys(src).filter((k) => src[k]).join("+") + (src.espnErr ? " (ESPN: " + src.espnErr + ")" : "") };
 }
+// KLUB GERBINI QIDIRISH — bir nechta manba (2026-11-09, Bahtiyor aka: "logo topa olmasang qidir, bir nechta manbadan ol"):
+// 1) o'z bazamiz (lgidx) 2) ESPN ro'yxati 3) FotMob qidiruvi (asl nom, lotincha, qisqa nom) 4) Wikipedia (klub maqolasining rasmi)
+async function findCrest(env, name, idx) {
+  if (!name) return "";
+  const lat = name.replace(/ç/g, "ch").replace(/Ç/g, "Ch").replace(/ş/g, "sh").replace(/Ş/g, "Sh");
+  const tries = [() => logoUrl(env, name, idx || {}), () => (lat !== name ? logoUrl(env, lat, idx || {}) : ""), () => ESPN_CREST[name] || ESPN_CREST[lat] || "",
+    () => fmTeamLogo(name), () => (lat !== name ? fmTeamLogo(lat) : ""), () => (name.split(" ").length > 1 ? fmTeamLogo(name.split(" ").slice(-1)[0]) : ""), () => wikiCrest(name)];
+  for (const f of tries) { try { const u = await f(); if (u) return u; } catch (e) {} }
+  return "";
+}
+async function wikiCrest(name) {
+  const h = { "user-agent": "InterFutbolBot/1.1 (https://t.me/Inter_Futbol_TV)" };
+  const q = await (await fetch("https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&srlimit=3&srsearch=" + encodeURIComponent(name + " football club"), { headers: h })).json();
+  for (const r of (q.query && q.query.search) || []) {
+    if (!/f\.?c\.?|football|club|spor|united|city|athletic|\bsk\b|\bfk\b/i.test(r.title + " " + (r.snippet || ""))) continue;
+    const sm = await (await fetch("https://en.wikipedia.org/api/rest_v1/page/summary/" + encodeURIComponent(r.title.replace(/ /g, "_")), { headers: h })).json();
+    const u = (sm.thumbnail && sm.thumbnail.source) || (sm.originalimage && sm.originalimage.source) || "";
+    if (u && /\.(svg|png)/i.test(u)) return u.replace(/\/\d+px-/, "/400px-");
+  }
+  return "";
+}
 // LEGIONERLAR HAFTALIGI kartochkasi uchun (2026-11-09): post matnidan har bir futbolchi, klubi (gerbi bilan) va o'yinlari
 async function legionFromPost(env, html, idx) {
   const t = String(html || "").replace(/<[^>]+>/g, "").replace(/[⟦⟧]/g, "").replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}️‍\u{E0000}-\u{E007F}]/gu, "").replace(/[ \t]{2,}/g, " ");
@@ -1967,7 +1988,7 @@ async function legionFromPost(env, html, idx) {
   const rows = []; let period = "";
   for (const b of B) {
     const m = b[0].match(/^(.{3,40}?)\s*\(\s*([^)]{2,40})\s*\)$/);
-    if (m) { const club = m[2].trim(); let crest = ""; const c2 = club.replace(/ç/g, "ch").replace(/Ç/g, "Ch").replace(/ş/g, "sh").replace(/Ş/g, "Sh"); try { crest = (await logoUrl(env, club, idx || {})) || (await logoUrl(env, c2, idx || {})) || ESPN_CREST[club] || ESPN_CREST[c2] || (await fmTeamLogo(club)) || (await fmTeamLogo(c2)) || (await fmTeamLogo(club.split(" ").slice(-1)[0])); } catch (e) {} rows.push({ name: m[1].trim(), club, crest, lines: b.slice(1, 4) }); }
+    if (m) { const club = m[2].trim(); let crest = ""; try { crest = await findCrest(env, club, idx); } catch (e) {} rows.push({ name: m[1].trim(), club, crest, lines: b.slice(1, 4) }); }
     else if (!period) { const p = b.join(" ").match(/(\d{1,2}-[\p{L}']+\s*[—–-]\s*\d{1,2}-[\p{L}']+)/u); if (p) period = p[1]; }
   }
   return rows.length ? { period, rows: rows.slice(0, 6) } : null;
@@ -2332,7 +2353,7 @@ async function personCrest(post) {
 const leftCrest = async (env, post, ci, idx) => {
   const plain = String(post || "").replace(/<[^>]+>/g, "");
   if (NAT_RE.test(plain) || /#Legionerlar\b|(O['‘’ʻ]|Ö)zbek legionerlari/i.test(plain)) return await ufaCrest(env); // legionerlar ham — o'zbek futboli
-  if (ci && ci.subj && ci.subj.t === "club") { const n = ci.subj.n; return (await logoUrl(env, n, idx || {})) || ESPN_CREST[n] || ESPN_CREST[Object.keys(ESPN_CREST).find((k) => norm(k) === norm(n))] || (await fmTeamLogo(n)); }
+  if (ci && ci.subj && ci.subj.t === "club") { const n = ci.subj.n; return (await logoUrl(env, n, idx || {})) || ESPN_CREST[n] || ESPN_CREST[Object.keys(ESPN_CREST).find((k) => norm(k) === norm(n))] || (await findCrest(env, n, idx)); }
   if (ci && ci.subj) return ""; // mavzu liga bo'lsa — chapda liga logotipi (avvalgidek)
   return await personCrest(post); // mavzu topilmadi — sarlavhadagi odamning klubi
 };

@@ -960,6 +960,7 @@ def render_news_v(j):
         d = ImageDraw.Draw(im, "RGBA")
         y = _title_v(d, j.get("title") or "Inter Futbol", 60, 930, Wd - 120, 300, 64, 40)
         d.rectangle([60, y + 16, 190, y + 22], fill=tuple(acc))
+        yend = y + 30
     else:
         _stripes(im, acc)
         if mark:
@@ -977,7 +978,13 @@ def render_news_v(j):
             lg = logo(300, False); im.paste(lg, ((Wd - 300) // 2, 250), lg)
         d = ImageDraw.Draw(im, "RGBA")
         d.rectangle([60, 720, 190, 728], fill=tuple(acc))
-        _title_v(d, j.get("title") or "Inter Futbol", 60, 760, Wd - 120, 420, 76, 44)
+        yend = _title_v(d, j.get("title") or "Inter Futbol", 60, 760, Wd - 120, 420, 76, 44)
+    if not st:
+        # pastki qism bo'sh qolmasin (Bahtiyor aka, 2026-11-09): balandlik kontentga qarab, 1080..1350
+        Hn = max(1080, min(Hd, int(yend) + 160))
+        if Hn < Hd:
+            im = im.crop((0, 0, Wd, Hn))
+            Hd = Hn
     mk = logo(92, False)
     im.paste(mk, (Wd - 92 - 40, Hd - 92 - 34), mk)
     return im
@@ -1020,7 +1027,7 @@ def render_legion_v(j):
         ImageDraw.Draw(box).rounded_rectangle([50, yy, Wd - 50, yy + rh], radius=28, fill=(255, 255, 255, 16), outline=tuple(acc) + (70,), width=2)
         im.paste(box, (0, 0), box)
         cs = min(150, rh - 50)
-        c = get_logo(r.get("crest"), cs) if r.get("crest") else None
+        c = crest(r.get("crest"), cs, r.get("club") or "")
         if c and max(c.size) < cs:
             kk = cs / max(c.size)
             c = c.resize((int(c.width * kk), int(c.height * kk)), Image.LANCZOS)
@@ -1045,6 +1052,11 @@ def render_legion_v(j):
                     break
                 d.text((x, ly), w, font=font("med", 26), fill=(215, 225, 238))
                 ly += 34
+    bottom = y0 + n * (rh + 22) - 22
+    Hn = max(1080, min(Hd, bottom + 150))
+    if Hn < Hd:
+        im = im.crop((0, 0, Wd, Hn))
+        Hd = Hn
     mk = logo(92, False)
     im.paste(mk, (Wd - 92 - 40, Hd - 92 - 34), mk)
     return im
