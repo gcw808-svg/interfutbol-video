@@ -849,6 +849,35 @@ def _title_v(d, title, x, y, maxw, maxh, start=72, minsize=44):
     return y
 
 
+def _grade(ph, base, acc):
+    # SURATGA YENGIL ISHLOV (2026-11-09, Bahtiyor aka: "asosiy shaxslar o'zgarmagan holda ozgina o'zgartirish va qo'shimcha"):
+    # odamlarga tegilmaydi — faqat rang (kontrast, klub rangida yengil tus), chetlarini qoraytirish va nozik don
+    from PIL import ImageEnhance
+    ph = ImageEnhance.Contrast(ph).enhance(1.08)
+    ph = ImageEnhance.Color(ph).enhance(1.06)
+    tint = Image.new("RGB", ph.size, tuple(acc))
+    ph = Image.blend(ph, Image.composite(tint, ph, Image.new("L", ph.size, 255)), 0.07)
+    w, h = ph.size
+    vg = Image.new("L", (w, h), 0)
+    ImageDraw.Draw(vg).ellipse([-w * 0.25, -h * 0.2, w * 1.25, h * 1.15], fill=255)
+    vg = vg.filter(ImageFilter.GaussianBlur(min(w, h) // 6))
+    dark = Image.new("RGB", (w, h), tuple(int(v * 0.25) for v in base))
+    ph = Image.composite(ph, Image.blend(ph, dark, 0.55), vg)
+    try:
+        noise = Image.effect_noise((w, h), 18).convert("L").point(lambda v: 128 + (v - 128) // 5)
+        ph = Image.blend(ph, Image.merge("RGB", (noise, noise, noise)), 0.05)
+    except Exception:
+        pass
+    return ph
+
+
+def _accent_band(im, y, acc, Wd):
+    # surat va sarlavha orasidagi klub rangidagi qiya chiziq (qo'shimcha bezak)
+    d = ImageDraw.Draw(im, "RGBA")
+    d.polygon([(0, y + 26), (Wd, y - 34), (Wd, y - 22), (0, y + 38)], fill=tuple(acc) + (235,))
+    d.polygon([(0, y + 44), (Wd, y - 16), (Wd, y - 12), (0, y + 48)], fill=tuple(acc) + (110,))
+
+
 def render_news_v(j):
     Wd, Hd = 1080, 1350
     src = j.get("leftLogo") or ""
@@ -880,7 +909,7 @@ def render_news_v(j):
     if st:
         LW = 660
         if face:
-            im.paste(_cover(face, LW, Hd, 0.12), (0, 0))
+            im.paste(_grade(_cover(face, LW, Hd, 0.12), base, acc), (0, 0))
             _vfade(im, 820, Hd, dark, 0, 245, 0, LW)
         else:
             _stripes(im, acc)
@@ -920,13 +949,14 @@ def render_news_v(j):
         if st.get("src"):
             d.text((62, Hd - 70), "Manba: " + st["src"], font=font("med", 22), fill=(150, 165, 190))
     elif face:
-        im.paste(_cover(face, Wd, 900, 0.12), (0, 0))
-        _vfade(im, 560, 900, dark)
+        im.paste(_grade(_cover(face, Wd, 900, 0.12), base, acc), (0, 0))
+        _vfade(im, 600, 900, dark)
+        _accent_band(im, 872, acc, Wd)
         d = ImageDraw.Draw(im, "RGBA")
         d.rectangle([0, 900, Wd, Hd], fill=tuple(dark))
         _stripes(im, acc, 860, 10)
         if mark:
-            m2 = mark.copy(); m2.thumbnail((130, 130), Image.LANCZOS); _shadow_paste(im, m2, 60, 900 - 70 - m2.height // 2)
+            m2 = mark.copy(); m2.thumbnail((130, 130), Image.LANCZOS); _shadow_paste(im, m2, 60, 900 - 110 - m2.height // 2)
         d = ImageDraw.Draw(im, "RGBA")
         y = _title_v(d, j.get("title") or "Inter Futbol", 60, 930, Wd - 120, 300, 64, 40)
         d.rectangle([60, y + 16, 190, y + 22], fill=tuple(acc))
