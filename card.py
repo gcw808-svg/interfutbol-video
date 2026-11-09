@@ -778,6 +778,181 @@ def stat_block(im, st, acc):
         d.text((610, 300 + rows * (th + gap) - gap + 18), "Manba: " + st["src"], font=font("med", 16), fill=(160, 175, 195))
 
 
+# ================= TIK YANGILIK KARTOCHKASI (1080x1350, Bahtiyor aka talabi 2026-11-09: "uzunasiga qo'y") =================
+# Bazada odamning surati bo'lsa (j["face"]) — tepada surat, pastda gerb va sarlavha; bo'lmasa — katta gerb, logo rangidagi fon.
+# "Raqamlarda" (j["stat"]) — chapda surat yoki gerb, o'ngda raqamlar ustuni. Rukn nomi (FIKR, RAQAMLARDA...) yozilmaydi.
+def get_photo(url):
+    if not url:
+        return None
+    for k in range(3):
+        try:
+            req = urllib.request.Request(url, headers={"user-agent": UA})
+            with urllib.request.urlopen(req, timeout=40) as r:
+                return Image.open(io.BytesIO(r.read())).convert("RGB")
+        except Exception as e:
+            print("photo", e)
+    return None
+
+
+def _cover(src, w, h, fy=0.15):
+    r = max(w / src.width, h / src.height)
+    im = src.resize((int(src.width * r + .5), int(src.height * r + .5)), Image.LANCZOS)
+    x = (im.width - w) // 2
+    y = int((im.height - h) * fy)
+    im = im.crop((x, y, x + w, y + h))
+    if r > 1.3:
+        im = im.filter(ImageFilter.UnsharpMask(radius=2, percent=60, threshold=2))
+    return im
+
+
+def _vfade(im, y0, y1, col, a0=0, a1=255, x0=0, x1=None):
+    g = Image.new("RGBA", im.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(g)
+    for y in range(y0, y1):
+        d.line([x0, y, x1 or im.width, y], fill=tuple(col) + (int(a0 + (a1 - a0) * (y - y0) / max(1, y1 - y0)),))
+    im.paste(g, (0, 0), g)
+
+
+def _stripes(im, acc, y0=0, alpha=11):
+    Wd, Hd = im.size
+    st = Image.new("RGBA", (Wd, Hd), (0, 0, 0, 0))
+    sd = ImageDraw.Draw(st)
+    for k in range(-Hd, Wd, 52):
+        sd.line([k, Hd, k + Hd, 0], fill=tuple(acc) + (alpha,), width=20)
+    if y0:
+        ImageDraw.Draw(st).rectangle([0, 0, Wd, y0], fill=(0, 0, 0, 0))
+    im.paste(st, (0, 0), st)
+
+
+def _shadow_paste(im, lg, x, y, blur=16, op=0.6):
+    sh = Image.new("RGBA", im.size, (0, 0, 0, 0))
+    blk = Image.new("RGBA", lg.size, (0, 0, 0, 255))
+    blk.putalpha(lg.getchannel("A").point(lambda v: int(v * op)))
+    sh.paste(blk, (x, y + 10), blk)
+    sh = sh.filter(ImageFilter.GaussianBlur(blur))
+    im.paste(sh, (0, 0), sh)
+    im.paste(lg, (x, y), lg)
+
+
+def _title_v(d, title, x, y, maxw, maxh, start=72, minsize=44):
+    s = start
+    while True:
+        f = font("black", s)
+        lines = wrap(d, title, f, maxw)
+        lh = int(s * 1.2)
+        if (len(lines) * lh <= maxh and len(lines) <= 6) or s <= minsize:
+            break
+        s -= 4
+    for ln in lines[:7]:
+        d.text((x, y), ln, font=f, fill=WHITE)
+        y += lh
+    return y
+
+
+def render_news_v(j):
+    Wd, Hd = 1080, 1350
+    src = j.get("leftLogo") or ""
+    crest_ = get_logo(src, 460) if src else None
+    lgl = None if crest_ else get_logo(j.get("leagueLogo"), 420)
+    if not crest_ and not lgl:
+        for u in (j.get("clubLogos") or [])[:1]:
+            crest_ = get_logo(u, 460)
+    mark = crest_ or lgl
+    if lgl and not crest_:
+        mark, _g = league_mark(lgl, j.get("league") or "")
+    if mark and max(mark.size) < 400:  # kichik logo (masalan FotMob 192 px) — kattalashtiriladi
+        k = 440 / max(mark.size)
+        mark = mark.resize((int(mark.width * k), int(mark.height * k)), Image.LANCZOS)
+        if crest_:
+            crest_ = mark
+    pal = club_palette(mark) if mark else None
+    base, acc = pal if pal else ((10, 14, 22), GREEN)
+    sc = lambda c, mx: tuple(int(v * mx / max(1, max(c))) for v in c)
+    face = get_photo(j.get("face")) if j.get("face") else None
+    st = j.get("stat") if (j.get("stat") or {}).get("tiles") else None
+    im = Image.new("RGB", (Wd, Hd), (10, 14, 22))
+    d = ImageDraw.Draw(im)
+    top, bot = (sc(base, 74), sc(base, 20)) if pal else ((22, 28, 40), (8, 10, 16))
+    for y in range(Hd):
+        t = y / Hd
+        d.line([0, y, Wd, y], fill=tuple(int(top[i] + (bot[i] - top[i]) * t) for i in range(3)))
+    dark = sc(base, 18) if pal else (8, 10, 16)
+    if st:
+        LW = 660
+        if face:
+            im.paste(_cover(face, LW, Hd, 0.12), (0, 0))
+            _vfade(im, 820, Hd, dark, 0, 245, 0, LW)
+        else:
+            _stripes(im, acc)
+            if mark:
+                big = mark.resize((int(mark.width * 900 / max(mark.size)), int(mark.height * 900 / max(mark.size))))
+                big.putalpha(big.getchannel("A").point(lambda v: int(v * 0.05)))
+                im.paste(big, (-220, 420), big)
+                m2 = mark.copy()
+                m2.thumbnail((420, 420), Image.LANCZOS)
+                _shadow_paste(im, m2, (LW - m2.width) // 2, 330)
+        d = ImageDraw.Draw(im, "RGBA")
+        d.rectangle([LW, 0, Wd, Hd], fill=(0, 0, 0, 120))
+        d.line([LW, 0, LW, Hd], fill=tuple(acc), width=6)
+        tiles = st["tiles"][:5]
+        rh = (Hd - 200) // max(4, len(tiles))
+        for k, (v, l) in enumerate(tiles):
+            cy = 40 + k * rh + rh // 2
+            fv = font("black", 136 if len(tiles) <= 4 else 110)
+            while d.textlength(v, font=fv) > Wd - LW - 60:
+                fv = font("black", fv.size - 8)
+            d.text(((LW + Wd) // 2, cy - 30), v, font=fv, fill=tuple(acc) if k == 0 else WHITE, anchor="mm")
+            d.text(((LW + Wd) // 2, cy + 74), str(l).upper(), font=font("bold", 26), fill=(205, 218, 235), anchor="mm")
+            if k:
+                d.line([LW + 50, 40 + k * rh, Wd - 50, 40 + k * rh], fill=(255, 255, 255, 40), width=2)
+        nm = (st.get("name") or "").split()
+        y = 900
+        if len(nm) > 1:
+            d.text((60, y), " ".join(nm[:-1]).upper(), font=font("black", 56), fill=(220, 230, 245)); y += 66
+        fs = 100
+        while fs > 50 and d.textlength((nm[-1] if nm else "").upper(), font=font("black", fs)) > LW - 100:
+            fs -= 6
+        d.text((60, y), (nm[-1] if nm else "").upper(), font=font("black", fs), fill=WHITE); y += int(fs * 1.15)
+        if face and crest_:
+            c2 = crest_.copy(); c2.thumbnail((110, 110), Image.LANCZOS); _shadow_paste(im, c2, 60, 60); d = ImageDraw.Draw(im, "RGBA")
+        for ln in wrap(d, st.get("sub") or "", font("med", 30), LW - 110)[:2]:
+            d.text((62, y + 8), ln, font=font("med", 30), fill=(200, 215, 235)); y += 42
+        if st.get("src"):
+            d.text((62, Hd - 70), "Manba: " + st["src"], font=font("med", 22), fill=(150, 165, 190))
+    elif face:
+        im.paste(_cover(face, Wd, 900, 0.12), (0, 0))
+        _vfade(im, 560, 900, dark)
+        d = ImageDraw.Draw(im, "RGBA")
+        d.rectangle([0, 900, Wd, Hd], fill=tuple(dark))
+        _stripes(im, acc, 860, 10)
+        if mark:
+            m2 = mark.copy(); m2.thumbnail((130, 130), Image.LANCZOS); _shadow_paste(im, m2, 60, 900 - 70 - m2.height // 2)
+        d = ImageDraw.Draw(im, "RGBA")
+        y = _title_v(d, j.get("title") or "Inter Futbol", 60, 930, Wd - 120, 300, 64, 40)
+        d.rectangle([60, y + 16, 190, y + 22], fill=tuple(acc))
+    else:
+        _stripes(im, acc)
+        if mark:
+            big = mark.resize((int(mark.width * 760 / max(mark.size)), int(mark.height * 760 / max(mark.size))))
+            big.putalpha(big.getchannel("A").point(lambda v: int(v * 0.045)))
+            im.paste(big, (Wd - big.width + 200, 40), big)
+            gl = Image.new("RGBA", (Wd, Hd), (0, 0, 0, 0))
+            glow = (228, 232, 240) if (not pal or blends(mark) or is_dark(mark, 50)) else sc(acc, 200)
+            ImageDraw.Draw(gl).ellipse([Wd // 2 - 340, 400 - 340, Wd // 2 + 340, 400 + 340], fill=tuple(glow) + (70 if not pal or blends(mark) else 120,))
+            gl = gl.filter(ImageFilter.GaussianBlur(120))
+            im.paste(gl, (0, 0), gl)
+            m2 = mark.copy(); m2.thumbnail((440, 440), Image.LANCZOS)
+            _shadow_paste(im, m2, (Wd - m2.width) // 2, 400 - m2.height // 2, 20)
+        else:
+            lg = logo(300, False); im.paste(lg, ((Wd - 300) // 2, 250), lg)
+        d = ImageDraw.Draw(im, "RGBA")
+        d.rectangle([60, 720, 190, 728], fill=tuple(acc))
+        _title_v(d, j.get("title") or "Inter Futbol", 60, 760, Wd - 120, 420, 76, 44)
+    mk = logo(92, False)
+    im.paste(mk, (Wd - 92 - 40, Hd - 92 - 34), mk)
+    return im
+
+
 def render_news(j):
     # 2026-11-08 qo'shimcha: chapda klub gerbi bo'lsa fon klub ranglarida (club_palette/club_bg), "Raqamlarda" — plitkalar (stat_block)
     # YANGILIK KARTOCHKASI (Bahtiyor aka tasdiqlagan dizayn, 2026-11-08):
@@ -994,9 +1169,12 @@ def render(j):
         buf = io.BytesIO()
         im.save(buf, "PNG", optimize=True)
         return buf.getvalue()
-    im = render_news(j)
+    im = render_news(j) if j.get("hz") else render_news_v(j)  # 2026-11-09: yangilik kartochkalari tik (1080x1350)
     buf = io.BytesIO()
-    im.save(buf, "PNG", optimize=True)
+    if j.get("face"):
+        im.convert("RGB").save(buf, "JPEG", quality=92)  # suratli kartochka — hajm kichik bo'lsin
+    else:
+        im.save(buf, "PNG", optimize=True)
     return buf.getvalue()
 
 

@@ -1425,7 +1425,7 @@ async function healthCheck(env) { const now = Date.now(), d = tashDate(now), h =
   homeLogo = homeLogo || crest(ci.home); awayLogo = awayLogo || crest(ci.away);
   const clubLogos = extra.home ? [] : (await Promise.all((ci.clubs || []).map(async (n) => (await logoUrl(env, n, idx)) || crest(n)))).filter(Boolean).slice(0, 4);
   if ((extra.home && extra.away) && (!homeLogo || !awayLogo)) { try { const ad = (await getAdmins(env))[0]; if (ad) await tg(env, "sendMessage", { chat_id: ad, text: "⚠️ Nazorat: natija kartochkasida klub logotipi topilmadi — " + [!homeLogo && ci.home, !awayLogo && ci.away].filter(Boolean).join(", ") + ". Claude logotipni qo'shib, /kartaqayta bilan kartochkani yangilaydi." }); } catch (e) {} } leagueLogo = leagueLogo || espnLgLogo(extra.compName || lgName) || (await leagueLogoUrl(env, lgName, idx)) || "";
-  await kvPut(env, "cjob:" + id, { ...ci, home: cardNm(ci.home), away: cardNm(ci.away), league: newAlpha(lgName || ""), homeLogo, awayLogo, leagueLogo, leftLogo: (extra.kind || "res") === "news" ? await leftCrest(env, post, ci, idx) : "", clubLogos, stat: (extra.kind || "res") === "news" && /#Raqamlarda/i.test(post) ? statFromPost(post) : null, ...(extra.goals || {}), chan: post, to: to || null, url: extra.url || null, kind: extra.kind || "res", story: (!to && (extra.kind || "res") === "res" && STORY_BIG.test(ci.home + " " + ci.away + " " + (lgName || ""))) ? await storyQuota(env) : 0 }, { expirationTtl: 7 * 3600 });
+  await kvPut(env, "cjob:" + id, { ...ci, home: cardNm(ci.home), away: cardNm(ci.away), league: newAlpha(lgName || ""), homeLogo, awayLogo, leagueLogo, leftLogo: (extra.kind || "res") === "news" ? await leftCrest(env, post, ci, idx) : "", clubLogos, stat: (extra.kind || "res") === "news" && /#Raqamlarda/i.test(post) ? statFromPost(post) : null, face: (extra.kind || "res") === "news" ? await faceUrl(env, post) : "", ...(extra.goals || {}), chan: post, to: to || null, url: extra.url || null, kind: extra.kind || "res", story: (!to && (extra.kind || "res") === "res" && STORY_BIG.test(ci.home + " " + ci.away + " " + (lgName || ""))) ? await storyQuota(env) : 0 }, { expirationTtl: 7 * 3600 });
   if (to) return ghDispatch(env, "card.yml", { job: id });
   const w = await kvGet(env, "resWait", []); w.push({ id, post, t: Date.now(), url: extra.url || null, kind: extra.kind || "res" }); await kvPut(env, "resWait", w.slice(-20));
   await ghDispatch(env, "card.yml", { job: id }); // chizilmasa resFallback qayta urinadi
@@ -1503,6 +1503,15 @@ async function squadByNumber(club, num) {
     const txt = await (await fetch("https://www.fotmob.com/api/data/teams?ccode3=UZB&id=" + t.id, { headers: { "user-agent": "Mozilla/5.0 InterFutbolBot" } })).text();
     const m = txt.match(new RegExp('"name":"([^"]{3,60})","shirtNumber":' + Number(num) + '[,}]'));
     return m ? m[1] : "";
+  } catch (e) { return ""; }
+}
+// kartochka uchun bazadagi surat (Rasmlar bazasi): post kim haqida bo'lsa — o'sha odamning surati (bir nechta bo'lsa — navbat bilan)
+async function faceUrl(env, post) {
+  try {
+    const F = await kvGet(env, "faces", {}); const k = faceFor(F, post); if (!k) return "";
+    const ph = (F[k].ph || []).filter((p) => !p.low); const L = ph.length ? ph : F[k].ph || []; if (!L.length) return "";
+    const p = L[Math.floor(Date.now() / 3600e3) % L.length];
+    return WURL + "/ph/" + encodeURIComponent(p.f);
   } catch (e) { return ""; }
 }
 // post matnidan kim haqida ekanini topadi: sarlavhadagi birinchi tanilgan ism (to'liq ism yoki qo'shimcha yozilishlar)
@@ -2889,7 +2898,7 @@ return;
       const [leagueLogo0, ...cls] = await Promise.all([leagueLogoUrl(env, ci.league, idx), ...(ci.clubs || []).map((n) => logoUrl(env, n, idx))]);
       const clubLogos = cls.map((u, k) => u || ESPN_CREST[ci.clubs[k]] || "").filter(Boolean).slice(0, 4);
       const id = "n" + Date.now().toString(36) + "r";
-      await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", leftLogo: await leftCrest(env, html, ci, idx), clubLogos, stat: /#Raqamlarda/i.test(html) ? statFromPost(html) : null, chan: html, rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 }); await repWatch(env, id, mid);
+      await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", leftLogo: await leftCrest(env, html, ci, idx), clubLogos, stat: /#Raqamlarda/i.test(html) ? statFromPost(html) : null, face: await faceUrl(env, html), chan: html, rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 }); await repWatch(env, id, mid);
       await ghDispatch(env, "card.yml", { job: id });
       await tg(env, "sendMessage", { chat_id: chat, text: "🖼 " + mid + "-post uchun yangi kartochka chizilmoqda (liga: " + (ci.league || "—") + ", klublar: " + (ci.clubs || []).join(", ") + "). 2–3 daqiqada rasm almashtiriladi." });
     } else if (/^\/maqola\s+\S+\s*\n/.test(text)) {
