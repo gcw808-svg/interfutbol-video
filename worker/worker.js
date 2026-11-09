@@ -1967,7 +1967,7 @@ async function legionFromPost(env, html, idx) {
   const rows = []; let period = "";
   for (const b of B) {
     const m = b[0].match(/^(.{3,40}?)\s*\(\s*([^)]{2,40})\s*\)$/);
-    if (m) { const club = m[2].trim(); let crest = ""; const c2 = club.replace(/ç/g, "ch").replace(/Ç/g, "Ch").replace(/ş/g, "sh").replace(/Ş/g, "Sh"); try { crest = (await logoUrl(env, club, idx || {})) || (await logoUrl(env, c2, idx || {})) || ESPN_CREST[club] || ESPN_CREST[c2] || (await fmTeamLogo(c2)); } catch (e) {} rows.push({ name: m[1].trim(), club, crest, lines: b.slice(1, 4) }); }
+    if (m) { const club = m[2].trim(); let crest = ""; const c2 = club.replace(/ç/g, "ch").replace(/Ç/g, "Ch").replace(/ş/g, "sh").replace(/Ş/g, "Sh"); try { crest = (await logoUrl(env, club, idx || {})) || (await logoUrl(env, c2, idx || {})) || ESPN_CREST[club] || ESPN_CREST[c2] || (await fmTeamLogo(club)) || (await fmTeamLogo(c2)) || (await fmTeamLogo(club.split(" ").slice(-1)[0])); } catch (e) {} rows.push({ name: m[1].trim(), club, crest, lines: b.slice(1, 4) }); }
     else if (!period) { const p = b.join(" ").match(/(\d{1,2}-[\p{L}']+\s*[—–-]\s*\d{1,2}-[\p{L}']+)/u); if (p) period = p[1]; }
   }
   return rows.length ? { period, rows: rows.slice(0, 6) } : null;
