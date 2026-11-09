@@ -186,6 +186,25 @@ function addLogos(t) {
   if (cut > 0 && cut < 400) return scoreDigits(addLogosPart(t.slice(0, cut)) + "\n\n" + addLogosPart(t.slice(cut + 2)));
   return scoreDigits(addLogosPart(t));
 }
+// DAVLAT BAYROQLARI (2026-11-09, Bahtiyor aka): davlat nomi yoki millat sifati ("italiyalik") oldidan bayroq; terma jamoa logotipi
+// to'plamda bo'lsa (CLUB_EMOJI, masalan "O'zbekiston terma jamoasi") — o'sha logotip (klublar bosqichida); bo'lmasa bayroq. Har bo'limda birinchi eslatishda.
+const FLAG = (cc) => [...cc.toUpperCase()].map((c) => String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65)).join("");
+const ENG = "\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}", SCO = "\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}", WAL = "\u{1F3F4}\u{E0067}\u{E0062}\u{E0077}\u{E006C}\u{E0073}\u{E007F}";
+const COUNTRY_FLAGS = [["UZ", "O'zbekiston"], ["RU", "Rossiya"], ["TR", "Turkiya"], ["ES", "Ispaniya"], ["IT", "Italiya"], ["DE", "Germaniya"], ["FR", "Fransiya"], [ENG, "Angliya"], [SCO, "Shotlandiya"], [WAL, "Uels"], ["PT", "Portugaliya"], ["NL", "Niderlandiya|Gollandiya"], ["BE", "Belgiya"], ["BR", "Braziliya"], ["AR", "Argentina"], ["UY", "Urugvay"], ["CO", "Kolumbiya"], ["MX", "Meksika"], ["US", "AQSh"], ["CA", "Kanada"], ["JP", "Yaponiya"], ["KR", "Janubiy Koreya"], ["KP", "Shimoliy Koreya"], ["CN", "Xitoy"], ["IR", "Eron"], ["IQ", "Iroq"], ["SA", "Saudiya Arabistoni"], ["AE", "BAA|Birlashgan Arab Amirliklari"], ["QA", "Qatar"], ["KZ", "Qozog'iston"], ["KG", "Qirg'iziston"], ["TJ", "Tojikiston"], ["TM", "Turkmaniston"], ["AF", "Afg'oniston"], ["AU", "Avstraliya"], ["EG", "Misr"], ["MA", "Marokash"], ["DZ", "Jazoir"], ["TN", "Tunis"], ["SN", "Senegal"], ["NG", "Nigeriya"], ["CM", "Kamerun"], ["GH", "Gana"], ["CI", "Kot-d'Ivuar"], ["HR", "Xorvatiya"], ["RS", "Serbiya"], ["PL", "Polsha"], ["CZ", "Chexiya"], ["CH", "Shveysariya"], ["AT", "Avstriya"], ["DK", "Daniya"], ["SE", "Shvetsiya"], ["NO", "Norvegiya"], ["FI", "Finlandiya"], ["GR", "Gretsiya"], ["UA", "Ukraina"], ["VE", "Venesuela"], ["CL", "Chili"], ["PE", "Peru"], ["EC", "Ekvador"], ["PY", "Paragvay"], ["BO", "Boliviya"], ["IN", "Hindiston"], ["ID", "Indoneziya"], ["TH", "Tailand"], ["VN", "Vyetnam"], ["JO", "Iordaniya"], ["SY", "Suriya"], ["AZ", "Ozarbayjon"], ["GE", "Gruziya"], ["AM", "Armaniston"], ["HU", "Vengriya"], ["RO", "Ruminiya"], ["BG", "Bolgariya"], ["SI", "Sloveniya"], ["SK", "Slovakiya"], ["IE", "Irlandiya"], ["IS", "Islandiya"], ["CD", "Kongo DR|KDR"], ["BH", "Bahrayn"], ["OM", "Ummon"], ["KW", "Quvayt"], ["LB", "Livan"], ["PS", "Falastin"], ["IL", "Isroil"], ["CR", "Kosta-Rika"], ["PA", "Panama"], ["JM", "Yamayka"], ["NZ", "Yangi Zelandiya"], ["ZA", "Janubiy Afrika|JAR"], ["ML", "Mali"], ["BA", "Bosniya va Gersegovina|Bosniya"], ["AL", "Albaniya"], ["MK", "Shimoliy Makedoniya"], ["ME", "Chernogoriya"], ["CY", "Kipr"], ["LU", "Lyuksemburg"], ["BY", "Belarus"], ["MD", "Moldova"], ["EE", "Estoniya"], ["LV", "Latviya"], ["LT", "Litva"]];
+let FLAG_RE = null;
+function addFlags(p) {
+  if (!FLAG_RE) {
+    FLAG_RE = [];
+    const rq = (x) => x.replace(/[.*+?^${}()|[\]\\\/]/g, "\\$&").replace(/'/g, "['‘’ʻʼ`]?");
+    for (const [cc, names] of COUNTRY_FLAGS) {
+      const fl = cc.length === 2 ? FLAG(cc) : cc;
+      const alts = [...new Set(names.split("|").flatMap((n) => [n, newAlpha(n)]))].sort((a, b) => b.length - a.length).map(rq).join("|");
+      FLAG_RE.push([new RegExp("(^|[^\\p{L}\\p{N}\\u{1F1E6}-\\u{1F1FF}\\u{E007F}]\\s?)(⟦?)(" + alts + ")(?=(?:lik|liklar|likni|ning|ni|ga|da|dan|dagi|day)?(?![\\p{L}\\p{N}]))", "iu"), fl]);
+    }
+  }
+  for (const [re, fl] of FLAG_RE) p = p.replace(re, (m, a, b, c) => a + fl + " " + b + c);
+  return p;
+}
 function addLogosPart(t) {
   if (!CLUB_RE) {
     CLUB_RE = [];
@@ -202,7 +221,7 @@ function addLogosPart(t) {
       const re = new RegExp(re0.source, "gu");
       p = p.replace(re, (m, a, b, c) => { used.add(id); keep.push(`<tg-emoji emoji-id="${id}">${em}</tg-emoji> ${b}${c}`); return a + "\u0002" + (keep.length - 1) + "\u0003"; });
     }
-    return p;
+    return addFlags(p);
   }).join("");
   return out.replace(/\u0002(\d+)\u0003/g, (m, k) => keep[+k]);
 }
