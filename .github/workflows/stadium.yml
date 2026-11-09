@@ -1,0 +1,22 @@
+name: stadium
+# Stadion roboti: erkin litsenziyali stadion suratlarini (Wikimedia Commons) rasmlar kanaliga va bot bazasiga qo'shadi (haftasiga bir marta)
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        default: "15"
+  schedule:
+    - cron: "41 2 * * 3"
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install -q requests
+      - env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          LIMIT: ${{ inputs.limit || '15' }}
+        run: python3 stadium.py
