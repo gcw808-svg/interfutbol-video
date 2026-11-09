@@ -77,10 +77,16 @@ def main():
             if not q:
                 print("-", club, "Wikidata topilmadi"); continue
             e = wd({"action": "wbgetentities", "ids": q, "props": "claims"})["entities"][q]
-            v = claim(e, "P115")
-            if not v:
+            cs = [c for c in e.get("claims", {}).get("P115", []) if c.get("mainsnak", {}).get("datavalue") and c.get("rank") != "deprecated"]
+            cur = [c for c in cs if c.get("rank") == "preferred"] or [c for c in cs if "P582" not in c.get("qualifiers", {})] or cs[-1:]
+            ids = [c["mainsnak"]["datavalue"]["value"]["id"] for c in cur]
+            if not ids:
                 print("-", club, "stadion yo'q"); continue
-            vq = v["id"]
+            vq = ids[0]
+            if len(ids) > 1:  # bir nechta "hozirgi" stadion — eng sig'imlisi (P1083) tanlanadi (eski kichik stadionlar emas)
+                ents = wd({"action": "wbgetentities", "ids": "|".join(ids[:10]), "props": "claims"})["entities"]
+                cap = lambda q: float(((claim(ents.get(q, {}), "P1083") or {}).get("amount") or "0").lstrip("+") or 0)
+                vq = max(ids[:10], key=cap)
             ve = wd({"action": "wbgetentities", "ids": vq, "props": "claims|labels", "languages": "en"})["entities"][vq]
             img = claim(ve, "P18")
             sname = (ve.get("labels", {}).get("en") or {}).get("value", "")
