@@ -12,6 +12,8 @@ API = f"https://api.telegram.org/bot{BOT}/"
 UA = {"user-agent": "InterFutbolBot/1.1 (https://t.me/Inter_Futbol_TV)"}
 H = {"x-key": KEY, "user-agent": "InterFutbolStadium"}
 LIMIT = int(os.environ.get("LIMIT", "15"))
+# Wikidata'da eski stadion "hozirgi" deb turgan klublar — to'g'ri stadion nomi bilan qidiriladi
+OVR = {"Eintracht Frankfurt": "Waldstadion Frankfurt", "Brentford": "Brentford Community Stadium"}
 OK_LIC = re.compile(r"^(CC0|Public domain|PD|CC BY(-SA)? \d(\.\d)?)", re.I)
 
 
@@ -83,6 +85,10 @@ def main():
             if not ids:
                 print("-", club, "stadion yo'q"); continue
             vq = ids[0]
+            if club in OVR:
+                sr = wd({"action": "wbsearchentities", "search": OVR[club], "language": "en", "type": "item", "limit": 3}).get("search", [])
+                if sr:
+                    ids, vq = [sr[0]["id"]], sr[0]["id"]
             if len(ids) > 1:  # bir nechta "hozirgi" stadion — eng sig'imlisi (P1083) tanlanadi (eski kichik stadionlar emas)
                 ents = wd({"action": "wbgetentities", "ids": "|".join(ids[:10]), "props": "claims"})["entities"]
                 cap = lambda q: float(((claim(ents.get(q, {}), "P1083") or {}).get("amount") or "0").lstrip("+") or 0)
