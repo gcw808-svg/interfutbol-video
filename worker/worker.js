@@ -2499,7 +2499,7 @@ function entHtmlNoLogo(text, ents) {
   return out;
 }
 async function logoFix(env, chat, ids, opt = {}) {
-  CLUB_RE = null;
+  CLUB_RE = null; await mergeCemoji(env);
   const edits = [], bad = [];
   for (const mid of ids) {
     const fw = await tg(env, "forwardMessage", { chat_id: chat, from_chat_id: env.CHANNEL, message_id: mid, disable_notification: true });
@@ -2507,6 +2507,7 @@ async function logoFix(env, chat, ids, opt = {}) {
     await tg(env, "deleteMessage", { chat_id: chat, message_id: m.message_id }).catch(() => null);
     const text = m.caption != null ? m.caption : m.text; const ents = m.caption != null ? m.caption_entities : m.entities;
     if (!text) { bad.push(mid + " (matnsiz)"); continue; }
+    await natTeamNeeds(env, text); // logo roboti navbatiga (terma jamoa logotipi yo'q bo'lsa)
     let html = addLogos(hashFix(CANON.reduce((a, [re, v]) => a.replace(re, v), entHtmlNoLogo(text, ents))));
     if (opt.tur) { const h2 = html.replace(/(\d{4}-yil [^,\n]+, [^\n]*?)(?:, \d+-tur)?\. (U[çc]h?ra[şs]h?uv)/, "$1, " + opt.tur + "-tur. $2"); if (h2 === html) { bad.push(mid + " (tur joyi topilmadi)"); continue; } html = h2; }
     edits.push({ id: mid, html });
