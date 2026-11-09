@@ -1491,8 +1491,10 @@ async function libIndex(env, m, edited) {
     }
     if (g.people > 1) how += " ⚠️ Suratda " + g.people + " kishi bor — kartaga bir kishilik surat yaxshiroq.";
   }
-  const [main, rest] = cap.split("\n")[0].split("|");
-  const name = main.trim(); const key = pnorm(name);
+  let [main, rest] = cap.split("\n")[0].split("|");
+  // izohga klub nomi ham qo'shilgan bo'lsa ("Oston Urunov  Persepolis") — klub nomi olib tashlanadi, surat odamning o'ziga yoziladi
+  { const m0 = main.replace(/\s+/g, " ").trim(); for (const [, , ns] of CLUB_EMOJI) for (const c of ns) if (c.length >= 4 && m0.toLowerCase().endsWith(" " + c.toLowerCase()) && m0.length - c.length >= 5) { main = m0.slice(0, m0.length - c.length).trim(); break; } }
+  const name = main.replace(/\s+/g, " ").trim(); const key = pnorm(name);
   if (!key) { if (name === "-" && edited) { const F0 = await kvGet(env, "faces", {}); let hit = 0; for (const k of Object.keys(F0)) { const n0 = F0[k].ph.length; F0[k].ph = F0[k].ph.filter((p) => p.m !== m.message_id); hit += n0 - F0[k].ph.length; if (!F0[k].ph.length) delete F0[k]; } if (hit) { await kvPut(env, "faces", F0); await libReply(env, m, "🗑 Surat bazadan olib tashlandi."); } } return; }
   const al = [name, ...String(rest || "").split(",")].map((x) => x.trim()).filter(Boolean);
   const small = ph.width && ph.height && Math.min(ph.width, ph.height) < 500;
