@@ -1467,6 +1467,7 @@ async function healthCheck(env) { const now = Date.now(), d = tashDate(now), h =
   homeLogo = homeLogo || crest(ci.home); awayLogo = awayLogo || crest(ci.away);
   const clubLogos = extra.home ? [] : (await Promise.all((ci.clubs || []).map(async (n) => (await logoUrl(env, n, idx)) || crest(n)))).filter(Boolean).slice(0, 4);
   if ((extra.home && extra.away) && (!homeLogo || !awayLogo)) { try { const ad = (await getAdmins(env))[0]; if (ad) await tg(env, "sendMessage", { chat_id: ad, text: "⚠️ Nazorat: natija kartochkasida klub logotipi topilmadi — " + [!homeLogo && ci.home, !awayLogo && ci.away].filter(Boolean).join(", ") + ". Claude logotipni qo'shib, /kartaqayta bilan kartochkani yangilaydi." }); } catch (e) {} } leagueLogo = leagueLogo || espnLgLogo(extra.compName || lgName) || (await leagueLogoUrl(env, lgName, idx)) || "";
+  await mergeCemoji(env); if (ci.home && homeLogo) await emojiNeed(env, ci.home, homeLogo); if (ci.away && awayLogo) await emojiNeed(env, ci.away, awayLogo); await natTeamNeeds(env, post);
   await kvPut(env, "cjob:" + id, { ...ci, home: cardNm(ci.home), away: cardNm(ci.away), league: newAlpha(lgName || ""), homeLogo, awayLogo, leagueLogo, leftLogo: (extra.kind || "res") === "news" ? await leftCrest(env, post, ci, idx) : "", clubLogos, stat: (extra.kind || "res") === "news" && /#Raqamlarda/i.test(post) ? statFromPost(post) : null, face: (extra.kind || "res") === "news" ? await faceUrl(env, post) : "", legion: (extra.kind || "res") === "news" && /#Legionerlar\b/i.test(post) ? await legionFromPost(env, post, idx) : null, ...(extra.goals || {}), chan: post, to: to || null, url: extra.url || null, kind: extra.kind || "res", story: (!to && (extra.kind || "res") === "res" && STORY_BIG.test(ci.home + " " + ci.away + " " + (lgName || ""))) ? await storyQuota(env) : 0 }, { expirationTtl: 7 * 3600 });
   if (to) return ghDispatch(env, "card.yml", { job: id });
   const w = await kvGet(env, "resWait", []); w.push({ id, post, t: Date.now(), url: extra.url || null, kind: extra.kind || "res" }); await kvPut(env, "resWait", w.slice(-20));
@@ -1978,6 +1979,34 @@ async function statPlayer(env, p) {
   const agree = (k) => { const v = Object.values(src).filter(Boolean).map((x) => x[k]).filter((x) => x != null); for (const x of v) if (v.filter((y) => y === x).length >= 2) return x; return null; };
   const g = agree("g"), a = agree("a"); if (g == null) return { fail: JSON.stringify(src).slice(0, 300) };
   return { p, name: fm.name || p.n, club: fm.primaryTeam?.teamName || "", lg: lgName, season: ml.season, g, a, mp: st.Matches, min: st["Minutes played"], rating: st.Rating, sh: src.espn?.sh, n: Object.values(src).filter(Boolean).length, srcs: Object.keys(src).filter((k) => src[k]).join("+") + (src.espnErr ? " (ESPN: " + src.espnErr + ")" : "") };
+}
+// robot qo'shgan logotiplar (KV cemoji) — postlarda ishlatish uchun CLUB_EMOJI'ga qo'shiladi (avval faqat buyruqlarda edi; endi cron'da ham)
+async function mergeCemoji(env) { try { const cm = await kvGet(env, "cemoji", {}); let add = false; for (const [n, id] of Object.entries(cm)) if (!CLUB_EMOJI.some((c) => c[0] === id)) { CLUB_EMOJI.push([id, "⚽", [n]]); add = true; } if (add) CLUB_RE = null; } catch (e) {} }
+// LOGO ROBOTI (2026-11-09, Bahtiyor aka: "internetdagi manbalardan olib joylaydigan robot"): logotip to'plamida yo'q klub/terma jamoa navbatga
+// yoziladi (nom + gerb manzili); emojiadd.yml (har kuni yoki navbat to'lsa) gerbni "Inter Futbol klublar" to'plamiga qo'shadi va /ub/emap bilan bog'laydi.
+async function emojiNeed(env, name, logo) {
+  try {
+    if (!name || !logo) return;
+    const has = (x) => CLUB_EMOJI.some((c) => c[2].some((y) => norm(y) === norm(x)));
+    if (has(name)) return;
+    const cm = await kvGet(env, "cemoji", {}); if (cm[name]) return;
+    const q = await kvGet(env, "emojiNeed", []); if (q.some((x) => x.n === name)) return;
+    q.push({ n: name, u: logo, t: Date.now() }); await kvPut(env, "emojiNeed", q.slice(-60));
+  } catch (e) {}
+}
+const EN_COUNTRY = (cc) => { try { return new Intl.DisplayNames(["en"], { type: "region" }).of(cc); } catch (e) { return ""; } };
+async function natTeamNeeds(env, post) {
+  // postdagi "X terma jamoasi" — logotipi bo'lmasa navbatga (O'zbekiston — UFA gerbi; boshqalar — federatsiya gerbi Vikipediyadan)
+  const t = String(post || "").replace(/<[^>]+>|[⟦⟧]/g, "");
+  for (const [cc, names] of COUNTRY_FLAGS) {
+    if (cc.length !== 2) continue;
+    const nm = names.split("|")[0];
+    const re = new RegExp("(" + [...new Set(names.split("|").flatMap((n) => [n, newAlpha(n)]))].map((x) => x.replace(/[.*+?^${}()|[\]\\\/]/g, "\\$&").replace(/'/g, "['‘’ʻʼ`]?")).join("|") + ")\\s+(?:milliy\\s+)?(?:futbol\\s+)?terma\\s+jamoa", "iu");
+    if (!re.test(t)) continue;
+    const key = nm + " terma jamoasi";
+    const logo = cc === "UZ" ? await ufaCrest(env) : await wikiCrest(EN_COUNTRY(cc) + " national football team").catch(() => "");
+    await emojiNeed(env, key, logo);
+  }
 }
 // KLUB GERBINI QIDIRISH — bir nechta manba (2026-11-09, Bahtiyor aka: "logo topa olmasang qidir, bir nechta manbadan ol"):
 // 1) o'z bazamiz (lgidx) 2) ESPN ro'yxati 3) FotMob qidiruvi (asl nom, lotincha, qisqa nom) 4) Wikipedia (klub maqolasining rasmi)
@@ -2617,6 +2646,8 @@ async function ubRoute(env, req, url) {
         return J(j ? { html: j.edit ? j.html2 : j.html, edit: j.edit || 0, story: j.story || null, check: j.check || 0, photo: j.photo, editPhoto: j.editPhoto || null, edits: j.edits || null, video: j.video, channel: env.CHANNEL, session: await kvGet(env, "usess", null) } : {});
   }
   if (url.pathname === "/ub/lgput" && req.method === "POST") { const nm = (url.searchParams.get("name") || "").trim(); if (!nm) return J({ ok: false }); await env.STATE.put("lgb:" + nm.toLowerCase(), await req.arrayBuffer()); const idx = await kvGet(env, "lgidx", {}); const k = Object.keys(idx).find((x) => x.toLowerCase() === nm.toLowerCase()) || nm; idx[k] = { t: url.searchParams.get("t") || "club", a: (idx[k] && idx[k].a) || [] }; await kvPut(env, "lgidx", idx); const cm = await kvGet(env, "cemoji", {}); const lc = nm.toLowerCase(); const emoji = CLUB_EMOJI.some((c) => c[2].some((x) => x.toLowerCase() === lc)) || Object.keys(cm).some((x) => x.toLowerCase() === lc); return J({ ok: true, emoji }); }
+  if (url.pathname === "/ub/emojineed") return J(await kvGet(env, "emojiNeed", []));
+  if (url.pathname === "/ub/emojidone" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); const q = (await kvGet(env, "emojiNeed", [])).filter((x) => !(b0.names || []).includes(x.n)); await kvPut(env, "emojiNeed", q); return J({ ok: true, left: q.length }); }
   if (url.pathname === "/ub/emap" && req.method === "POST") { const m = await req.json(); const cur = await kvGet(env, "cemoji", {}); Object.assign(cur, m); await kvPut(env, "cemoji", cur); return J({ ok: true, n: Object.keys(cur).length }); }
   if (url.pathname === "/ub/ttslex") return J((await kvGet(env, "ttslex", null)) || {});
   if (url.pathname === "/ub/ttsjob") return J((await kvGet(env, "ttsj:" + url.searchParams.get("id"), null)) || {});
@@ -2700,7 +2731,7 @@ async function onUpdate(env, u, ctx) {
     const cp = u.channel_post || u.edited_channel_post;
     if (cp) { if (cp.chat && cp.chat.id === LIB_CHAT) await libIndex(env, cp, !!u.edited_channel_post); return; } // asosiy kanal postlari e'tiborsiz
     const admins = await getAdmins(env);
-  { const cm = await kvGet(env, "cemoji", {}); let add = false; for (const [n, id] of Object.entries(cm)) if (!CLUB_EMOJI.some((c) => c[0] === id)) { CLUB_EMOJI.push([id, "⚽", [n]]); add = true; } if (add) CLUB_RE = null; }
+  await mergeCemoji(env);
 
     if (u.message) {
     const msg = u.message, chat = msg.chat.id, text = BTN[msg.text] || msg.text || "";
@@ -3649,6 +3680,7 @@ if (url.pathname === "/hook" && req.method === "POST") {
 
     async scheduled(event, env, ctx) {
     env = kvSpy(env);
+    await mergeCemoji(env);
     ctx.waitUntil((async () => {
     const err = async (k, e) => { try { const v = { k, t: Date.now(), e: String((e && (e.stack || e.message)) || e).slice(0, 300) }; const L = await kvGet(env, "cronLog", []); const p = L.filter((x) => x.k === k).pop(); if (p && v.t - p.t < 1800e3) return; L.push(v); await kvPut(env, "cronLog", L.slice(-40), { expirationTtl: 3 * 86400 }); await kvPut(env, "cronErr", v, { expirationTtl: 3 * 86400 }); } catch (x) {} }; const G = ({ "*/10 * * * *": "A", "2-59/10 * * * *": "B", "5-59/10 * * * *": "C" })[event.cron] || "all"; const on = (g) => G === "all" || G === g;
     let st = null;
@@ -3666,6 +3698,7 @@ if (url.pathname === "/hook" && req.method === "POST") {
       if (hh === 13 && [0, 4].includes(new Date(xd + "T00:00:00Z").getUTCDay()) && (await kvGet(env, "statDay", "")) !== xd) { await kvPut(env, "statDay", xd, { expirationTtl: 3 * 86400 }); await statsPost(env); }
       if (hh === 15 && (await kvGet(env, "scDay", "")) !== xd) { await kvPut(env, "scDay", xd, { expirationTtl: 3 * 86400 }); await scorersAuto(env); }
       if (hh === 7) await fmWatch(env);
+      if (hh === 4 && (await kvGet(env, "emojiDay", "")) !== xd) { const q = await kvGet(env, "emojiNeed", []); if (q.length) { await kvPut(env, "emojiDay", xd, { expirationTtl: 3 * 86400 }); await ghDispatch(env, "emojiadd.yml", {}); } }
       if (hh === 11 && new Date(xd + "T00:00:00Z").getUTCDay() === 1 && (await kvGet(env, "ideaGenDay", "")) !== xd) { await kvPut(env, "ideaGenDay", xd, { expirationTtl: 3 * 86400 }); await ideaGen(env); }
       if (hh === 18 && (await kvGet(env, "ideaDay", "")) !== xd) { await kvPut(env, "ideaDay", xd, { expirationTtl: 3 * 86400 }); await ideaApply(env); }
       if (hh === 12 && (await kvGet(env, "lgwDay", "")) !== xd) { await kvPut(env, "lgwDay", xd, { expirationTtl: 3 * 86400 }); await legionWeekly(env); }

@@ -1,0 +1,16 @@
+name: emojiadd
+# Logo roboti: navbatdagi klub/terma jamoa gerblarini maxsus emoji to'plamiga qo'shadi (worker har kuni 04:00 da navbat bo'lsa ishga tushiradi)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install -q pillow requests
+      - env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        run: python3 emojiadd.py
