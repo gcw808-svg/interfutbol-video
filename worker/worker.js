@@ -199,7 +199,7 @@ function addFlags(p) {
     for (const [cc, names] of COUNTRY_FLAGS) {
       const fl = cc.length === 2 ? FLAG(cc) : cc;
       const alts = [...new Set(names.split("|").flatMap((n) => [n, newAlpha(n)]))].sort((a, b) => b.length - a.length).map(rq).join("|");
-      FLAG_RE.push([new RegExp("(^|[^\\p{L}\\p{N}\\u{1F1E6}-\\u{1F1FF}\\u{E007F}]\\s?)(⟦?)(" + alts + ")(?=(?:lik|liklar|likni|ning|ni|ga|da|dan|dagi|day)?(?![\\p{L}\\p{N}]))", "iu"), fl]);
+      FLAG_RE.push([new RegExp("(^|[^\\p{L}\\p{N}])(⟦?)(?<![\\u{1F1E6}-\\u{1F1FF}\\u{E007F}\\u0003]\\s?⟦?)(" + alts + ")(?=(?:lik|liklar|likni|ning|ni|ga|da|dan|dagi|day)?(?![\\p{L}\\p{N}]))", "iu"), fl]);
     }
   }
   for (const [re, fl] of FLAG_RE) p = p.replace(re, (m, a, b, c) => a + fl + " " + b + c);
@@ -1981,7 +1981,7 @@ async function statPlayer(env, p) {
   return { p, name: fm.name || p.n, club: fm.primaryTeam?.teamName || "", lg: lgName, season: ml.season, g, a, mp: st.Matches, min: st["Minutes played"], rating: st.Rating, sh: src.espn?.sh, n: Object.values(src).filter(Boolean).length, srcs: Object.keys(src).filter((k) => src[k]).join("+") + (src.espnErr ? " (ESPN: " + src.espnErr + ")" : "") };
 }
 // robot qo'shgan logotiplar (KV cemoji) — postlarda ishlatish uchun CLUB_EMOJI'ga qo'shiladi (avval faqat buyruqlarda edi; endi cron'da ham)
-async function mergeCemoji(env) { try { const cm = await kvGet(env, "cemoji", {}); let add = false; for (const [n, id] of Object.entries(cm)) if (!CLUB_EMOJI.some((c) => c[0] === id)) { CLUB_EMOJI.push([id, "⚽", [n]]); add = true; } if (add) CLUB_RE = null; } catch (e) {} }
+async function mergeCemoji(env) { try { const cm = await kvGet(env, "cemoji", {}); let add = false; for (const [n, id] of Object.entries(cm)) if (!CLUB_EMOJI.some((c) => c[0] === id)) { const ns = [n]; const tm = n.match(/^(.+) terma jamoasi$/); if (tm) ns.unshift(tm[1] + " milliy futbol terma jamoasi", tm[1] + " milliy terma jamoasi", tm[1] + " futbol terma jamoasi"); CLUB_EMOJI.push([id, "⚽", ns]); add = true; } if (add) CLUB_RE = null; } catch (e) {} }
 // LOGO ROBOTI (2026-11-09, Bahtiyor aka: "internetdagi manbalardan olib joylaydigan robot"): logotip to'plamida yo'q klub/terma jamoa navbatga
 // yoziladi (nom + gerb manzili); emojiadd.yml (har kuni yoki navbat to'lsa) gerbni "Inter Futbol klublar" to'plamiga qo'shadi va /ub/emap bilan bog'laydi.
 async function emojiNeed(env, name, logo) {
@@ -2508,7 +2508,8 @@ async function logoFix(env, chat, ids, opt = {}) {
     const text = m.caption != null ? m.caption : m.text; const ents = m.caption != null ? m.caption_entities : m.entities;
     if (!text) { bad.push(mid + " (matnsiz)"); continue; }
     await natTeamNeeds(env, text); // logo roboti navbatiga (terma jamoa logotipi yo'q bo'lsa)
-    let html = addLogos(hashFix(CANON.reduce((a, [re, v]) => a.replace(re, v), entHtmlNoLogo(text, ents))));
+    const FLAGS_RX = /(?:[\u{1F1E6}-\u{1F1FF}]{2}|\u{1F3F4}[\u{E0061}-\u{E007A}]+\u{E007F})\s?/gu;
+    let html = addLogos(hashFix(CANON.reduce((a, [re, v]) => a.replace(re, v), entHtmlNoLogo(text, ents).replace(FLAGS_RX, ""))));
     if (opt.tur) { const h2 = html.replace(/(\d{4}-yil [^,\n]+, [^\n]*?)(?:, \d+-tur)?\. (U[çc]h?ra[şs]h?uv)/, "$1, " + opt.tur + "-tur. $2"); if (h2 === html) { bad.push(mid + " (tur joyi topilmadi)"); continue; } html = h2; }
     edits.push({ id: mid, html });
   }
