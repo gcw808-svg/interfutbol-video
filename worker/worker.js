@@ -2420,11 +2420,14 @@ async function resRedo(env, chat, mid) {
   // logotiplar (custom emoji) matnda oddiy emoji bo'lib keladi — olib tashlanadi, addLogos ularni qayta qo'yadi
   let cap = String(m.caption || m.text || "").replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}\uFE0F\u200D\u{E0000}-\u{E007F}]/gu, "").replace(/[ \t]{2,}/g, " ").split("\n").map((l) => l.trim()).join("\n");
   for (const [a, b] of Object.entries(ESPN_NAME)) if (a !== b && !cap.includes(b)) cap = cap.replace(new RegExp("(^|[^\\p{L}])" + a.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![\\p{L}])", "gu"), "$1" + b);
-  let L = cap.split("\n"); let t0 = (L.find((l) => /^.+?\s+\d{1,2}:\d{1,2}\s+.+$/.test(l.trim())) || L[0] || "").trim();
+  let L = cap.split("\n"); let t0 = (L.slice(0, 3).find((l) => /^.+?\s+\d{1,2}:\d{1,2}\s+.+$/.test(l.trim())) || L[0] || "").trim();
   // qisqartirilgan klub nomi logotip to'plamida bo'lmasa — rasmiy to'liq nomga ("Charlotte" -> "Charlotte FC")
   { const s0 = t0.match(/^(.+?)\s+\d{1,2}:\d{1,2}\s+(.+)$/); if (s0) { if (!ALIAS_LC) teamName({ name: "x" }); for (const n of [s0[1].trim(), s0[2].trim()]) { if (ALIAS_LC.has(n.toLowerCase())) continue; const full = CLUB_EMOJI.flatMap(([, , ns]) => ns).find((x) => x !== n && teamName0({ name: x }) === n); if (full) cap = cap.replace(new RegExp("(^|[^\\p{L}#])" + n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![\\p{L}]| FC| SK| SC)", "gu"), "$1" + full); } L = cap.split("\n"); t0 = (L.find((l) => /^.+?\s+\d{1,2}:\d{1,2}\s+.+$/.test(l.trim())) || L[0] || "").trim(); } }
   const sm = t0.match(/^(.+?)\s+(\d{1,2}):(\d{1,2})\s+(.+)$/); if (!sm) throw new Error("birinchi qatorda hisob topilmadi — bu natija posti emas");
   const H = sm[1].trim(), A = sm[4].trim();
+  // himoya (2026-11-09, 173-post): matndagi gap klub nomi deb olinmasin — ikkala tomon ham qisqa nom bo'lishi shart
+  const okName = (x) => x.length <= 40 && x.split(/\s+/).length <= 4 && /^[\p{Lu}0-9]/u.test(x) && !/[.,;!?]/.test(x);
+  if (!okName(H) || !okName(A)) throw new Error("natija qatori topilmadi: birinchi qator «Uy 2:1 Mehmon» ko'rinishida emas. Avval /tahrir bilan sarlavhani shu ko'rinishga keltiring.");
   const side = (l) => (l.startsWith(H + ":") ? "h" : l.startsWith(A + ":") ? "a" : "");
   const goals = { hg: [], ag: [], hr: [], ar: [] }; let sec = "";
   for (const l0 of L.slice(1)) { const l = l0.trim(); if (/^Gollar:$/i.test(l)) { sec = "g"; continue; } if (/^Qizil karto[cç]h?ka:$/i.test(l)) { sec = "r"; continue; } if (!l || l.startsWith("#")) { if (!l) sec = sec; continue; } const sd = side(l); if (!sec || !sd) continue;
