@@ -1,0 +1,26 @@
+name: sendimg
+# Tayyor rasmni (tmpimg/ ichidagi) bot orqali admin chatiga yuboradi — keyin kanal postiga qo'yish uchun (2026-11-09)
+on:
+  workflow_dispatch:
+    inputs:
+      file:
+        required: true
+      chat:
+        required: true
+      caption:
+        default: ""
+permissions:
+  contents: read
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          F: ${{ inputs.file }}
+          C: ${{ inputs.chat }}
+          CAP: ${{ inputs.caption }}
+        run: |
+          curl -sS -F chat_id="$C" -F caption="$CAP" -F photo=@"$F" "https://api.telegram.org/bot$BOT_TOKEN/sendPhoto" | head -c 300
