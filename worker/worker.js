@@ -2025,7 +2025,7 @@ async function wikiCrest(name) {
     if (!/f\.?c\.?|football|club|spor|united|city|athletic|\bsk\b|\bfk\b/i.test(r.title + " " + (r.snippet || ""))) continue;
     const sm = await (await fetch("https://en.wikipedia.org/api/rest_v1/page/summary/" + encodeURIComponent(r.title.replace(/ /g, "_")), { headers: h })).json();
     const u = (sm.thumbnail && sm.thumbnail.source) || (sm.originalimage && sm.originalimage.source) || "";
-    if (u && /\.(svg|png)/i.test(u)) return u.replace(/\/\d+px-/, "/400px-");
+    if (u && /\.(svg|png)/i.test(u) && !/Flag_of/i.test(u)) return u.replace(/\/\d+px-/, "/330px-"); // Vikipediya faqat standart o'lchamlarni beradi; bayroq gerb emas
   }
   return "";
 }

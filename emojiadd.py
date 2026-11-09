@@ -14,6 +14,9 @@ H = {"x-key": KEY, "user-agent": "InterFutbolEmoji"}
 
 
 def png100(url):
+    import re
+    if "wikimedia.org" in url:
+        url = re.sub(r"/\d+px-", "/330px-", url)  # Vikipediya faqat standart o'lchamlarni beradi
     ua = "InterFutbolBot/1.1 (https://t.me/Inter_Futbol_TV)" if "wiki" in url else "Mozilla/5.0"
     r = requests.get(url, headers={"user-agent": ua}, timeout=40)
     r.raise_for_status()
