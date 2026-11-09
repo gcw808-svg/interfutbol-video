@@ -39,10 +39,13 @@ def club_qid(name):
 
 
 def claim(ent, p):
-    for c in ent.get("claims", {}).get(p, []):
-        v = c.get("mainsnak", {}).get("datavalue", {}).get("value")
-        if v:
-            return v
+    # hozirgi qiymat: "preferred" darajali yoki tugash sanasi (P582) yo'q bo'lgani; eski (tarixiy) stadionlar tanlanmaydi
+    cs = [c for c in ent.get("claims", {}).get(p, []) if c.get("mainsnak", {}).get("datavalue")]
+    cs = [c for c in cs if c.get("rank") != "deprecated"]
+    pref = [c for c in cs if c.get("rank") == "preferred"]
+    cur = [c for c in cs if "P582" not in c.get("qualifiers", {})]
+    for c in (pref or cur or cs[-1:]):
+        return c["mainsnak"]["datavalue"]["value"]
     return None
 
 
@@ -62,7 +65,8 @@ def commons(fname):
 
 def main():
     have = requests.get(W + "/ub/stadiums", headers=H, timeout=30).json()
-    todo = [c for c in clubs() if c not in have]
+    redo = [x.strip() for x in os.environ.get("REDO", "").split(",") if x.strip()]
+    todo = redo + [c for c in clubs() if c not in have and c not in redo]
     print("klublar:", len(todo), "yangi; bazada:", len(have))
     added = 0
     for club in todo:
