@@ -2224,10 +2224,29 @@ async function ufaCrest(env) {
   }
   return WURL + "/lg/ufa";
 }
+// FotMob qidiruvi (2026-11-09): logo bazada topilmasa — klub nomi bo'yicha; sarlavhada klub bo'lmasa — odamning hozirgi klubi
+const FM_LOGO = (id) => "https://images.fotmob.com/image_resources/logo/teamlogo/" + id + ".png";
+async function fmSuggest(term) { try { const j = await (await fetch("https://www.fotmob.com/api/data/search/suggest?lang=en&term=" + encodeURIComponent(term), { headers: { "user-agent": "Mozilla/5.0 InterFutbolBot" } })).json(); return (Array.isArray(j) ? j : []).flatMap((g) => g.suggestions || []); } catch (e) { return []; } }
+async function fmTeamLogo(name) { const ok = (x) => pnorm(x).replace(/\b(fc|cf|sc|ac|club)\b/g, "").trim(); const s = (await fmSuggest(name)).find((x) => x.type === "team" && (ok(x.name) === ok(name) || ok(x.name).includes(ok(name)) || ok(name).includes(ok(x.name)))); return s ? FM_LOGO(s.id) : ""; }
+async function personCrest(post) {
+  // sarlavhadagi ismlar ketma-ketligi ("Zinedine Zidane Kylian Mbappé ...") — juft-juft so'rab, klubi bor birinchi odam
+  const t = String(post || "").replace(/<[^>]+>|[⟦⟧]/g, "").split("\n").find((l) => l.trim()) || "";
+  const W = []; for (const m of t.matchAll(/[\p{Lu}][\p{L}'’.-]+/gu)) W.push({ w: m[0].replace(/(ning|niki|ga|ni|dan|da|lar)$/u, ""), i: m.index });
+  const runs = []; let cur = []; for (const x of W) { if (cur.length && x.i - (cur[cur.length - 1].i + cur[cur.length - 1].w.length) > 6) { runs.push(cur); cur = []; } cur.push(x); } if (cur.length) runs.push(cur);
+  let q = 0;
+  for (const r of runs) for (let k = 0; k + 1 < r.length && q < 4; k += 2) {
+    const nm = r[k].w + " " + r[k + 1].w; q++;
+    const s = (await fmSuggest(nm)).find((x) => x.type === "player" && x.teamId && pnorm(x.name).includes(pnorm(r[k + 1].w)));
+    if (s) return FM_LOGO(s.teamId);
+  }
+  return "";
+}
 const leftCrest = async (env, post, ci, idx) => {
-  if (NAT_RE.test(String(post || "").replace(/<[^>]+>/g, ""))) return await ufaCrest(env);
-  if (ci && ci.subj && ci.subj.t === "club") { const n = ci.subj.n; return (await logoUrl(env, n, idx || {})) || ESPN_CREST[n] || ESPN_CREST[Object.keys(ESPN_CREST).find((k) => norm(k) === norm(n))] || ""; }
-  return ""; // mavzu liga bo'lsa — chapda liga logotipi (avvalgidek)
+  const plain = String(post || "").replace(/<[^>]+>/g, "");
+  if (NAT_RE.test(plain) || /#Legionerlar\b|(O['‘’ʻ]|Ö)zbek legionerlari/i.test(plain)) return await ufaCrest(env); // legionerlar ham — o'zbek futboli
+  if (ci && ci.subj && ci.subj.t === "club") { const n = ci.subj.n; return (await logoUrl(env, n, idx || {})) || ESPN_CREST[n] || ESPN_CREST[Object.keys(ESPN_CREST).find((k) => norm(k) === norm(n))] || (await fmTeamLogo(n)); }
+  if (ci && ci.subj) return ""; // mavzu liga bo'lsa — chapda liga logotipi (avvalgidek)
+  return await personCrest(post); // mavzu topilmadi — sarlavhadagi odamning klubi
 };
 function cardInfo(post, extra = {}) {
   const plain = String(post || "").replace(/<[^>]+>/g, "").replace(/[⟦⟧]/g, "");
