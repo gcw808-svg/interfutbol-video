@@ -2949,7 +2949,7 @@ return;
           const m = fw && fw.result; if (m) await tg(env, "deleteMessage", { chat_id: chat, message_id: m.message_id }).catch(() => null);
           const ph = m && m.photo ? m.photo[m.photo.length - 1] : null;
           if (!ph) { out.push(mid + ": rasm yo'q"); continue; }
-          out.push(mid + ": " + (await tgphSetImg(env, url, WURL + "/ph/" + encodeURIComponent(ph.file_id), true)));
+          out.push(mid + ": " + (await tgphSetImg(env, url, WURL + "/ph/" + encodeURIComponent(ph.file_id), !/^\/maqolarasm!/.test(text)))); // "/maqolarasm!" — o'z rasmi bo'lsa ham almashtiriladi
         } catch (e) { out.push(mid + ": xato " + String(e.message || e).slice(0, 60)); }
       }
       await tg(env, "sendMessage", { chat_id: chat, text: "🖼 Maqola rasmlari:\n" + (out.join("\n") || "ro'yxat bo'sh") });
