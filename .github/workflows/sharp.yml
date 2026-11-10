@@ -1,0 +1,30 @@
+name: sharp
+# Rasmlar bazasi tiniqlashtiruvchisi (sharp.py): kichik suratni 4 marta kattalashtirib kanalga qayta yuklaydi, bazada almashtiradi, xira aslini o'chiradi.
+# Bot yangi kichik surat tushganda o'zi ishga tushiradi (only=xabar raqami, del=1); qo'lda: only bo'sh — bazadagi hammasi.
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        default: ""
+      del:
+        default: "0"
+      purge:
+        default: "0"
+permissions:
+  contents: read
+concurrency:
+  group: sharp
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install -q requests pillow numpy onnxruntime
+      - env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          ONLY: ${{ inputs.only }}
+          DEL: ${{ inputs.del }}
+          PURGE: ${{ inputs.purge }}
+        run: python3 sharp.py

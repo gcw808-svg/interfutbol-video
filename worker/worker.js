@@ -1539,7 +1539,10 @@ async function libIndex(env, m, edited) {
   const ix = P.ph.findIndex((p) => p.uid === ph.file_unique_id);
   if (ix < 0) P.ph.push(rec); else P.ph[ix] = { ...P.ph[ix], ...rec, t: P.ph[ix].t || rec.t };
   await kvPut(env, "faces", F);
-  if (!m.media_group_id || how || cap === String(m.caption || "").trim()) await libReply(env, m, (small ? "⚠️ Surat kichik (" + ph.width + "×" + ph.height + ") — saqlandi, kartada sifati avtomatik oshiriladi; kattaroq surat yuborsangiz yanada yaxshi. " : "✅ ") + name + " — bazada " + P.ph.length + " ta surat." + (box ? " ✂️ Asosiy odam topildi." : m.__guess ? " ⚠️ Asosiy odam ramkasi aniqlanmadi" + (g.err ? " (" + g.err + ")" : "") + "." : "") + how + (how ? " Noto'g'ri bo'lsa — suratga javob qilib to'g'ri ismni yozing." : ""));
+  // yangi kichik (yoki o'lchami noma'lum) surat — tiniqlashtiruvchi (sharp.yml) ishga tushadi: tiniq nusxa saqlanadi, xira asli o'chiriladi
+  let sharpQ = false;
+  if (ix < 0 && (!rec.w || Math.min(rec.w, rec.h) < 1000)) { try { sharpQ = await ghDispatch(env, "sharp.yml", { only: String(m.message_id), del: "1" }, true); } catch (e) {} }
+  if (!m.media_group_id || how || cap === String(m.caption || "").trim()) await libReply(env, m, (small ? "⚠️ Surat kichik (" + ph.width + "×" + ph.height + ") — saqlandi. " : "✅ ") + name + " — bazada " + P.ph.length + " ta surat." + (box ? " ✂️ Asosiy odam topildi." : m.__guess ? " ⚠️ Asosiy odam ramkasi aniqlanmadi" + (g.err ? " (" + g.err + ")" : "") + "." : "") + how + (how ? " Noto'g'ri bo'lsa — suratga javob qilib to'g'ri ismni yozing." : "") + (sharpQ ? " ✨ Tiniqlashtirilmoqda — 1–2 daqiqada tiniq nusxasi shu yerga tushadi, xira asli o'chiriladi." : ""));
 }
 // Surat kimligini aniqlash: FAQAT izoh matni va suratda yozilgan so'zlar (formadagi familiya, ekrandagi yozuv); yuz yoki tashqi ko'rinishdan EMAS
 async function libGuess(env, ph, cap) {
@@ -2673,6 +2676,19 @@ async function ubRoute(env, req, url) {
   if (url.pathname === "/ub/lgput" && req.method === "POST") { const nm = (url.searchParams.get("name") || "").trim(); if (!nm) return J({ ok: false }); await env.STATE.put("lgb:" + nm.toLowerCase(), await req.arrayBuffer()); const idx = await kvGet(env, "lgidx", {}); const k = Object.keys(idx).find((x) => x.toLowerCase() === nm.toLowerCase()) || nm; idx[k] = { t: url.searchParams.get("t") || "club", a: (idx[k] && idx[k].a) || [] }; await kvPut(env, "lgidx", idx); const cm = await kvGet(env, "cemoji", {}); const lc = nm.toLowerCase(); const emoji = CLUB_EMOJI.some((c) => c[2].some((x) => x.toLowerCase() === lc)) || Object.keys(cm).some((x) => x.toLowerCase() === lc); return J({ ok: true, emoji }); }
   if (url.pathname === "/ub/emojineed") return J(await kvGet(env, "emojiNeed", []));
   // STADIONLAR BAZASI (2026-11-10): robot (stadium.yml) Wikimedia Commons'dan erkin litsenziyali stadion suratini rasmlar kanaliga tashlab, shu yerga yozadi
+  // RASMLAR BAZASI TINIQLASHTIRUVCHISI (sharp.py, 2026-11-10): /ub/faces — baza; /ub/facesharp — tiniq nusxa eski surat o'rniga yoziladi
+  if (url.pathname === "/ub/faces") return J(await kvGet(env, "faces", {}));
+  if (url.pathname === "/ub/facesharp" && req.method === "POST") {
+    const b0 = await req.json().catch(() => ({})); const F = await kvGet(env, "faces", {}); let hit = 0;
+    for (const P of Object.values(F)) for (const p of P.ph || []) {
+      if (b0.om && b0.f && p.m === b0.om) { p.f = b0.f; p.uid = b0.uid; p.w = b0.w || 0; p.h = b0.h || 0; p.m = b0.m; p.low = p.w && Math.min(p.w, p.h) < 500 ? 1 : 0; p.sr = 1; if (b0.del) delete p.om; else p.om = b0.om; hit++; }
+      else if (b0.dims && p.m === b0.dims) { p.w = b0.w || 0; p.h = b0.h || 0; p.low = p.w && Math.min(p.w, p.h) < 500 ? 1 : 0; hit++; }
+      else if (b0.keep && p.m === b0.keep) { p.om = b0.om; hit++; }
+      else if (b0.purged && p.om === b0.purged) { delete p.om; hit++; }
+    }
+    if (hit) await kvPut(env, "faces", F);
+    return J({ ok: hit > 0 });
+  }
   if (url.pathname === "/ub/stadiums") return J(await kvGet(env, "stadiums", {}));
   if (url.pathname === "/ub/stadium" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); if (!b0.club || !b0.f) return J({ ok: false }); const S = await kvGet(env, "stadiums", {}); S[b0.club] = { s: b0.s || "", f: b0.f, c: b0.c || "", t: Date.now() }; await kvPut(env, "stadiums", S); return J({ ok: true, n: Object.keys(S).length }); }
   if (url.pathname === "/ub/emojidone" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); const q = (await kvGet(env, "emojiNeed", [])).filter((x) => !(b0.names || []).includes(x.n)); await kvPut(env, "emojiNeed", q); return J({ ok: true, left: q.length }); }
