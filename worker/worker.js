@@ -1503,6 +1503,8 @@ async function libIndex(env, m, edited) {
   // va haqiqiy o'lcham aniqlanadi; kartada surat shu odam atrofida qirqiladi. Ism tahrirlanganda (edited) qayta tahlil qilinmaydi — eski ramka saqlanadi.
   const g = (!edited || m.__guess) ? await libGuess(env, ph, cap) : {};
   if (g.w && g.h) { ph.width = g.w; ph.height = g.h; }
+  // "?" bilan qayta tahlilda ism aniqlanmasa — surat bazada qaysi ismga yozilgan bo'lsa, o'sha ism qoladi (faqat ramka va o'lcham yangilanadi)
+  if (m.__guess && !(g.name && isFaceName(g.name))) { const F0 = await kvGet(env, "faces", {}); for (const k of Object.keys(F0)) if ((F0[k].ph || []).some((p) => p.uid === ph.file_unique_id)) { g.name = F0[k].n; g.from = "caption"; } }
   if (needName) {
     // izohda ism yo'q — AI izoh matni va suratdagi yozuvlardan (formadagi familiya/raqam, gerb) aniqlaydi; yuzdan aniqlanmaydi
     if (g.watermark) { await libReply(env, m, "ℹ️ Suratda boshqa kanal/agentlik belgisi bor — namuna sifatida qoldi, bazaga qo'shilmadi."); return; }
@@ -1531,7 +1533,8 @@ async function libIndex(env, m, edited) {
   // tahrir: shu post boshqa ismga yozilgan bo'lsa — o'sha yerdan olib tashlanadi
   for (const k of Object.keys(F)) { F[k].ph = (F[k].ph || []).filter((p) => p.m !== m.message_id || k === key); if (!F[k].ph.length && k !== key) delete F[k]; }
   const P = (F[key] = F[key] || { n: name, al: [], ph: [], u: 0 });
-  P.n = name; P.al = [...new Set([...(P.al || []), ...al])].slice(0, 12);
+  const na = (x) => (String(x || "").match(/[^\x00-\x7f]/g) || []).length;
+  P.n = P.n && pnorm(P.n) === key && na(P.n) > na(name) ? P.n : name; P.al = [...new Set([...(P.al || []), ...al])].slice(0, 12);
   const rec = { f: ph.file_id, uid: ph.file_unique_id, w: ph.width || 0, h: ph.height || 0, m: m.message_id, low: small ? 1 : 0, t: Date.now(), ...(box ? { b: box } : {}) };
   const ix = P.ph.findIndex((p) => p.uid === ph.file_unique_id);
   if (ix < 0) P.ph.push(rec); else P.ph[ix] = { ...P.ph[ix], ...rec, t: P.ph[ix].t || rec.t };
@@ -1545,11 +1548,12 @@ async function libGuess(env, ph, cap) {
   const prompt = `You catalogue a football (soccer) photo library. NEVER identify a person from their face, body, hair or appearance. Decide who the photo shows ONLY from (1) the caption text below and (2) words printed in the image (a surname printed on a shirt, on-screen captions). If neither clearly names the single main person, leave "name" empty. You may give the club only from a clearly visible crest or printed club name, and a shirt number only if clearly visible.
 Caption: """${String(cap || "").slice(0, 1500)}"""
 Answer ONLY JSON: {"name":"full name in official Latin spelling, or empty","from":"caption" or "shirt" or "","club":"","number":"","people":number of prominent people in sharp focus whose head is visible (do NOT count blurred background people, the crowd, or someone cut off by the image edge with only an arm, shoulder or back showing),"main":[ymin,xmin,ymax,xmax] bounding box (integers 0-1000, relative to image height/width) of the visible body of the ONE main person - the largest, sharpest and most central one - or [] if there is no person,"watermark":true if logos/watermarks of TV channels, websites or news agencies are overlaid on the photo}`;
-  try {
-    const raw = await callGemini(env, img ? [{ text: prompt }, { inline_data: { mime_type: "image/jpeg", data: toB64(img) } }] : prompt, 0, Date.now() + 25000, 512, false, true);
+  for (let k = 0; k < 2; k++) try { // javob buzuq kelsa yoki model javob bermasa — yana bir marta
+    const raw = await callGemini(env, img ? [{ text: prompt }, { inline_data: { mime_type: "image/jpeg", data: toB64(img) } }] : prompt, 0, Date.now() + 22000, 1024, false, true);
     const j = JSON.parse(raw.match(/\{[\s\S]*\}/)[0]);
     return { name: String(j.name || "").trim(), from: j.from || "", club: String(j.club || "").trim(), number: String(j.number || "").replace(/\D/g, ""), people: Number(j.people) || 1, watermark: j.watermark === true || j.watermark === "true", box: mainBox(j.main), w: iw, h: ih };
-  } catch (e) { return { w: iw, h: ih }; }
+  } catch (e) { console.log("libGuess", k, String(e && e.message || e).slice(0, 200)); }
+  return { w: iw, h: ih };
 }
 // asosiy odam ramkasi: Gemini [ymin,xmin,ymax,xmax] (0–1000) → [x0,y0,x1,y1] (0–1); juda kichik yoki buzuq ramka olinmaydi
 function mainBox(a) {
