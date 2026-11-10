@@ -2383,6 +2383,21 @@ async function qcCheck(env, text, media) {
   { const MON = { yanvar: 0, fevral: 1, mart: 2, aprel: 3, may: 4, iyun: 5, iyul: 6, avgust: 7, sentabr: 8, sentyabr: 8, oktabr: 9, noyabr: 10, dekabr: 11 };
     for (const mm of plain.matchAll(/(\d{4})-yil(?:ning)?\s+(\d{1,2})(?:[–-]\d{1,2})?-(yanvar|fevral|mart|aprel|may|iyun|iyul|avgust|sentabr|sentyabr|oktabr|noyabr|dekabr)(\S*)/gi)) {
       if (/gacha/i.test(mm[4])) continue; const t = Date.UTC(+mm[1], MON[mm[3].toLowerCase()], +mm[2]); if (t - Date.now() > 300 * 86400e3) fatal.push("sana juda uzoq kelajakda: " + mm[0].replace(/\S*$/, "") + " — yil xato bo'lishi mumkin"); } }
+  // FUTBOLCHI VA LIGA MOSLIGI (2026-11-11: "Eldor Shomurodov Italiya chempionatida gol urdi" chiqib ketgan — u İstanbul Başakşehir'da, Süper Lig'da o'ynaydi):
+  // gapda bizning futbolchi, o'yin/gol so'zi va uning klubi ligasi bo'lmagan boshqa liga bo'lsa (o'tmish haqida bo'lmasa) — post to'xtatiladi.
+  try {
+    const LGS = [["Serie A", /Serie A\b|Italiya [cç]h?empionat/i], ["Premier League", /Premier League|Angliya [cç]h?empionat|Prem[ye]+r-?liga/i], ["LaLiga", /La ?Liga|Ispaniya [cç]h?empionat/i], ["Bundesliga", /Bundesliga|Germaniya [cç]h?empionat/i], ["Ligue 1", /Ligue 1|Fransiya [cç]h?empionat/i], ["Süper Lig", /S[uü]per Lig|Turkiya [cç]h?empionat/i], ["Saudiya Pro ligasi", /Saudi(?:ya)? Pro|Saudiya Arabistoni [cç]h?empionat|Roshn/i], ["MLS", /\bMLS\b/]];
+    const OWN = [["Başakşehir", "Süper Lig"], ["Rizespor", "Süper Lig"], ["Manchester City", "Premier League"], ["Al-Nassr", "Saudiya Pro ligasi"], ["Inter Miami", "MLS"]];
+    for (const fp of FOCUS_PLAYERS) {
+      const own1 = (OWN.find(([cn]) => fp.club.test(cn)) || [])[1] || null;
+      const nm = fp.n.replace(/[⟦⟧]/g, ""), fam = nm.split(" ").pop();
+      for (const sen of plain.replace(/[⟦⟧]/g, "").split(/(?<=[.!?])\s+|\n+/)) {
+        if (!sen.includes(fam) && !fp.k.some((k) => sen.toLowerCase().includes(k))) continue;
+        if (!/gol|o['ʻ‘’]?yin|öyin|maydon|uçrashuv|uchrashuv|darvoza|tarkib/i.test(sen) || /avval|ilgari|sobiq|o['ʻ‘’]?ynagan|öynagan|urgan|kiritgan|davrida|tarixida|rekord|faoliyat|\d{4}[–-]\d{2,4}|ijara/i.test(sen)) continue;
+        for (const [ln, re] of LGS) if (re.test(sen) && ln !== own1) fatal.push(nm + " " + (own1 ? own1 + "da" : "boshqa ligada") + " o'ynaydi, matnda esa " + ln + " — fakt xato bo'lishi mumkin");
+      }
+    }
+  } catch (e) {}
   if (/#Natija\b/.test(raw) && !/\d+-tur|final|guruh|pley-?off|saralash|1\/\d+|bosqich|raund/i.test(plain)) warn.push("natija postida tur ko'rsatilmagan");
   for (const [re, why] of AUDIT_RULES) if (re.test(plain.replace(/⟦[^⟧]*⟧/g, (m) => m.replace(/ı/g, "i")))) warn.push(why);
   // logotipsiz klub: ESPN ro'yxatidagi klub matnda bor, lekin logotip to'plamida (CLUB_EMOJI) yo'q
