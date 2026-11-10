@@ -1055,6 +1055,12 @@ def render_news_v(j):
     elif face:
         im.paste(_grade(_cover(face, Wd, 900, 0.12), base, acc), (0, 0))
         _vfade(im, 600, 900, dark)
+        if j.get("credit"):  # erkin litsenziyali surat muallifi va litsenziyasi (CC BY / BY-SA talabi) — suratning o'ng yuqori burchagida kichik yozuv
+            dc = ImageDraw.Draw(im, "RGBA")
+            cf = font("med", 20)
+            tw = dc.textlength(j["credit"], font=cf)
+            dc.rounded_rectangle([Wd - tw - 40, 18, Wd - 18, 54], radius=10, fill=(0, 0, 0, 110))
+            dc.text((Wd - 29, 36), j["credit"], font=cf, fill=(255, 255, 255, 215), anchor="rm")
         _accent_band(im, 872, acc, Wd)
         d = ImageDraw.Draw(im, "RGBA")
         d.rectangle([0, 900, Wd, Hd], fill=tuple(dark))

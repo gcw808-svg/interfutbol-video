@@ -7,6 +7,14 @@ on:
         default: "15"
       redo:
         default: ""
+      file:
+        default: ""
+      sname:
+        default: ""
+      club:
+        default: ""
+      post:
+        default: ""
   schedule:
     - cron: "41 2 * * 3"
 permissions:
@@ -17,9 +25,13 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - run: pip install -q requests
+      - run: pip install -q requests pillow numpy onnxruntime
       - env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           LIMIT: ${{ inputs.limit || '15' }}
           REDO: ${{ inputs.redo }}
+          FILE: ${{ inputs.file }}
+          SNAME: ${{ inputs.sname }}
+          CLUB: ${{ inputs.club }}
+          POST: ${{ inputs.post }}
         run: python3 stadium.py

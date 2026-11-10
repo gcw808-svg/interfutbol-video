@@ -1576,7 +1576,7 @@ Example: {"name":"","from":"","club":"","number":"","people":1,"main":[120,300,1
   return { w: iw, h: ih, err: (img ? "" : "surat o'qilmadi; ") + err };
 }
 // "/rasm ID" ishi: kanal postining rasmini tasdiqlangan dizayndagi kartochkaga almashtirish (matn va tugma saqlanadi); /ub/rasm ham shuni chaqiradi
-async function rasmRedo(env, chat, mid, quiet) {
+async function rasmRedo(env, chat, mid, quiet, ov) {
       const fw = await tg(env, "forwardMessage", { chat_id: chat, from_chat_id: env.CHANNEL, message_id: mid, disable_notification: true }); const m = fw && fw.result;
       if (!m) { await tg(env, "sendMessage", { chat_id: chat, text: "Kanalda bu raqamli post topilmadi." }); return false; }
       await tg(env, "deleteMessage", { chat_id: chat, message_id: m.message_id }).catch(() => null);
@@ -1585,9 +1585,9 @@ async function rasmRedo(env, chat, mid, quiet) {
       const idx = await kvGet(env, "lgidx", {}); const ci = cardInfo(html, idx);
       const [leagueLogo0, ...cls] = await Promise.all([leagueLogoUrl(env, ci.league, idx), ...(ci.clubs || []).map((n) => logoUrl(env, n, idx))]);
       const clubLogos = cls.map((u, k) => u || ESPN_CREST[ci.clubs[k]] || "").filter(Boolean).slice(0, 4);
-      const own = await ownFace(env, mid, html);
+      const own = ov ? { face: ov.face, po: 0 } : await ownFace(env, mid, html); // ov — aniq berilgan surat (masalan stadion), muallif yozuvi bilan
       const id = "n" + Date.now().toString(36) + "r";
-      await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", leftLogo: await leftCrest(env, html, ci, idx), clubLogos, stat: /#Raqamlarda/i.test(html) ? statFromPost(html) : null, face: own ? own.face : await faceUrl(env, html), po: own ? own.po : 0, legion: /#Legionerlar\b/i.test(html) ? await legionFromPost(env, html, idx) : null, scorers: /#Topurarlar\b/i.test(html) ? await scorersFromPost(env, html, idx) : null, chan: html, rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 }); await repWatch(env, id, mid);
+      await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", leftLogo: await leftCrest(env, html, ci, idx), clubLogos, stat: /#Raqamlarda/i.test(html) ? statFromPost(html) : null, face: own ? own.face : await faceUrl(env, html), po: own ? own.po : 0, credit: ov ? ov.credit : "", legion: /#Legionerlar\b/i.test(html) ? await legionFromPost(env, html, idx) : null, scorers: /#Topurarlar\b/i.test(html) ? await scorersFromPost(env, html, idx) : null, chan: html, rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 }); await repWatch(env, id, mid);
       await ghDispatch(env, "card.yml", { job: id });
       if (!quiet) await tg(env, "sendMessage", { chat_id: chat, text: "🖼 " + mid + "-post uchun yangi kartochka chizilmoqda (liga: " + (ci.league || "—") + ", klublar: " + (ci.clubs || []).join(", ") + "). 2–3 daqiqada rasm almashtiriladi." });
       return true;
@@ -2772,7 +2772,7 @@ async function ubRoute(env, req, url) {
     if (!P.ph.some((p) => p.uid === b0.uid || (b0.src && p.src === b0.src))) P.ph.push({ f: b0.f, uid: b0.uid, w: b0.w || 0, h: b0.h || 0, m: b0.m, low: b0.w && Math.min(b0.w, b0.h) < 500 ? 1 : 0, t: Date.now(), sr: 1, ...(b0.b ? { b: b0.b, x: b0.x || [], d: 1 } : {}), ...(b0.src ? { src: b0.src } : {}) });
     await kvPut(env, "faces", F); return J({ ok: true, n: P.ph.length });
   }
-  if (url.pathname === "/ub/rasm" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); return J({ ok: await rasmRedo(env, admin, +b0.id, true) }); }
+  if (url.pathname === "/ub/rasm" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); return J({ ok: await rasmRedo(env, admin, +b0.id, true, b0.face ? { face: String(b0.face), credit: String(b0.credit || "").slice(0, 90) } : null) }); }
   if (url.pathname === "/ub/facesharp" && req.method === "POST") {
     const b0 = await req.json().catch(() => ({})); const F = await kvGet(env, "faces", {}); let hit = 0;
     for (const P of Object.values(F)) for (const p of P.ph || []) {

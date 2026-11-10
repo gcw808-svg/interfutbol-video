@@ -65,7 +65,44 @@ def commons(fname):
     return {"url": ii.get("thumburl") or ii["url"], "lic": lic, "art": art or "noma'lum muallif", "page": ii.get("descriptionurl", "")}
 
 
+def one():
+    # BITTA ANIQ SURAT (2026-11-11, Bahtiyor aka: "Maine Road stadioni rasmini top, shu postga joyla, bazaga saqla"):
+    # FILE — Commons fayl nomi ("File:" siz), SNAME — stadion nomi, CLUB — klub, POST — kanal posti (rasmi shu surat bilan qayta chiziladi).
+    # Faqat erkin litsenziya; kichik bo'lsa tiniqlashtiriladi (o'zgartirish izohda ko'rsatiladi — CC BY-SA talabi); fayl bo'lib yuklanadi.
+    import io
+    from PIL import Image
+    fname, sname, club, post = os.environ["FILE"], os.environ.get("SNAME", ""), os.environ.get("CLUB", ""), os.environ.get("POST", "")
+    c = commons(fname)
+    if not c:
+        print("- litsenziya mos emas yoki fayl topilmadi:", fname); sys.exit(1)
+    full = requests.get("https://commons.wikimedia.org/w/api.php", params={"action": "query", "format": "json", "titles": "File:" + fname, "prop": "imageinfo", "iiprop": "url", "iiurlwidth": 2560}, headers=UA, timeout=40).json()
+    ii = next(iter(full["query"]["pages"].values()))["imageinfo"][0]
+    im = Image.open(io.BytesIO(requests.get(ii.get("thumburl") or ii["url"], headers=UA, timeout=120).content)).convert("RGB")
+    w0, h0 = im.size
+    note = ""
+    if min(im.size) < 1000:
+        import sharp
+        im = sharp.sr4(im)
+        if max(im.size) > 2560:
+            k = 2560 / max(im.size)
+            im = im.resize((int(im.width * k + .5), int(im.height * k + .5)), Image.LANCZOS)
+        note = "; tiniqlashtirilgan"
+    buf = io.BytesIO(); im.save(buf, "JPEG", quality=93, subsampling=0)
+    credit = f"Foto: {c['art']}, {c['lic']}"
+    cap = f"🏟 {sname}" + (f" — {club}" if club else "") + f"\n{credit} (Wikimedia Commons){note}"
+    r = requests.post(API + "sendDocument", data={"chat_id": LIB, "caption": cap[:1000], "disable_notification": True, "disable_content_type_detection": True}, files={"document": ("".join(ch if ch.isalnum() else "_" for ch in sname)[:40] + ".jpg", buf.getvalue(), "image/jpeg")}, timeout=180).json()
+    if not r.get("ok"):
+        print("- yuborilmadi", r.get("description")); sys.exit(1)
+    fid = r["result"]["document"]["file_id"]
+    print("+", sname, f"{w0}x{h0} -> {im.width}x{im.height}", "|", credit, "| xabar", r["result"]["message_id"])
+    print("baza:", requests.post(W + "/ub/stadium", headers={**H, "content-type": "application/json"}, data=json.dumps({"club": sname, "s": sname, "f": fid, "c": credit}), timeout=30).text[:120])
+    if post.isdigit():
+        print("post:", requests.post(W + "/ub/rasm", headers={**H, "content-type": "application/json"}, data=json.dumps({"id": int(post), "face": W + "/ph/" + requests.utils.quote(fid, safe=""), "credit": f"{credit} · Wikimedia Commons"}), timeout=60).text[:120])
+
+
 def main():
+    if os.environ.get("FILE"):
+        return one()
     have = requests.get(W + "/ub/stadiums", headers=H, timeout=30).json()
     redo = [x.strip() for x in os.environ.get("REDO", "").split(",") if x.strip()]
     todo = redo + [c for c in clubs() if c not in have and c not in redo]
