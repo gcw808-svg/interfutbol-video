@@ -788,13 +788,52 @@ def get_photo(url):
         try:
             req = urllib.request.Request(url, headers={"user-agent": UA})
             with urllib.request.urlopen(req, timeout=40) as r:
-                return Image.open(io.BytesIO(r.read())).convert("RGB")
+                im = Image.open(io.BytesIO(r.read())).convert("RGB")
+            im.info["box"] = _url_box(url)
+            return im
         except Exception as e:
             print("photo", e)
     return None
 
 
+def _url_box(url):
+    # Rasmlar bazasi suratida asosiy odam ramkasi manzilda keladi: ...?b=x0,y0,x1,y1 (0..1) — worker faceUrl
+    try:
+        q = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query).get("b")
+        v = [float(x) for x in q[0].split(",")] if q else []
+        if len(v) == 4 and 0 <= v[0] < v[2] <= 1 and 0 <= v[1] < v[3] <= 1:
+            return v
+    except Exception as e:
+        print("box", e)
+    return None
+
+
+def _person_window(sw, sh, w, h, box, maxup=1.6):
+    # ASOSIY ODAM ATROFIDA QIRQISH (2026-11-10): w:h nisbatli oyna odamning o'rtasiga qo'yiladi, boshi tepada joy bilan qoladi;
+    # odam kichik bo'lsa yaqinlashtiriladi (lekin surat maxup martadan ortiq kattalashmaydi), chetdagi begona bo'laklar kadrdan chiqadi.
+    a = w / h
+    fw, fh = (sw, sw / a) if sw / sh <= a else (sh * a, sh)  # suratga sig'adigan eng katta oyna
+    bx0, by0, bx1, by1 = box[0] * sw, box[1] * sh, box[2] * sw, box[3] * sh
+    pw, ph = bx1 - bx0, by1 - by0
+    need_w = max(pw * 1.25, ph * 1.12 * a)  # odam eni va bo'yi (zaxira bilan) sig'ishi uchun
+    ww = min(fw, max(need_w, w / maxup, fw * 0.55))
+    wh = ww / a
+    x = (bx0 + bx1) / 2 - ww / 2
+    y = by0 - ph * 0.08 if ph * 1.12 >= wh else (by0 + by1) / 2 - wh / 2  # odam oynadan uzun bo'lsa — bosh tomoni qoladi
+    x = min(max(0, x), sw - ww)
+    y = min(max(0, y), sh - wh)
+    return x, y, x + ww, y + wh
+
+
 def _cover(src, w, h, fy=0.15):
+    box = (getattr(src, "info", None) or {}).get("box")
+    if box:
+        x0, y0, x1, y1 = _person_window(src.width, src.height, w, h, box)
+        r = w / (x1 - x0)
+        im = src.resize((w, h), Image.LANCZOS, box=(x0, y0, x1, y1))
+        if r > 1.3:
+            im = im.filter(ImageFilter.UnsharpMask(radius=2, percent=60, threshold=2))
+        return im
     r = max(w / src.width, h / src.height)
     im = src.resize((int(src.width * r + .5), int(src.height * r + .5)), Image.LANCZOS)
     x = (im.width - w) // 2

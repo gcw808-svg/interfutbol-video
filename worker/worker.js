@@ -1497,10 +1497,14 @@ async function libIndex(env, m, edited) {
   if (!cap && m.media_group_id) cap = (await kvGet(env, "fgrp:" + m.media_group_id, "")) || "";
   else if (cap && m.media_group_id && !edited) await kvPut(env, "fgrp:" + m.media_group_id, cap, { expirationTtl: 900 });
   let how = "";
-  if (!cap || !isFaceName(cap.split("\n")[0].split("|")[0]) || cap.split("\n").length > 2) {
+  const needName = !cap || !isFaceName(cap.split("\n")[0].split("|")[0]) || cap.split("\n").length > 2;
+  if (needName && edited && !m.__guess) return;
+  // SURAT TAHLILI (2026-11-10, Bahtiyor aka: "rasmni ko'rib, odamni ajratadigan robot"): har bir yangi suratda asosiy odam ramkasi (gavda, yuzdan tanimasdan)
+  // va haqiqiy o'lcham aniqlanadi; kartada surat shu odam atrofida qirqiladi. Ism tahrirlanganda (edited) qayta tahlil qilinmaydi — eski ramka saqlanadi.
+  const g = (!edited || m.__guess) ? await libGuess(env, ph, cap) : {};
+  if (g.w && g.h) { ph.width = g.w; ph.height = g.h; }
+  if (needName) {
     // izohda ism yo'q — AI izoh matni va suratdagi yozuvlardan (formadagi familiya/raqam, gerb) aniqlaydi; yuzdan aniqlanmaydi
-    if (edited && !m.__guess) return;
-    const g = await libGuess(env, ph, cap);
     if (g.watermark) { await libReply(env, m, "ℹ️ Suratda boshqa kanal/agentlik belgisi bor — namuna sifatida qoldi, bazaga qo'shilmadi."); return; }
     if (g.name && isFaceName(g.name)) { cap = g.name; how = g.from === "shirt" ? " (formadagi yozuvdan aniqlandi)" : " (izohdan aniqlandi)"; if (m.media_group_id) await kvPut(env, "fgrp:" + m.media_group_id, cap, { expirationTtl: 900 }); }
     else {
@@ -1509,37 +1513,52 @@ async function libIndex(env, m, edited) {
       else if (!m.media_group_id || cap) await libReply(env, m, "❓ Kimligini aniqlay olmadim (izohda ism yo'q, formada familiya ko'rinmaydi). Suratga javob qilib ismini yozing.");
       return;
     }
-    if (g.people > 1) how += " ⚠️ Suratda " + g.people + " kishi bor — kartaga bir kishilik surat yaxshiroq.";
   }
+  if (g.people > 1) how += g.box ? " ⚠️ Suratda " + g.people + " kishi bor — eng yirik va markazdagisi asosiy deb olindi, kartada shu odam atrofida qirqiladi." : " ⚠️ Suratda " + g.people + " kishi bor — kartaga bir kishilik surat yaxshiroq.";
   let [main, rest] = cap.split("\n")[0].split("|");
   // izohga klub nomi ham qo'shilgan bo'lsa ("Oston Urunov  Persepolis") — klub nomi olib tashlanadi, surat odamning o'ziga yoziladi
   { const m0 = main.replace(/\s+/g, " ").trim(); for (const [, , ns] of CLUB_EMOJI) for (const c of ns) if (c.length >= 4 && m0.toLowerCase().endsWith(" " + c.toLowerCase()) && m0.length - c.length >= 5) { main = m0.slice(0, m0.length - c.length).trim(); break; } }
   const name = main.replace(/\s+/g, " ").trim(); const key = pnorm(name);
   if (!key) { if (name === "-" && edited) { const F0 = await kvGet(env, "faces", {}); let hit = 0; for (const k of Object.keys(F0)) { const n0 = F0[k].ph.length; F0[k].ph = F0[k].ph.filter((p) => p.m !== m.message_id); hit += n0 - F0[k].ph.length; if (!F0[k].ph.length) delete F0[k]; } if (hit) { await kvPut(env, "faces", F0); await libReply(env, m, "🗑 Surat bazadan olib tashlandi."); } } return; }
   const al = [name, ...String(rest || "").split(",")].map((x) => x.trim()).filter(Boolean);
-  const small = ph.width && ph.height && Math.min(ph.width, ph.height) < 500;
   const F = await kvGet(env, "faces", {});
+  // shu surat avval yozilgan bo'lsa (ism tuzatilyapti) — o'lchami va odam ramkasi saqlanadi
+  let old = null; for (const k of Object.keys(F)) for (const p of F[k].ph || []) if (p.uid === ph.file_unique_id) old = p;
+  if (old && !g.w) { ph.width = ph.width || old.w || 0; ph.height = ph.height || old.h || 0; }
+  const box = g.box || (old && old.b) || null;
+  const small = ph.width && ph.height && Math.min(ph.width, ph.height) < 500;
   for (const k of Object.keys(F)) if (!isFaceName(F[k].n)) delete F[k]; // eski noto'g'ri yozuvlarni tozalash
   // tahrir: shu post boshqa ismga yozilgan bo'lsa — o'sha yerdan olib tashlanadi
   for (const k of Object.keys(F)) { F[k].ph = (F[k].ph || []).filter((p) => p.m !== m.message_id || k === key); if (!F[k].ph.length && k !== key) delete F[k]; }
   const P = (F[key] = F[key] || { n: name, al: [], ph: [], u: 0 });
   P.n = name; P.al = [...new Set([...(P.al || []), ...al])].slice(0, 12);
-  if (!P.ph.some((p) => p.uid === ph.file_unique_id)) P.ph.push({ f: ph.file_id, uid: ph.file_unique_id, w: ph.width || 0, h: ph.height || 0, m: m.message_id, low: small ? 1 : 0, t: Date.now() });
+  const rec = { f: ph.file_id, uid: ph.file_unique_id, w: ph.width || 0, h: ph.height || 0, m: m.message_id, low: small ? 1 : 0, t: Date.now(), ...(box ? { b: box } : {}) };
+  const ix = P.ph.findIndex((p) => p.uid === ph.file_unique_id);
+  if (ix < 0) P.ph.push(rec); else P.ph[ix] = { ...P.ph[ix], ...rec, t: P.ph[ix].t || rec.t };
   await kvPut(env, "faces", F);
-  if (!m.media_group_id || how || cap === String(m.caption || "").trim()) await libReply(env, m, (small ? "⚠️ Surat kichik (" + ph.width + "×" + ph.height + ") — saqlandi, lekin kattaroq surat yuborsangiz yaxshi. " : "✅ ") + name + " — bazada " + P.ph.length + " ta surat." + how + (how ? " Noto'g'ri bo'lsa — suratga javob qilib to'g'ri ismni yozing." : ""));
+  if (!m.media_group_id || how || cap === String(m.caption || "").trim()) await libReply(env, m, (small ? "⚠️ Surat kichik (" + ph.width + "×" + ph.height + ") — saqlandi, lekin kattaroq surat yuborsangiz yaxshi. " : "✅ ") + name + " — bazada " + P.ph.length + " ta surat." + (box ? " ✂️ Asosiy odam topildi." : "") + how + (how ? " Noto'g'ri bo'lsa — suratga javob qilib to'g'ri ismni yozing." : ""));
 }
 // Surat kimligini aniqlash: FAQAT izoh matni va suratda yozilgan so'zlar (formadagi familiya, ekrandagi yozuv); yuz yoki tashqi ko'rinishdan EMAS
 async function libGuess(env, ph, cap) {
-  let img = null;
-  try { const f = await tg(env, "getFile", { file_id: ph.file_id }); if (f.ok) { const r = await fetch(`https://api.telegram.org/file/bot${env.BOT_TOKEN}/${f.result.file_path}`); img = await (await env.IMAGES.input(r.body).transform({ width: 1024 }).output({ format: "image/jpeg", quality: 80 })).response().arrayBuffer(); } } catch (e) {}
+  let img = null, iw = 0, ih = 0;
+  try { const f = await tg(env, "getFile", { file_id: ph.file_id }); if (f.ok) { const r = await fetch(`https://api.telegram.org/file/bot${env.BOT_TOKEN}/${f.result.file_path}`); const raw0 = await r.arrayBuffer(); try { const inf = await env.IMAGES.info(new Blob([raw0]).stream()); iw = inf.width || 0; ih = inf.height || 0; } catch (e) {} img = await (await env.IMAGES.input(new Blob([raw0]).stream()).transform({ width: 1024 }).output({ format: "image/jpeg", quality: 80 })).response().arrayBuffer(); } } catch (e) {}
   const prompt = `You catalogue a football (soccer) photo library. NEVER identify a person from their face, body, hair or appearance. Decide who the photo shows ONLY from (1) the caption text below and (2) words printed in the image (a surname printed on a shirt, on-screen captions). If neither clearly names the single main person, leave "name" empty. You may give the club only from a clearly visible crest or printed club name, and a shirt number only if clearly visible.
 Caption: """${String(cap || "").slice(0, 1500)}"""
-Answer ONLY JSON: {"name":"full name in official Latin spelling, or empty","from":"caption" or "shirt" or "","club":"","number":"","people":number of prominent people,"watermark":true if logos/watermarks of TV channels, websites or news agencies are overlaid on the photo}`;
+Answer ONLY JSON: {"name":"full name in official Latin spelling, or empty","from":"caption" or "shirt" or "","club":"","number":"","people":number of prominent people in sharp focus whose head is visible (do NOT count blurred background people, the crowd, or someone cut off by the image edge with only an arm, shoulder or back showing),"main":[ymin,xmin,ymax,xmax] bounding box (integers 0-1000, relative to image height/width) of the visible body of the ONE main person - the largest, sharpest and most central one - or [] if there is no person,"watermark":true if logos/watermarks of TV channels, websites or news agencies are overlaid on the photo}`;
   try {
     const raw = await callGemini(env, img ? [{ text: prompt }, { inline_data: { mime_type: "image/jpeg", data: toB64(img) } }] : prompt, 0, Date.now() + 25000, 512, false, true);
     const j = JSON.parse(raw.match(/\{[\s\S]*\}/)[0]);
-    return { name: String(j.name || "").trim(), from: j.from || "", club: String(j.club || "").trim(), number: String(j.number || "").replace(/\D/g, ""), people: Number(j.people) || 1, watermark: j.watermark === true || j.watermark === "true" };
-  } catch (e) { return {}; }
+    return { name: String(j.name || "").trim(), from: j.from || "", club: String(j.club || "").trim(), number: String(j.number || "").replace(/\D/g, ""), people: Number(j.people) || 1, watermark: j.watermark === true || j.watermark === "true", box: mainBox(j.main), w: iw, h: ih };
+  } catch (e) { return { w: iw, h: ih }; }
+}
+// asosiy odam ramkasi: Gemini [ymin,xmin,ymax,xmax] (0–1000) → [x0,y0,x1,y1] (0–1); juda kichik yoki buzuq ramka olinmaydi
+function mainBox(a) {
+  if (!Array.isArray(a) || a.length !== 4) return null;
+  const v = a.map((x) => Math.min(1, Math.max(0, Number(x) / 1000)));
+  if (v.some((x) => !isFinite(x))) return null;
+  const [y0, x0, y1, x1] = v;
+  if (x1 - x0 < 0.08 || y1 - y0 < 0.15) return null;
+  return [x0, y0, x1, y1].map((x) => Math.round(x * 1000) / 1000);
 }
 // klub tarkibidan raqam bo'yicha futbolchi (FotMob) — faqat taxmin, Bahtiyor aka tasdiqlaydi (eski surat bo'lsa raqam boshqa odamniki bo'lishi mumkin)
 async function squadByNumber(club, num) {
@@ -1556,7 +1575,7 @@ async function faceUrl(env, post) {
     const F = await kvGet(env, "faces", {}); const k = faceFor(F, post); if (!k) return "";
     const ph = (F[k].ph || []).filter((p) => !p.low); const L = ph.length ? ph : F[k].ph || []; if (!L.length) return "";
     const p = L[Math.floor(Date.now() / 3600e3) % L.length];
-    return WURL + "/ph/" + encodeURIComponent(p.f);
+    return WURL + "/ph/" + encodeURIComponent(p.f) + (p.b ? "?b=" + p.b.join(",") : "");
   } catch (e) { return ""; }
 }
 // post matnidan kim haqida ekanini topadi: sarlavhadagi birinchi tanilgan ism (to'liq ism yoki qo'shimcha yozilishlar)
