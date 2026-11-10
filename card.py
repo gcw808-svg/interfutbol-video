@@ -847,9 +847,13 @@ def _person_window(sw, sh, w, h, box, maxup=1.6, excl=None):
     wh = ww / a
     x = (bx0 + bx1) / 2 - ww / 2
     y = by0 - ph * 0.08 if ph * 1.12 >= wh else (by0 + by1) / 2 - wh / 2  # odam oynadan uzun bo'lsa — bosh tomoni qoladi
-    x = min(max(xmin, x), xmax - ww)
-    y = min(max(0, y), sh - wh)
-    return x, y, x + ww, y + wh
+    x = max(xmin, min(x, xmax - ww))
+    y = max(0.0, min(y, sh - wh))
+    # yaxlitlash xatolari manfiy yoki suratdan tashqari qiymat bermasligi uchun (2026-11-10: "box offset can't be negative" — 10 ta post chizilmay qolgan edi)
+    x0, y0, x1, y1 = max(0.0, x), max(0.0, y), min(float(sw), x + ww), min(float(sh), y + wh)
+    if x1 - x0 < 2 or y1 - y0 < 2:
+        return 0.0, 0.0, float(sw), float(sh)
+    return x0, y0, x1, y1
 
 
 _SR = {}
