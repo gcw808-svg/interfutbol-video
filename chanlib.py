@@ -69,7 +69,7 @@ def main():
                 why = why or ("" if pr.get("people") == 1 else f"suratda {pr.get('people')} kishi")
                 why = why or ("" if pr.get("box") else "asosiy odam topilmadi")
                 if why:
-                    print(pid, "O'TKAZILDI:", why, "|", pr.get("title"), "|", pr.get("err", "")); sk += 1; continue
+                    print(pid, "O'TKAZILDI:", why, "|", pr.get("title"), "|", pr.get("err", ""), "|", pr.get("dbg", "")); sk += 1; continue
                 f = tg("getFile", data={"file_id": pr["f"]})
                 im = Image.open(io.BytesIO(requests.get(f"https://api.telegram.org/file/bot{BOT}/{f['result']['file_path']}", timeout=120).content)).convert("RGB")
                 w0, h0 = im.size

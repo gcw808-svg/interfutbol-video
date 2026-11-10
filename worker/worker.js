@@ -1562,7 +1562,7 @@ Example: {"name":"","from":"","club":"","number":"","people":1,"main":[120,300,1
   for (let k = 0; k < 2; k++) try { // javob buzuq kelsa yoki model javob bermasa — yana bir marta
     const raw = await callGemini(env, img ? [{ text: prompt }, { inline_data: { mime_type: "image/jpeg", data: toB64(img) } }] : prompt, 0, Date.now() + 22000, 4096, false, true);
     const j = JSON.parse(raw.match(/\{[\s\S]*\}/)[0].replace(/"main"\s*:\s*(?=[,}])/, '"main":[]'));
-    return { name: String(j.name || "").trim(), from: j.from || "", club: String(j.club || "").trim(), number: String(j.number || "").replace(/\D/g, ""), people: Number(j.people) || 1, watermark: j.watermark === true || j.watermark === "true", box: mainBox(j.main), w: iw, h: ih };
+    return { name: String(j.name || "").trim(), from: j.from || "", club: String(j.club || "").trim(), number: String(j.number || "").replace(/\D/g, ""), people: Number(j.people) || 1, watermark: j.watermark === true || j.watermark === "true", box: mainBox(j.main), w: iw, h: ih, dbg: raw.slice(0, 300) };
   } catch (e) { err = String(e && e.message || e).slice(0, 160); console.log("libGuess", k, err); }
   return { w: iw, h: ih, err: (img ? "" : "surat o'qilmadi; ") + err };
 }
@@ -2728,7 +2728,7 @@ async function ubRoute(env, req, url) {
     if (!m.photo) return J({ ok: false, why: "postda surat yo'q" });
     const ph = m.photo[m.photo.length - 1]; const text = String(m.caption || "");
     const g = await libGuess(env, { file_id: ph.file_id }, text.split("\n").filter((l) => l.trim()).slice(0, 3).join("\n"));
-    return J({ ok: true, f: ph.file_id, w: ph.width, h: ph.height, title: (text.split("\n").find((l) => l.trim()) || "").slice(0, 200), tags: (text.match(/#[\p{L}\p{N}_]+/gu) || []).join(" "), name: g.name || "", from: g.from || "", people: g.people || 0, box: g.box || null, err: g.err || "" });
+    return J({ ok: true, f: ph.file_id, w: ph.width, h: ph.height, title: (text.split("\n").find((l) => l.trim()) || "").slice(0, 200), tags: (text.match(/#[\p{L}\p{N}_]+/gu) || []).join(" "), name: g.name || "", from: g.from || "", people: g.people || 0, box: g.box || null, err: g.err || "", dbg: g.dbg || "" });
   }
   if (url.pathname === "/ub/faceadd" && req.method === "POST") {
     const b0 = await req.json().catch(() => ({})); const name = String(b0.name || "").replace(/\s+/g, " ").trim(); const key = pnorm(name);
