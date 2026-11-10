@@ -9,11 +9,12 @@ app = modal.App("inter-card")
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("fonts-inter", "fonts-dejavu-core", "curl")
-    .pip_install("pillow==10.4.0", "fastapi[standard]")
+    .pip_install("pillow==10.4.0", "fastapi[standard]", "numpy", "onnxruntime")
     .run_commands(
         "mkdir -p /root/fonts && curl -sSL -o /root/fonts/oswald-latin-700-normal.woff "
         "https://cdn.jsdelivr.net/npm/@fontsource/oswald@5.0.17/files/oswald-latin-700-normal.woff"
     )
+    .add_local_file("models/realesr-general-x4v3.onnx", "/root/models/realesr-general-x4v3.onnx")
     .add_local_file("card.py", "/root/card.py")
 )
 

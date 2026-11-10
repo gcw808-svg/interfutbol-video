@@ -825,22 +825,49 @@ def _person_window(sw, sh, w, h, box, maxup=1.6):
     return x, y, x + ww, y + wh
 
 
+_SR = {}
+
+
+def _sr(im):
+    # SIFAT OSHIRISH (2026-11-10, Bahtiyor aka: "sifati past rasmlarni sifatli qilib beradigan qilib ber"): kichik surat 4 marta
+    # kattalashtiriladi — Real-ESRGAN "realesr-general-x4v3" (BSD-3, tijoratga ruxsat), onnxruntime, CPU. Model faqat mavjud
+    # piksellarni tiniqlashtiradi; yuzni qayta chizadigan modellar (GFPGAN va h.k.) ATAYLAB ishlatilmaydi — odam o'zgarmasligi kerak.
+    # Kutubxona yoki model bo'lmasa None qaytadi (eski oddiy kattalashtirish ishlaydi).
+    try:
+        if "s" not in _SR:
+            _SR["s"] = None
+            import onnxruntime as ort
+            mp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "realesr-general-x4v3.onnx")
+            _SR["s"] = ort.InferenceSession(mp, providers=["CPUExecutionProvider"])
+        if not _SR["s"] or im.width * im.height > 750000:
+            return None
+        import numpy as np
+        a = np.asarray(im.convert("RGB"), dtype=np.float32).transpose(2, 0, 1)[None] / 255.0
+        y = _SR["s"].run(None, {"x": a})[0][0].clip(0, 1).transpose(1, 2, 0)
+        return Image.fromarray((y * 255 + 0.5).astype("uint8"))
+    except Exception as e:
+        print("sr", e)
+        return None
+
+
 def _cover(src, w, h, fy=0.15):
     box = (getattr(src, "info", None) or {}).get("box")
     if box:
         x0, y0, x1, y1 = _person_window(src.width, src.height, w, h, box)
-        r = w / (x1 - x0)
-        im = src.resize((w, h), Image.LANCZOS, box=(x0, y0, x1, y1))
-        if r > 1.3:
-            im = im.filter(ImageFilter.UnsharpMask(radius=2, percent=60, threshold=2))
-        return im
-    r = max(w / src.width, h / src.height)
-    im = src.resize((int(src.width * r + .5), int(src.height * r + .5)), Image.LANCZOS)
-    x = (im.width - w) // 2
-    y = int((im.height - h) * fy)
-    im = im.crop((x, y, x + w, y + h))
+    else:
+        a = w / h
+        fw, fh = (src.width, src.width / a) if src.width / src.height <= a else (src.height * a, src.height)
+        x0, y0 = (src.width - fw) / 2, (src.height - fh) * fy
+        x1, y1 = x0 + fw, y0 + fh
+    r = w / (x1 - x0)
+    im = src.resize((w, h), Image.LANCZOS, box=(x0, y0, x1, y1))
     if r > 1.3:
         im = im.filter(ImageFilter.UnsharpMask(radius=2, percent=60, threshold=2))
+    if r > 1.25:  # surat kartadan kichik — sifat oshiriladi; tabiiy ko'rinishi uchun oddiy kattalashtirish bilan 75/25 aralashtiriladi
+        up = _sr(src.crop((int(x0), int(y0), int(x1 + 0.5), int(y1 + 0.5))))
+        if up:
+            im = Image.blend(im, up.resize((w, h), Image.LANCZOS), 0.75)
+            print("sr ok x%.2f" % r)
     return im
 
 

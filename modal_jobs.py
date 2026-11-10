@@ -11,7 +11,7 @@ app = modal.App("inter-jobs")
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("fonts-dejavu-core", "curl", "unzip")
-    .pip_install("pillow==10.4.0", "fastapi[standard]", "telethon", "cryptg")
+    .pip_install("pillow==10.4.0", "fastapi[standard]", "telethon", "cryptg", "numpy", "onnxruntime")
     .run_commands(
         # GitHub'dagi bilan bir xil shriftlar: Inter 4.1 va Oswald (@fontsource 5.3.0)
         "curl -sSL --retry 3 -o /tmp/inter.zip https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip"
@@ -21,6 +21,7 @@ image = (
         "mkdir -p /root/fonts && curl -sSL --retry 3 -o /root/fonts/oswald-latin-700-normal.woff "
         "https://cdn.jsdelivr.net/npm/@fontsource/oswald@5.3.0/files/oswald-latin-700-normal.woff",
     )
+    .add_local_file("models/realesr-general-x4v3.onnx", "/root/models/realesr-general-x4v3.onnx")  # sifat oshiruvchi (card.py _sr)
     .add_local_file("card.py", "/root/card.py")
     .add_local_file("ub.py", "/root/ub.py")
 )

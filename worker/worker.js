@@ -1539,7 +1539,7 @@ async function libIndex(env, m, edited) {
   const ix = P.ph.findIndex((p) => p.uid === ph.file_unique_id);
   if (ix < 0) P.ph.push(rec); else P.ph[ix] = { ...P.ph[ix], ...rec, t: P.ph[ix].t || rec.t };
   await kvPut(env, "faces", F);
-  if (!m.media_group_id || how || cap === String(m.caption || "").trim()) await libReply(env, m, (small ? "⚠️ Surat kichik (" + ph.width + "×" + ph.height + ") — saqlandi, lekin kattaroq surat yuborsangiz yaxshi. " : "✅ ") + name + " — bazada " + P.ph.length + " ta surat." + (box ? " ✂️ Asosiy odam topildi." : m.__guess ? " ⚠️ Asosiy odam ramkasi aniqlanmadi" + (g.err ? " (" + g.err + ")" : "") + "." : "") + how + (how ? " Noto'g'ri bo'lsa — suratga javob qilib to'g'ri ismni yozing." : ""));
+  if (!m.media_group_id || how || cap === String(m.caption || "").trim()) await libReply(env, m, (small ? "⚠️ Surat kichik (" + ph.width + "×" + ph.height + ") — saqlandi, kartada sifati avtomatik oshiriladi; kattaroq surat yuborsangiz yanada yaxshi. " : "✅ ") + name + " — bazada " + P.ph.length + " ta surat." + (box ? " ✂️ Asosiy odam topildi." : m.__guess ? " ⚠️ Asosiy odam ramkasi aniqlanmadi" + (g.err ? " (" + g.err + ")" : "") + "." : "") + how + (how ? " Noto'g'ri bo'lsa — suratga javob qilib to'g'ri ismni yozing." : ""));
 }
 // Surat kimligini aniqlash: FAQAT izoh matni va suratda yozilgan so'zlar (formadagi familiya, ekrandagi yozuv); yuz yoki tashqi ko'rinishdan EMAS
 async function libGuess(env, ph, cap) {
