@@ -1583,8 +1583,9 @@ async function rasmRedo(env, chat, mid, quiet) {
       const idx = await kvGet(env, "lgidx", {}); const ci = cardInfo(html, idx);
       const [leagueLogo0, ...cls] = await Promise.all([leagueLogoUrl(env, ci.league, idx), ...(ci.clubs || []).map((n) => logoUrl(env, n, idx))]);
       const clubLogos = cls.map((u, k) => u || ESPN_CREST[ci.clubs[k]] || "").filter(Boolean).slice(0, 4);
+      const own = await ownFace(env, mid, html);
       const id = "n" + Date.now().toString(36) + "r";
-      await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", leftLogo: await leftCrest(env, html, ci, idx), clubLogos, stat: /#Raqamlarda/i.test(html) ? statFromPost(html) : null, face: await faceUrl(env, html), legion: /#Legionerlar\b/i.test(html) ? await legionFromPost(env, html, idx) : null, chan: html, rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 }); await repWatch(env, id, mid);
+      await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", leftLogo: await leftCrest(env, html, ci, idx), clubLogos, stat: /#Raqamlarda/i.test(html) ? statFromPost(html) : null, face: own ? own.face : await faceUrl(env, html), po: own ? own.po : 0, legion: /#Legionerlar\b/i.test(html) ? await legionFromPost(env, html, idx) : null, chan: html, rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 }); await repWatch(env, id, mid);
       await ghDispatch(env, "card.yml", { job: id });
       if (!quiet) await tg(env, "sendMessage", { chat_id: chat, text: "🖼 " + mid + "-post uchun yangi kartochka chizilmoqda (liga: " + (ci.league || "—") + ", klublar: " + (ci.clubs || []).join(", ") + "). 2–3 daqiqada rasm almashtiriladi." });
       return true;
@@ -1613,8 +1614,19 @@ async function faceUrl(env, post) {
     const F = await kvGet(env, "faces", {}); const k = faceFor(F, post); if (!k) return "";
     const ph = (F[k].ph || []).filter((p) => !p.low); const L = ph.length ? ph : F[k].ph || []; if (!L.length) return "";
     const p = L[Math.floor(Date.now() / 3600e3) % L.length];
-    return WURL + "/ph/" + encodeURIComponent(p.f) + (p.b ? "?b=" + p.b.join(",") + (p.x && p.x.length ? "&x=" + p.x.map((e) => e.join(",")).join(";") : "") : "");
+    return phUrl(p);
   } catch (e) { return ""; }
+}
+const phUrl = (p) => WURL + "/ph/" + encodeURIComponent(p.f) + (p.b ? "?b=" + p.b.join(",") + (p.x && p.x.length ? "&x=" + p.x.map((e) => e.join(",")).join(";") : "") : "");
+// POSTNING O'Z SURATI (kanal postidan bazaga o'tkazilgan, src = post raqami): post qayta chizilganda avval shu surat ishlatiladi;
+// sarlavhada shu odamning ismi bo'lmasa — sarlavhasiz suratli karta (po), surat ustiga boshqa mavzudagi sarlavha yozilmaydi
+async function ownFace(env, mid, html) {
+  try {
+    const F = await kvGet(env, "faces", {}); let own = null, ok = null;
+    for (const [k, P] of Object.entries(F)) for (const p of P.ph || []) if (p.src === mid) { own = p; ok = k; }
+    if (!own) return null;
+    return { face: phUrl(own), po: faceFor(F, html) === ok ? 0 : 1 };
+  } catch (e) { return null; }
 }
 // post matnidan kim haqida ekanini topadi: sarlavhadagi birinchi tanilgan ism (to'liq ism yoki qo'shimcha yozilishlar)
 function faceFor(F, text) {

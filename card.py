@@ -1083,6 +1083,21 @@ def render_news_v(j):
     return im
 
 
+def render_photo_v(j):
+    # SARLAVHASIZ SURATLI KARTA (2026-11-10): post o'z surati bilan qoladi, lekin tik (1080x1350), asosiy odam atrofida qirqilgan,
+    # chetdagi begona odamlarsiz va tiniqlashtirilgan; yozuv yo'q — faqat pastki o'ng burchakda iF. Post sarlavhasida shu odamning ismi
+    # bo'lmaganda ishlatiladi (masalan klub haqidagi yangilik) — surat ustiga boshqa mavzudagi sarlavha yozilmasligi uchun.
+    Wd, Hd = 1080, 1350
+    face = get_photo(j.get("face"))
+    if not face:
+        return render_news_v({**j, "po": 0, "face": ""})
+    im = _grade(_cover(face, Wd, Hd, 0.12), (10, 14, 22), GREEN).convert("RGB")
+    _vfade(im, Hd - 260, Hd, (6, 8, 12), 0, 150)
+    mk = logo(92, False)
+    im.paste(mk, (Wd - 92 - 40, Hd - 92 - 34), mk)
+    return im
+
+
 def render_legion_v(j):
     # LEGIONERLAR HAFTALIGI (2026-11-09): tepada UFA gerbi va sarlavha, pastda har bir legioner — klub gerbi, ismi, klubi, o'yinlari
     Wd, Hd = 1080, 1350
@@ -1380,7 +1395,7 @@ def render(j):
         buf = io.BytesIO()
         im.save(buf, "PNG", optimize=True)
         return buf.getvalue()
-    im = render_legion_v(j) if (j.get("legion") or {}).get("rows") else (render_news(j) if j.get("hz") else render_news_v(j))  # 2026-11-09: yangilik kartochkalari tik (1080x1350)
+    im = render_photo_v(j) if (j.get("po") and j.get("face")) else render_legion_v(j) if (j.get("legion") or {}).get("rows") else (render_news(j) if j.get("hz") else render_news_v(j))  # 2026-11-09: yangilik kartochkalari tik (1080x1350)
     buf = io.BytesIO()
     if j.get("face"):
         im.convert("RGB").save(buf, "JPEG", quality=92)  # suratli kartochka — hajm kichik bo'lsin
