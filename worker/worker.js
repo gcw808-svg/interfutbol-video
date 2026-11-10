@@ -1470,7 +1470,7 @@ async function healthCheck(env) { const now = Date.now(), d = tashDate(now), h =
   const clubLogos = extra.home ? [] : (await Promise.all((ci.clubs || []).map(async (n) => (await logoUrl(env, n, idx)) || crest(n)))).filter(Boolean).slice(0, 4);
   if ((extra.home && extra.away) && (!homeLogo || !awayLogo)) { try { const ad = (await getAdmins(env))[0]; if (ad) await tg(env, "sendMessage", { chat_id: ad, text: "⚠️ Nazorat: natija kartochkasida klub logotipi topilmadi — " + [!homeLogo && ci.home, !awayLogo && ci.away].filter(Boolean).join(", ") + ". Claude logotipni qo'shib, /kartaqayta bilan kartochkani yangilaydi." }); } catch (e) {} } leagueLogo = leagueLogo || espnLgLogo(extra.compName || lgName) || (await leagueLogoUrl(env, lgName, idx)) || "";
   await mergeCemoji(env); if (ci.home && homeLogo) await emojiNeed(env, ci.home, homeLogo); if (ci.away && awayLogo) await emojiNeed(env, ci.away, awayLogo); await natTeamNeeds(env, post);
-  await kvPut(env, "cjob:" + id, { ...ci, home: cardNm(ci.home), away: cardNm(ci.away), league: newAlpha(lgName || ""), homeLogo, awayLogo, leagueLogo, leftLogo: (extra.kind || "res") === "news" ? await leftCrest(env, post, ci, idx) : "", clubLogos, stat: (extra.kind || "res") === "news" && /#Raqamlarda/i.test(post) ? statFromPost(post) : null, face: (extra.kind || "res") === "news" ? await faceUrl(env, post) : "", legion: (extra.kind || "res") === "news" && /#Legionerlar\b/i.test(post) ? await legionFromPost(env, post, idx) : null, ...(extra.goals || {}), chan: post, to: to || null, url: extra.url || null, kind: extra.kind || "res", story: (!to && (extra.kind || "res") === "res" && STORY_BIG.test(ci.home + " " + ci.away + " " + (lgName || ""))) ? await storyQuota(env) : 0 }, { expirationTtl: 7 * 3600 });
+  await kvPut(env, "cjob:" + id, { ...ci, home: cardNm(ci.home), away: cardNm(ci.away), league: newAlpha(lgName || ""), homeLogo, awayLogo, leagueLogo, leftLogo: (extra.kind || "res") === "news" ? await leftCrest(env, post, ci, idx) : "", clubLogos, stat: (extra.kind || "res") === "news" && /#Raqamlarda/i.test(post) ? statFromPost(post) : null, face: (extra.kind || "res") === "news" ? await faceUrl(env, post) : "", legion: (extra.kind || "res") === "news" && /#Legionerlar\b/i.test(post) ? await legionFromPost(env, post, idx) : null, scorers: (extra.kind || "res") === "news" && /#Topurarlar\b/i.test(post) ? await scorersFromPost(env, post, idx) : null, ...(extra.goals || {}), chan: post, to: to || null, url: extra.url || null, kind: extra.kind || "res", story: (!to && (extra.kind || "res") === "res" && STORY_BIG.test(ci.home + " " + ci.away + " " + (lgName || ""))) ? await storyQuota(env) : 0 }, { expirationTtl: 7 * 3600 });
   if (to) return ghDispatch(env, "card.yml", { job: id });
   const w = await kvGet(env, "resWait", []); w.push({ id, post, t: Date.now(), url: extra.url || null, kind: extra.kind || "res" }); await kvPut(env, "resWait", w.slice(-20));
   await ghDispatch(env, "card.yml", { job: id }); // chizilmasa resFallback qayta urinadi
@@ -1587,7 +1587,7 @@ async function rasmRedo(env, chat, mid, quiet) {
       const clubLogos = cls.map((u, k) => u || ESPN_CREST[ci.clubs[k]] || "").filter(Boolean).slice(0, 4);
       const own = await ownFace(env, mid, html);
       const id = "n" + Date.now().toString(36) + "r";
-      await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", leftLogo: await leftCrest(env, html, ci, idx), clubLogos, stat: /#Raqamlarda/i.test(html) ? statFromPost(html) : null, face: own ? own.face : await faceUrl(env, html), po: own ? own.po : 0, legion: /#Legionerlar\b/i.test(html) ? await legionFromPost(env, html, idx) : null, chan: html, rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 }); await repWatch(env, id, mid);
+      await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", leftLogo: await leftCrest(env, html, ci, idx), clubLogos, stat: /#Raqamlarda/i.test(html) ? statFromPost(html) : null, face: own ? own.face : await faceUrl(env, html), po: own ? own.po : 0, legion: /#Legionerlar\b/i.test(html) ? await legionFromPost(env, html, idx) : null, scorers: /#Topurarlar\b/i.test(html) ? await scorersFromPost(env, html, idx) : null, chan: html, rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 }); await repWatch(env, id, mid);
       await ghDispatch(env, "card.yml", { job: id });
       if (!quiet) await tg(env, "sendMessage", { chat_id: chat, text: "🖼 " + mid + "-post uchun yangi kartochka chizilmoqda (liga: " + (ci.league || "—") + ", klublar: " + (ci.clubs || []).join(", ") + "). 2–3 daqiqada rasm almashtiriladi." });
       return true;
@@ -2111,6 +2111,19 @@ async function legionFromPost(env, html, idx) {
     else if (!period) { const p = b.join(" ").match(/(\d{1,2}-[\p{L}']+\s*[—–-]\s*\d{1,2}-[\p{L}']+)/u); if (p) period = p[1]; }
   }
   return rows.length ? { period, rows: rows.slice(0, 6) } : null;
+}
+// TO'PURARLAR POYGASI posti matnidan jadval kartochkasi (2026-11-10, Bahtiyor aka tasdiqlagan dizayn): o'rin, ism, klub (gerbi bilan), gol, gol uzatmasi
+async function scorersFromPost(env, html, idx) {
+  const t = String(html || "").replace(/<[^>]+>/g, "").replace(/[⟦⟧]/g, "").replace(/&amp;/g, "&").replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}️‍\u{E0000}-\u{E007F}]/gu, "").replace(/[ \t]{2,}/g, " ");
+  const rows = [];
+  for (const l of t.split("\n")) {
+    const m = l.trim().match(/^\d{1,2}\.\s+(.{2,50}?)\s*\(\s*([^)]{2,40}?)\s*\)\s*[—–-]\s*(\d{1,3})\s+gol(?:\s*,\s*(\d{1,3})\s+ta\s+gol\s+uzatmasi)?/i);
+    if (!m) continue;
+    const club = m[2].trim(); let crest = ""; try { crest = (await logoUrl(env, club, idx || {})) || ESPN_CREST[club] || (await findCrest(env, club, idx)); } catch (e) {}
+    rows.push({ name: m[1].trim(), club, crest: crest || "", g: +m[3], a: +(m[4] || 0) });
+  }
+  const dt = (t.match(/(\d{4}-yil\s+\d{1,2}-[\p{L}'‘’ʻ]+\s+holatiga)/u) || [])[1] || "";
+  return rows.length >= 3 ? { date: dt, rows: rows.slice(0, 10) } : null;
 }
 // "Raqamlarda" posti matnidan kartochka plitkalari (C1 dizayni, 2026-11-08): ism, liga · mavsum · sana, raqamlar
 function statFromPost(html, src) {

@@ -9,6 +9,8 @@ on:
         default: "0"
       dry:
         default: "1"
+      onlydraw:
+        default: "0"
 permissions:
   contents: read
 concurrency:
@@ -26,4 +28,5 @@ jobs:
           POSTS: ${{ inputs.posts }}
           REDRAW: ${{ inputs.redraw }}
           DRY: ${{ inputs.dry }}
+          ONLYDRAW: ${{ inputs.onlydraw }}
         run: python3 chanlib.py

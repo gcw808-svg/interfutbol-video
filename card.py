@@ -1083,6 +1083,88 @@ def render_news_v(j):
     return im
 
 
+def render_scorers_v(j):
+    # TO'PURARLAR POYGASI — JADVAL KO'RINISHIDA (Bahtiyor aka tasdiqlagan, 2026-11-10; 211-post): tepada liga logotipi, liga nomi,
+    # sarlavha va sana; "GOL" / "UZATMA" ustunlari; har futbolchi alohida qatorda — o'rni, klub gerbi, ismi, klubi, gollari, gol uzatmalari;
+    # birinchi o'rin urg'u rangida ajratilgan; fon liga logotipi rangida; pastda O'RTADA iF; "Manba" yozuvi YO'Q.
+    Wd, Hd = 1080, 1350
+    S = j["scorers"]
+    rows = (S.get("rows") or [])[:10]
+    lgl = get_logo(j.get("leagueLogo"), 420)
+    mark = None
+    if lgl:
+        mark, _g = league_mark(lgl, j.get("league") or "")
+    pal = club_palette(mark) if mark else None
+    base, acc = pal if pal else ((10, 14, 22), GREEN)
+    sc = lambda c, mx: tuple(int(v * mx / max(1, max(c))) for v in c)
+    soft = tuple(int(v * 0.35 + 255 * 0.65) for v in acc)  # och yozuv rangi (urg'u rangiga moyil)
+    im = Image.new("RGB", (Wd, Hd))
+    d = ImageDraw.Draw(im)
+    top, bot = (sc(base, 80), sc(base, 24)) if pal else ((22, 28, 40), (8, 10, 16))
+    for y in range(Hd):
+        t = y / Hd
+        d.line([0, y, Wd, y], fill=tuple(int(top[i] + (bot[i] - top[i]) * t) for i in range(3)))
+    _stripes(im, (255, 255, 255), 0, 7)
+    if mark:
+        wm = mark.copy()
+        if pal:  # logo fon bilan bir xil rangda (Premier League) — oq siluetga aylantiriladi
+            wm = Image.merge("RGBA", (*Image.new("RGB", wm.size, (255, 255, 255)).split(), wm.getchannel("A")))
+        big = wm.resize((int(wm.width * 760 / max(wm.size)), int(wm.height * 760 / max(wm.size))), Image.LANCZOS)
+        big.putalpha(big.getchannel("A").point(lambda v: int(v * 0.05)))
+        im.paste(big, (Wd - 560, 40), big)
+        m2 = wm.copy(); m2.thumbnail((150, 150), Image.LANCZOS)
+        im.paste(m2, (60 + (150 - m2.width) // 2, 62 + (150 - m2.height) // 2), m2)
+    d = ImageDraw.Draw(im, "RGBA")
+    tx = 236 if mark else 60
+    title = (j.get("title") or "")
+    head = (title.split(":", 1)[1] if ":" in title else title).strip().upper() or "TÖPURARLAR POYGASI"
+    d.text((tx + 2, 70), (j.get("league") or title.split(":")[0]).strip().upper(), font=font("bold", 34), fill=soft)
+    fs = 62
+    while fs > 40 and d.textlength(head, font=font("black", fs)) > Wd - tx - 50:
+        fs -= 2
+    d.text((tx, 112), head, font=font("black", fs), fill=WHITE)
+    if S.get("date"):
+        d.text((60, 232), S["date"], font=font("med", 30), fill=soft)
+    d.rectangle([60, 284, 180, 290], fill=tuple(acc))
+    d.text((842, 330), "GOL", font=font("bold", 24), fill=soft, anchor="mm")
+    d.text((972, 330), "UZATMA", font=font("bold", 24), fill=soft, anchor="mm")
+    n = max(1, len(rows))
+    gap = 12
+    rh = min(110, (Hd - 360 - 150 - (n - 1) * gap) // n)
+    y = 360
+    for k, r in enumerate(rows):
+        first = k == 0
+        box = Image.new("RGBA", (Wd, Hd), (0, 0, 0, 0))
+        ImageDraw.Draw(box).rounded_rectangle([44, y, Wd - 44, y + rh], radius=22, fill=(255, 255, 255, 34 if first else 16), outline=(tuple(acc) + (255,)) if first else None, width=3)
+        im.paste(box, (0, 0), box)
+        d = ImageDraw.Draw(im, "RGBA")
+        d.text((96, y + rh // 2), str(k + 1), font=font("black", int(rh * 0.42)), fill=tuple(acc) if first else soft, anchor="mm")
+        cs = int(rh * 0.71)
+        c = crest(r.get("crest"), cs, r.get("club") or "")
+        if c:
+            if max(c.size) != cs:
+                kk = cs / max(c.size)
+                c = c.resize((max(1, int(c.width * kk)), max(1, int(c.height * kk))), Image.LANCZOS)
+            im.paste(c, (150 + (cs - c.width) // 2, y + (rh - c.height) // 2), c)
+            d = ImageDraw.Draw(im, "RGBA")
+        nf = int(rh * 0.36)
+        while nf > 22 and d.textlength(r.get("name") or "", font=font("black", nf)) > 520:
+            nf -= 2
+        d.text((252, y + int(rh * 0.20)), r.get("name") or "", font=font("black", nf), fill=WHITE)
+        d.text((253, y + int(rh * 0.65)), r.get("club") or "", font=font("med", int(rh * 0.24)), fill=soft)
+        d.text((842, y + rh // 2), str(r.get("g") or 0), font=font("black", int(rh * 0.56)), fill=tuple(acc) if first else WHITE, anchor="mm")
+        a = r.get("a") or 0
+        d.text((972, y + rh // 2), str(a) if a else "–", font=font("bold", int(rh * 0.40)), fill=WHITE if a else soft + (150,), anchor="mm")
+        d.line([908, y + 24, 908, y + rh - 24], fill=(255, 255, 255, 40), width=2)
+        y += rh + gap
+    Hn = min(Hd, max(1080, y - gap + 136))  # pastda bo'sh joy qolmasin
+    if Hn < Hd:
+        im = im.crop((0, 0, Wd, Hn)); Hd = Hn
+    mk = logo(92, False)
+    im.paste(mk, ((Wd - 92) // 2, Hd - 92 - 28), mk)
+    return im
+
+
 def render_photo_v(j):
     # SARLAVHASIZ SURATLI KARTA (2026-11-10): post o'z surati bilan qoladi, lekin tik (1080x1350), asosiy odam atrofida qirqilgan,
     # chetdagi begona odamlarsiz va tiniqlashtirilgan; yozuv yo'q — faqat pastki o'ng burchakda iF. Post sarlavhasida shu odamning ismi
@@ -1395,7 +1477,7 @@ def render(j):
         buf = io.BytesIO()
         im.save(buf, "PNG", optimize=True)
         return buf.getvalue()
-    im = render_photo_v(j) if (j.get("po") and j.get("face")) else render_legion_v(j) if (j.get("legion") or {}).get("rows") else (render_news(j) if j.get("hz") else render_news_v(j))  # 2026-11-09: yangilik kartochkalari tik (1080x1350)
+    im = render_scorers_v(j) if len((j.get("scorers") or {}).get("rows") or []) >= 3 else render_photo_v(j) if (j.get("po") and j.get("face")) else render_legion_v(j) if (j.get("legion") or {}).get("rows") else (render_news(j) if j.get("hz") else render_news_v(j))  # 2026-11-09: yangilik kartochkalari tik (1080x1350)
     buf = io.BytesIO()
     if j.get("face"):
         im.convert("RGB").save(buf, "JPEG", quality=92)  # suratli kartochka — hajm kichik bo'lsin
