@@ -1360,7 +1360,16 @@ def render_story_result(j):
     return buf.getvalue()
 
 
+def _no_emoji(t):
+    import re
+    t = re.sub("[\U0001F1E6-\U0001F1FF\U0001F300-\U0001FAFF\U000E0020-\U000E007F\u2600-\u27BF\uFE0F\u200D\u20E3]", "", t)
+    return re.sub(r"\s{2,}", " ", t).strip()
+
+
 def render(j):
+    # sarlavhadagi bayroq va emoji belgilar (post matniga qo'yiladi) kartada shrift bo'lmagani uchun to'rtburchak bo'lib chiqadi — olib tashlanadi
+    if isinstance(j.get("title"), str):
+        j["title"] = _no_emoji(j["title"])
     if j.get("lineup"):
         im = render_lineup(j)
         buf = io.BytesIO()
