@@ -97,12 +97,23 @@ def one():
     print("+", sname, f"{w0}x{h0} -> {im.width}x{im.height}", "|", credit, "| xabar", r["result"]["message_id"])
     print("baza:", requests.post(W + "/ub/stadium", headers={**H, "content-type": "application/json"}, data=json.dumps({"club": sname, "s": sname, "f": fid, "c": credit}), timeout=30).text[:120])
     if post.isdigit():
-        print("post:", requests.post(W + "/ub/rasm", headers={**H, "content-type": "application/json"}, data=json.dumps({"id": int(post), "face": W + "/ph/" + requests.utils.quote(fid, safe=""), "credit": f"{credit} · Wikimedia Commons"}), timeout=60).text[:120])
+        redraw(int(post), fid, credit)
+
+
+def redraw(post, fid, credit):
+    # post rasmi shu surat bilan qayta chiziladi; muallif yozuvi RASMGA emas, post matniga (heshteglardan oldin) qo'shiladi
+    cr = re.sub(r"^Foto:\s*(User:)?", "Foto: ", credit).strip() + ", Wikimedia Commons"
+    print("post:", requests.post(W + "/ub/rasm", headers={**H, "content-type": "application/json"}, data=json.dumps({"id": post, "face": W + "/ph/" + requests.utils.quote(fid, safe=""), "credit": cr}), timeout=60).text[:120])
 
 
 def main():
     if os.environ.get("FILE"):
         return one()
+    if os.environ.get("SNAME") and os.environ.get("POST", "").isdigit():  # bazadagi stadion surati bilan postni qayta chizish
+        e = requests.get(W + "/ub/stadiums", headers=H, timeout=30).json().get(os.environ["SNAME"])
+        if not e:
+            print("- bazada yo'q:", os.environ["SNAME"]); sys.exit(1)
+        return redraw(int(os.environ["POST"]), e["f"], e.get("c", ""))
     have = requests.get(W + "/ub/stadiums", headers=H, timeout=30).json()
     redo = [x.strip() for x in os.environ.get("REDO", "").split(",") if x.strip()]
     todo = redo + [c for c in clubs() if c not in have and c not in redo]

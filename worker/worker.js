@@ -1585,9 +1585,13 @@ async function rasmRedo(env, chat, mid, quiet, ov) {
       const idx = await kvGet(env, "lgidx", {}); const ci = cardInfo(html, idx);
       const [leagueLogo0, ...cls] = await Promise.all([leagueLogoUrl(env, ci.league, idx), ...(ci.clubs || []).map((n) => logoUrl(env, n, idx))]);
       const clubLogos = cls.map((u, k) => u || ESPN_CREST[ci.clubs[k]] || "").filter(Boolean).slice(0, 4);
-      const own = ov ? { face: ov.face, po: 0 } : await ownFace(env, mid, html); // ov — aniq berilgan surat (masalan stadion), muallif yozuvi bilan
+      const own = ov ? { face: ov.face, po: 0 } : await ownFace(env, mid, html); // ov — aniq berilgan surat (masalan stadion)
+      // MUALLIF YOZUVI RASMDA EMAS, POST MATNIDA (Bahtiyor aka, 2026-11-11: "rasmdagi Wikimedia yozuvini ko'rinmaydigan qil"): erkin litsenziya (CC BY / BY-SA)
+      // muallifni ko'rsatishni talab qiladi — shuning uchun yozuv butunlay olib tashlanmaydi, heshteglardan oldin kichik kursiv qator bo'lib qo'shiladi
+      let html1 = html;
+      if (ov && ov.credit && !/Wikimedia Commons/i.test(html)) { const cl = "<i>⟦" + ov.credit + "⟧</i>"; html1 = /\n\s*#[^\n]*\s*$/.test(html) ? html.replace(/\n\s*(#[^\n]*\s*)$/, "\n" + cl + "\n\n$1") : html + "\n\n" + cl; }
       const id = "n" + Date.now().toString(36) + "r";
-      await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", leftLogo: await leftCrest(env, html, ci, idx), clubLogos, stat: /#Raqamlarda/i.test(html) ? statFromPost(html) : null, face: own ? own.face : await faceUrl(env, html), po: own ? own.po : 0, credit: ov ? ov.credit : "", legion: /#Legionerlar\b/i.test(html) ? await legionFromPost(env, html, idx) : null, scorers: /#Topurarlar\b/i.test(html) ? await scorersFromPost(env, html, idx) : null, chan: html, rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 }); await repWatch(env, id, mid);
+      await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", leftLogo: await leftCrest(env, html, ci, idx), clubLogos, stat: /#Raqamlarda/i.test(html) ? statFromPost(html) : null, face: own ? own.face : await faceUrl(env, html), po: own ? own.po : 0, legion: /#Legionerlar\b/i.test(html) ? await legionFromPost(env, html, idx) : null, scorers: /#Topurarlar\b/i.test(html) ? await scorersFromPost(env, html, idx) : null, chan: html1, rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 }); await repWatch(env, id, mid);
       await ghDispatch(env, "card.yml", { job: id });
       if (!quiet) await tg(env, "sendMessage", { chat_id: chat, text: "🖼 " + mid + "-post uchun yangi kartochka chizilmoqda (liga: " + (ci.league || "—") + ", klublar: " + (ci.clubs || []).join(", ") + "). 2–3 daqiqada rasm almashtiriladi." });
       return true;
