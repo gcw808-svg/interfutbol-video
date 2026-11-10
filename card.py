@@ -790,6 +790,7 @@ def get_photo(url):
             with urllib.request.urlopen(req, timeout=40) as r:
                 im = Image.open(io.BytesIO(r.read())).convert("RGB")
             im.info["box"] = _url_box(url)
+            im.info["excl"] = _url_excl(url)
             return im
         except Exception as e:
             print("photo", e)
@@ -808,19 +809,45 @@ def _url_box(url):
     return None
 
 
-def _person_window(sw, sh, w, h, box, maxup=1.6):
+def _url_excl(url):
+    # chetdan kesilib kirgan begona odamlar: ...&x=x0,y0,x1,y1;x0,y0,x1,y1 — kartada kadrdan chiqariladi
+    try:
+        q = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query).get("x")
+        out = []
+        for part in (q[0].split(";") if q else []):
+            v = [float(x) for x in part.split(",")]
+            if len(v) == 4:
+                out.append(v)
+        return out
+    except Exception as e:
+        print("excl", e)
+    return []
+
+
+def _person_window(sw, sh, w, h, box, maxup=1.6, excl=None):
     # ASOSIY ODAM ATROFIDA QIRQISH (2026-11-10): w:h nisbatli oyna odamning o'rtasiga qo'yiladi, boshi tepada joy bilan qoladi;
     # odam kichik bo'lsa yaqinlashtiriladi (lekin surat maxup martadan ortiq kattalashmaydi), chetdagi begona bo'laklar kadrdan chiqadi.
     a = w / h
     fw, fh = (sw, sw / a) if sw / sh <= a else (sh * a, sh)  # suratga sig'adigan eng katta oyna
     bx0, by0, bx1, by1 = box[0] * sw, box[1] * sh, box[2] * sw, box[3] * sh
     pw, ph = bx1 - bx0, by1 - by0
-    need_w = max(pw * 1.25, ph * 1.12 * a)  # odam eni va bo'yi (zaxira bilan) sig'ishi uchun
+    need_w = pw * 1.25  # odam eni zaxira bilan; bo'yi sig'masa — bosh va gavdaning yuqori qismi qoladi
     ww = min(fw, max(need_w, w / maxup, fw * 0.55))
+    # chetdagi begona odamlar: oyna ulardan ichkarida qoladi (kerak bo'lsa yaqinlashtiriladi, lekin asosiy odam enining 60% idan tor bo'lmaydi)
+    xmin, xmax = 0.0, float(sw)
+    for e in excl or []:
+        ex0, ex1 = e[0] * sw, e[2] * sw
+        if ex1 <= (bx0 + bx1) / 2 and ex0 <= sw * 0.02:
+            xmin = max(xmin, ex1)
+        elif ex0 >= (bx0 + bx1) / 2 and ex1 >= sw * 0.98:
+            xmax = min(xmax, ex0)
+    if xmax - xmin < pw * 0.6:
+        xmin, xmax = 0.0, float(sw)
+    ww = min(ww, xmax - xmin)
     wh = ww / a
     x = (bx0 + bx1) / 2 - ww / 2
     y = by0 - ph * 0.08 if ph * 1.12 >= wh else (by0 + by1) / 2 - wh / 2  # odam oynadan uzun bo'lsa — bosh tomoni qoladi
-    x = min(max(0, x), sw - ww)
+    x = min(max(xmin, x), xmax - ww)
     y = min(max(0, y), sh - wh)
     return x, y, x + ww, y + wh
 
@@ -853,7 +880,7 @@ def _sr(im):
 def _cover(src, w, h, fy=0.15):
     box = (getattr(src, "info", None) or {}).get("box")
     if box:
-        x0, y0, x1, y1 = _person_window(src.width, src.height, w, h, box)
+        x0, y0, x1, y1 = _person_window(src.width, src.height, w, h, box, excl=(getattr(src, "info", None) or {}).get("excl"))
     else:
         a = w / h
         fw, fh = (src.width, src.width / a) if src.width / src.height <= a else (src.height * a, src.height)

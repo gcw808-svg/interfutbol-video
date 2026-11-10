@@ -11,6 +11,7 @@ import numpy as np
 import requests
 from PIL import Image
 
+import persons
 import sharp
 from sharp import API, BOT, H, LIB, W, tg, wpost
 
@@ -65,15 +66,16 @@ def main():
                 pr = wpost("/ub/faceprobe", {"post": pid})
                 if not pr.get("ok"):
                     print(pid, "O'TKAZILDI:", pr.get("why")); sk += 1; continue
-                why = "" if pr.get("name") else "ism aniqlanmadi"
-                why = why or ("" if pr.get("people") == 1 else f"suratda {pr.get('people')} kishi")
-                why = why or ("" if pr.get("box") else "asosiy odam topilmadi")
-                if why:
-                    print(pid, "O'TKAZILDI:", why, "|", pr.get("title"), "|", pr.get("err", ""), "|", json.dumps(pr.get("dbg", ""), ensure_ascii=False)); sk += 1; continue
                 f = tg("getFile", data={"file_id": pr["f"]})
                 im = Image.open(io.BytesIO(requests.get(f"https://api.telegram.org/file/bot{BOT}/{f['result']['file_path']}", timeout=120).content)).convert("RGB")
                 w0, h0 = im.size
-                im2, box, note = clean(im, pr["box"])
+                box0, pn, _ = persons.analyse(im)
+                why = "" if pr.get("name") else "ism aniqlanmadi"
+                why = why or ("" if box0 else "suratda odam topilmadi")
+                why = why or ("" if pn == 1 else f"suratda {pn} ta yirik odam")
+                if why:
+                    print(pid, "O'TKAZILDI:", why, "|", pr.get("title"), "|", pr.get("err", "")); sk += 1; continue
+                im2, box, note = clean(im, box0)
                 if im2 is None:
                     print(pid, "O'TKAZILDI:", note, "|", pr["name"]); sk += 1; continue
                 if min(im2.size) < sharp.MINSIDE:
@@ -82,7 +84,10 @@ def main():
                         k = sharp.MAXLONG / max(im2.size)
                         im2 = im2.resize((int(im2.width * k + .5), int(im2.height * k + .5)), Image.LANCZOS)
                     note += ", tiniqlashtirildi"
-                print(pid, pr["name"], f"{w0}x{h0} -> {im2.width}x{im2.height}", note, "| ramka", box)
+                box, pn, ex = persons.analyse(im2)  # tozalangan suratda qayta: aniq ramka va chetdagi begonalar
+                if not box:
+                    print(pid, "O'TKAZILDI: tozalangach odam topilmadi"); sk += 1; continue
+                print(pid, pr["name"], f"{w0}x{h0} -> {im2.width}x{im2.height}", note, "| ramka", box, "| chet", ex)
                 if dry:
                     continue
                 buf = io.BytesIO(); im2.save(buf, "JPEG", quality=93, subsampling=0)
@@ -91,7 +96,7 @@ def main():
                 if not r.get("ok"):
                     print(pid, "XATO yuborish:", r.get("description")); sk += 1; continue
                 d = r["result"]["document"]
-                res = wpost("/ub/faceadd", {"name": pr["name"], "f": d["file_id"], "uid": d["file_unique_id"], "w": im2.width, "h": im2.height, "m": r["result"]["message_id"], "b": box, "src": pid})
+                res = wpost("/ub/faceadd", {"name": pr["name"], "f": d["file_id"], "uid": d["file_unique_id"], "w": im2.width, "h": im2.height, "m": r["result"]["message_id"], "b": box, "x": ex, "src": pid})
                 if not res.get("ok"):
                     tg("deleteMessage", data={"chat_id": LIB, "message_id": r["result"]["message_id"]})
                     print(pid, "XATO baza:", res); sk += 1; continue

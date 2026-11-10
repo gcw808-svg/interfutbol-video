@@ -1541,8 +1541,9 @@ async function libIndex(env, m, edited) {
   await kvPut(env, "faces", F);
   // yangi kichik (yoki o'lchami noma'lum) surat — tiniqlashtiruvchi (sharp.yml) ishga tushadi: tiniq nusxa saqlanadi, xira asli o'chiriladi
   let sharpQ = false;
-  if (ix < 0 && (!rec.w || Math.min(rec.w, rec.h) < 1000)) { try { sharpQ = await ghDispatch(env, "sharp.yml", { only: String(m.message_id), del: "1" }, true); } catch (e) {} }
-  if (!m.media_group_id || how || cap === String(m.caption || "").trim()) await libReply(env, m, (small ? "⚠️ Surat kichik (" + ph.width + "×" + ph.height + ") — saqlandi. " : "✅ ") + name + " — bazada " + P.ph.length + " ta surat." + (box ? " ✂️ Asosiy odam topildi." : m.__guess ? " ⚠️ Asosiy odam ramkasi aniqlanmadi" + (g.err ? " (" + g.err + ")" : "") + "." : "") + how + (how ? " Noto'g'ri bo'lsa — suratga javob qilib to'g'ri ismni yozing." : "") + (sharpQ ? " ✨ Tiniqlashtirilmoqda — 1–2 daqiqada tiniq nusxasi shu yerga tushadi, xira asli o'chiriladi." : ""));
+  const smallQ = !rec.w || Math.min(rec.w, rec.h) < 1000;
+  if (ix < 0) { try { sharpQ = await ghDispatch(env, "sharp.yml", { only: String(m.message_id), del: "1" }, true); } catch (e) {} }
+  if (!m.media_group_id || how || cap === String(m.caption || "").trim()) await libReply(env, m, (small ? "⚠️ Surat kichik (" + ph.width + "×" + ph.height + ") — saqlandi. " : "✅ ") + name + " — bazada " + P.ph.length + " ta surat." + (box ? " ✂️ Asosiy odam topildi." : m.__guess ? " ⚠️ Asosiy odam ramkasi aniqlanmadi" + (g.err ? " (" + g.err + ")" : "") + "." : "") + how + (how ? " Noto'g'ri bo'lsa — suratga javob qilib to'g'ri ismni yozing." : "") + (sharpQ && smallQ ? " ✨ Tiniqlashtirilmoqda — 1–2 daqiqada tiniq nusxasi shu yerga tushadi, xira asli o'chiriladi." : ""));
 }
 // Surat kimligini aniqlash: FAQAT izoh matni va suratda yozilgan so'zlar (formadagi familiya, ekrandagi yozuv); yuz yoki tashqi ko'rinishdan EMAS
 async function libGuess(env, ph, cap) {
@@ -1606,7 +1607,7 @@ async function faceUrl(env, post) {
     const F = await kvGet(env, "faces", {}); const k = faceFor(F, post); if (!k) return "";
     const ph = (F[k].ph || []).filter((p) => !p.low); const L = ph.length ? ph : F[k].ph || []; if (!L.length) return "";
     const p = L[Math.floor(Date.now() / 3600e3) % L.length];
-    return WURL + "/ph/" + encodeURIComponent(p.f) + (p.b ? "?b=" + p.b.join(",") : "");
+    return WURL + "/ph/" + encodeURIComponent(p.f) + (p.b ? "?b=" + p.b.join(",") + (p.x && p.x.length ? "&x=" + p.x.map((e) => e.join(",")).join(";") : "") : "");
   } catch (e) { return ""; }
 }
 // post matnidan kim haqida ekanini topadi: sarlavhadagi birinchi tanilgan ism (to'liq ism yoki qo'shimcha yozilishlar)
@@ -2735,15 +2736,15 @@ async function ubRoute(env, req, url) {
     if (!key || !isFaceName(name) || !b0.f || !b0.uid) return J({ ok: false });
     const F = await kvGet(env, "faces", {}); const P = (F[key] = F[key] || { n: name, al: [], ph: [], u: 0 });
     P.al = [...new Set([...(P.al || []), name])].slice(0, 12);
-    if (!P.ph.some((p) => p.uid === b0.uid || (b0.src && p.src === b0.src))) P.ph.push({ f: b0.f, uid: b0.uid, w: b0.w || 0, h: b0.h || 0, m: b0.m, low: b0.w && Math.min(b0.w, b0.h) < 500 ? 1 : 0, t: Date.now(), sr: 1, ...(b0.b ? { b: b0.b } : {}), ...(b0.src ? { src: b0.src } : {}) });
+    if (!P.ph.some((p) => p.uid === b0.uid || (b0.src && p.src === b0.src))) P.ph.push({ f: b0.f, uid: b0.uid, w: b0.w || 0, h: b0.h || 0, m: b0.m, low: b0.w && Math.min(b0.w, b0.h) < 500 ? 1 : 0, t: Date.now(), sr: 1, ...(b0.b ? { b: b0.b, x: b0.x || [], d: 1 } : {}), ...(b0.src ? { src: b0.src } : {}) });
     await kvPut(env, "faces", F); return J({ ok: true, n: P.ph.length });
   }
   if (url.pathname === "/ub/rasm" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); return J({ ok: await rasmRedo(env, admin, +b0.id, true) }); }
   if (url.pathname === "/ub/facesharp" && req.method === "POST") {
     const b0 = await req.json().catch(() => ({})); const F = await kvGet(env, "faces", {}); let hit = 0;
     for (const P of Object.values(F)) for (const p of P.ph || []) {
-      if (b0.om && b0.f && p.m === b0.om) { p.f = b0.f; p.uid = b0.uid; p.w = b0.w || 0; p.h = b0.h || 0; p.m = b0.m; p.low = p.w && Math.min(p.w, p.h) < 500 ? 1 : 0; p.sr = 1; if (b0.del) delete p.om; else p.om = b0.om; hit++; }
-      else if (b0.dims && p.m === b0.dims) { p.w = b0.w || 0; p.h = b0.h || 0; p.low = p.w && Math.min(p.w, p.h) < 500 ? 1 : 0; hit++; }
+      if (b0.om && b0.f && p.m === b0.om) { if (b0.b) { p.b = b0.b; p.x = b0.x || []; p.d = 1; p.pn = b0.pn || 1; } p.f = b0.f; p.uid = b0.uid; p.w = b0.w || 0; p.h = b0.h || 0; p.m = b0.m; p.low = p.w && Math.min(p.w, p.h) < 500 ? 1 : 0; p.sr = 1; if (b0.del) delete p.om; else p.om = b0.om; hit++; }
+      else if (b0.dims && p.m === b0.dims) { p.w = b0.w || 0; p.h = b0.h || 0; p.low = p.w && Math.min(p.w, p.h) < 500 ? 1 : 0; if (b0.b) { p.b = b0.b; p.x = b0.x || []; p.d = 1; p.pn = b0.pn || 1; } hit++; }
       else if (b0.keep && p.m === b0.keep) { p.om = b0.om; hit++; }
       else if (b0.purged && p.om === b0.purged) { delete p.om; hit++; }
     }

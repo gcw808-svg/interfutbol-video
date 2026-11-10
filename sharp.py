@@ -75,7 +75,7 @@ def main():
     done = skip = fail = 0
     for P in F.values():
         for p in P.get("ph", []):
-            if (only and p["m"] not in only) or p.get("sr"):
+            if (only and p["m"] not in only) or (p.get("sr") and p.get("d")):
                 continue
             try:
                 f = tg("getFile", data={"file_id": p["f"]})
@@ -84,10 +84,16 @@ def main():
             except Exception as e:
                 print("XATO yuklash", P["n"], p["m"], str(e)[:120]); fail += 1; continue
             w, h = im.size
-            if min(w, h) >= MINSIDE:
-                if not p.get("w"):
-                    wpost("/ub/facesharp", {"dims": p["m"], "w": w, "h": h})
-                print("yetarli", P["n"], p["m"], f"{w}x{h}"); skip += 1; continue
+            # aniq odam ramkasi va chetdagi begona odamlar (persons.py, YOLOX) — kartada surat shu bo'yicha qirqiladi
+            try:
+                import persons
+                box, pn, ex = persons.analyse(im)
+            except Exception as e:
+                print("XATO odam topish", str(e)[:120]); box, pn, ex = None, 1, []
+            det = {"b": box, "x": ex, "pn": pn} if box else {}
+            if min(w, h) >= MINSIDE or p.get("sr"):
+                wpost("/ub/facesharp", {"dims": p["m"], "w": w, "h": h, **det})
+                print("yetarli", P["n"], p["m"], f"{w}x{h}", "ramka", box, "odam", pn, "chet", ex); skip += 1; continue
             t0 = time.time()
             up = sr4(im)
             if max(up.size) > MAXLONG:
@@ -99,7 +105,7 @@ def main():
             if not r.get("ok"):
                 print("XATO yuborish", P["n"], p["m"], r.get("description")); fail += 1; continue
             d = r["result"]["document"]
-            res = wpost("/ub/facesharp", {"om": p["m"], "f": d["file_id"], "uid": d["file_unique_id"], "w": up.width, "h": up.height, "m": r["result"]["message_id"], "del": 1 if dele else 0})
+            res = wpost("/ub/facesharp", {"om": p["m"], "f": d["file_id"], "uid": d["file_unique_id"], "w": up.width, "h": up.height, "m": r["result"]["message_id"], "del": 1 if dele else 0, **det})
             if not res.get("ok"):
                 tg("deleteMessage", data={"chat_id": LIB, "message_id": r["result"]["message_id"]})  # bazaga yozilmadi — yangi nusxa qaytarib olinadi
                 print("XATO baza", P["n"], p["m"], res); fail += 1; continue
@@ -109,7 +115,7 @@ def main():
                 x = " | xira asli o'chirildi" if dr.get("ok") else " | xira asli O'CHMADI: " + str(dr.get("description"))
                 if not dr.get("ok"):
                     wpost("/ub/facesharp", {"keep": r["result"]["message_id"], "om": p["m"]})
-            print("TINIQ", P["n"], p["m"], "->", r["result"]["message_id"], f"{w}x{h} -> {up.width}x{up.height}", "%.0fs" % (time.time() - t0) + x); done += 1
+            print("TINIQ", P["n"], p["m"], "->", r["result"]["message_id"], f"{w}x{h} -> {up.width}x{up.height}", "ramka", box, "odam", pn, "chet", ex, "%.0fs" % (time.time() - t0) + x); done += 1
     print(f"yakun: tiniqlashtirildi {done}, yetarli {skip}, xato {fail}")
     if fail and not done:
         sys.exit(1)
