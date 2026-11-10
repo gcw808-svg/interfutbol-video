@@ -161,7 +161,7 @@ const FEEDS = [
 
     // yangi o'zbek lotin alifbosi (2026): O' → Ö, G' → Ğ, Sh → Ş, Ch → Ç. HTML teglar, havolalar, @nomlar, heshteglar,
 // ⟦…⟧ ichidagi original nomlar (klub, futbolchi, murabbiy) va chet tilidagi so'zlar o'zgarmaydi
-const NA_KEEP = /^(Manchester|Michael|Mitchell|Richarlison|Sancho|Chiesa|Shaw|Ashley|Charlton|Chalobah|Chilwell|Kimmich|Fletcher|Richards|Rashford|Champions|Chiellini|Sheffield|Shakhtar|Chicharito|Shearer|Schick|Sesko)$/;
+const NA_KEEP = /^(Christian|Christopher|Chris|Christensen|Achraf|Sanchez|Schmeichel|Pochettino|Chivu|Marchisio|Echeverri|Ochoa|Shaqiri|Fischer|Bochum|Mönchengladbach|Gladbach|Manchester|Michael|Mitchell|Richarlison|Sancho|Chiesa|Shaw|Ashley|Charlton|Chalobah|Chilwell|Kimmich|Fletcher|Richards|Rashford|Champions|Chiellini|Sheffield|Shakhtar|Chicharito|Shearer|Schick|Sesko)$/;
 const NA_FOREIGN = /c(?!h)|w|ea|ou|th|ph|ck|ee|oo|ae|[àáâãäåæèéêëìíîïñòóôõøùúûüýÿœß]/i;
 const naWord = (w) => (NA_FOREIGN.test(w) || NA_KEEP.test(w) ? w : w
   .replace(/O['‘’ʻʼ`]/g, "Ö").replace(/o['‘’ʻʼ`]/g, "ö")
