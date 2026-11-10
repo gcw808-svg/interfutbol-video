@@ -1487,6 +1487,12 @@ async function libIndex(env, m, edited) {
   if (!m.photo && !m.document && m.text && m.reply_to_message && (m.reply_to_message.photo || m.reply_to_message.document)) {
     const rm = m.reply_to_message, tx = m.text.trim();
     if (tx === "?") return libIndex(env, { ...rm, caption: rm.caption || "", media_group_id: null, __guess: 1 }, false);
+    if (tx === "-") { // suratga javob "-" — surat bazadan olib tashlanadi (bot o'zi qo'ygan tiniq nusxa yoki kanal postidan olingan surat bo'lsa — xabari ham o'chiriladi)
+      const F0 = await kvGet(env, "faces", {}); let hit = 0;
+      for (const k of Object.keys(F0)) { const n0 = (F0[k].ph || []).length; F0[k].ph = (F0[k].ph || []).filter((p) => p.m !== rm.message_id); hit += n0 - F0[k].ph.length; if (!F0[k].ph.length) delete F0[k]; }
+      if (hit) { await kvPut(env, "faces", F0); await libReply(env, m, "🗑 Surat bazadan olib tashlandi."); }
+      return;
+    }
     if (tx === "+") { const gname = await kvGet(env, "fguess:" + rm.message_id, ""); if (!gname) return; return libIndex(env, { ...rm, caption: gname, media_group_id: null }, true); }
     if (!isFaceName(tx.split("\n")[0].split("|")[0])) return;
     return libIndex(env, { ...rm, caption: m.text, media_group_id: null, message_id: rm.message_id }, true);
