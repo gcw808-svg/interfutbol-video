@@ -1,0 +1,29 @@
+name: chanlib
+# Kanal postlaridagi suratlarni rasmlar bazasiga o'tkazish va post rasmini qayta chizish (chanlib.py)
+on:
+  workflow_dispatch:
+    inputs:
+      posts:
+        required: true
+      redraw:
+        default: "0"
+      dry:
+        default: "1"
+permissions:
+  contents: read
+concurrency:
+  group: sharp
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install -q requests pillow numpy onnxruntime
+      - env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          POSTS: ${{ inputs.posts }}
+          REDRAW: ${{ inputs.redraw }}
+          DRY: ${{ inputs.dry }}
+        run: python3 chanlib.py

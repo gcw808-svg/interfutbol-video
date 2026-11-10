@@ -1558,6 +1558,22 @@ Answer ONLY JSON: {"name":"full name in official Latin spelling, or empty","from
   } catch (e) { err = String(e && e.message || e).slice(0, 160); console.log("libGuess", k, err); }
   return { w: iw, h: ih, err: (img ? "" : "surat o'qilmadi; ") + err };
 }
+// "/rasm ID" ishi: kanal postining rasmini tasdiqlangan dizayndagi kartochkaga almashtirish (matn va tugma saqlanadi); /ub/rasm ham shuni chaqiradi
+async function rasmRedo(env, chat, mid, quiet) {
+      const fw = await tg(env, "forwardMessage", { chat_id: chat, from_chat_id: env.CHANNEL, message_id: mid, disable_notification: true }); const m = fw && fw.result;
+      if (!m) { await tg(env, "sendMessage", { chat_id: chat, text: "Kanalda bu raqamli post topilmadi." }); return false; }
+      await tg(env, "deleteMessage", { chat_id: chat, message_id: m.message_id }).catch(() => null);
+      const t0 = m.caption != null ? m.caption : m.text; const e0 = m.caption != null ? m.caption_entities : m.entities;
+      const html = hashFix(CANON.reduce((a, [re, v]) => a.replace(re, v), entHtmlNoLogo(t0 || "", e0)));
+      const idx = await kvGet(env, "lgidx", {}); const ci = cardInfo(html, idx);
+      const [leagueLogo0, ...cls] = await Promise.all([leagueLogoUrl(env, ci.league, idx), ...(ci.clubs || []).map((n) => logoUrl(env, n, idx))]);
+      const clubLogos = cls.map((u, k) => u || ESPN_CREST[ci.clubs[k]] || "").filter(Boolean).slice(0, 4);
+      const id = "n" + Date.now().toString(36) + "r";
+      await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", leftLogo: await leftCrest(env, html, ci, idx), clubLogos, stat: /#Raqamlarda/i.test(html) ? statFromPost(html) : null, face: await faceUrl(env, html), legion: /#Legionerlar\b/i.test(html) ? await legionFromPost(env, html, idx) : null, chan: html, rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 }); await repWatch(env, id, mid);
+      await ghDispatch(env, "card.yml", { job: id });
+      if (!quiet) await tg(env, "sendMessage", { chat_id: chat, text: "🖼 " + mid + "-post uchun yangi kartochka chizilmoqda (liga: " + (ci.league || "—") + ", klublar: " + (ci.clubs || []).join(", ") + "). 2–3 daqiqada rasm almashtiriladi." });
+      return true;
+}
 // asosiy odam ramkasi: Gemini [ymin,xmin,ymax,xmax] (0–1000) → [x0,y0,x1,y1] (0–1); juda kichik yoki buzuq ramka olinmaydi
 function mainBox(a) {
   if (!Array.isArray(a) || a.length !== 4) return null;
@@ -2695,6 +2711,26 @@ async function ubRoute(env, req, url) {
   // STADIONLAR BAZASI (2026-11-10): robot (stadium.yml) Wikimedia Commons'dan erkin litsenziyali stadion suratini rasmlar kanaliga tashlab, shu yerga yozadi
   // RASMLAR BAZASI TINIQLASHTIRUVCHISI (sharp.py, 2026-11-10): /ub/faces — baza; /ub/facesharp — tiniq nusxa eski surat o'rniga yoziladi
   if (url.pathname === "/ub/faces") return J(await kvGet(env, "faces", {}));
+  // KANAL POSTLARIDAGI SURATLARNI BAZAGA O'TKAZISH (chanlib.py, 2026-11-10): /ub/faceprobe — post surati va undagi odam (ism post matnidan, yuzdan emas);
+  // /ub/faceadd — tozalangan surat bazaga yoziladi; /ub/rasm — post rasmi bazadagi surat bilan qayta chiziladi
+  if (url.pathname === "/ub/faceprobe" && req.method === "POST") {
+    const b0 = await req.json().catch(() => ({})); const fw = await tg(env, "forwardMessage", { chat_id: admin, from_chat_id: env.CHANNEL, message_id: +b0.post, disable_notification: true }); const m = fw && fw.result;
+    if (!m) return J({ ok: false, why: "post topilmadi" });
+    await tg(env, "deleteMessage", { chat_id: admin, message_id: m.message_id }).catch(() => null);
+    if (!m.photo) return J({ ok: false, why: "postda surat yo'q" });
+    const ph = m.photo[m.photo.length - 1]; const text = String(m.caption || "");
+    const g = await libGuess(env, { file_id: ph.file_id }, text.split("\n").filter((l) => l.trim()).slice(0, 3).join("\n"));
+    return J({ ok: true, f: ph.file_id, w: ph.width, h: ph.height, title: (text.split("\n").find((l) => l.trim()) || "").slice(0, 200), tags: (text.match(/#[\p{L}\p{N}_]+/gu) || []).join(" "), name: g.name || "", from: g.from || "", people: g.people || 0, box: g.box || null, err: g.err || "" });
+  }
+  if (url.pathname === "/ub/faceadd" && req.method === "POST") {
+    const b0 = await req.json().catch(() => ({})); const name = String(b0.name || "").replace(/\s+/g, " ").trim(); const key = pnorm(name);
+    if (!key || !isFaceName(name) || !b0.f || !b0.uid) return J({ ok: false });
+    const F = await kvGet(env, "faces", {}); const P = (F[key] = F[key] || { n: name, al: [], ph: [], u: 0 });
+    P.al = [...new Set([...(P.al || []), name])].slice(0, 12);
+    if (!P.ph.some((p) => p.uid === b0.uid || (b0.src && p.src === b0.src))) P.ph.push({ f: b0.f, uid: b0.uid, w: b0.w || 0, h: b0.h || 0, m: b0.m, low: b0.w && Math.min(b0.w, b0.h) < 500 ? 1 : 0, t: Date.now(), sr: 1, ...(b0.b ? { b: b0.b } : {}), ...(b0.src ? { src: b0.src } : {}) });
+    await kvPut(env, "faces", F); return J({ ok: true, n: P.ph.length });
+  }
+  if (url.pathname === "/ub/rasm" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); return J({ ok: await rasmRedo(env, admin, +b0.id, true) }); }
   if (url.pathname === "/ub/facesharp" && req.method === "POST") {
     const b0 = await req.json().catch(() => ({})); const F = await kvGet(env, "faces", {}); let hit = 0;
     for (const P of Object.values(F)) for (const p of P.ph || []) {
@@ -3060,20 +3096,7 @@ return;
       const r = await tg(env, "editMessageReplyMarkup", { chat_id: env.CHANNEL, message_id: +id, reply_markup: rm ? { inline_keyboard: [] } : readMore(arg) });
       await tg(env, "sendMessage", { chat_id: chat, text: r.ok ? (rm ? "✅ " + id + "-postdan tugma olib tashlandi." : "✅ " + id + "-post tugmasi yangilandi.") : "⚠️ " + (r.description || "o'zgarmadi") });
     } else if (/^\/rasm\s+\d+$/.test(text)) {
-      // yangilik postining rasmini tasdiqlangan dizayndagi kartochkaga almashtirish (matn va tugma saqlanadi)
-      const mid = +text.split(/\s+/)[1];
-      const fw = await tg(env, "forwardMessage", { chat_id: chat, from_chat_id: env.CHANNEL, message_id: mid, disable_notification: true }); const m = fw && fw.result;
-      if (!m) { await tg(env, "sendMessage", { chat_id: chat, text: "Kanalda bu raqamli post topilmadi." }); return; }
-      await tg(env, "deleteMessage", { chat_id: chat, message_id: m.message_id }).catch(() => null);
-      const t0 = m.caption != null ? m.caption : m.text; const e0 = m.caption != null ? m.caption_entities : m.entities;
-      const html = hashFix(CANON.reduce((a, [re, v]) => a.replace(re, v), entHtmlNoLogo(t0 || "", e0)));
-      const idx = await kvGet(env, "lgidx", {}); const ci = cardInfo(html, idx);
-      const [leagueLogo0, ...cls] = await Promise.all([leagueLogoUrl(env, ci.league, idx), ...(ci.clubs || []).map((n) => logoUrl(env, n, idx))]);
-      const clubLogos = cls.map((u, k) => u || ESPN_CREST[ci.clubs[k]] || "").filter(Boolean).slice(0, 4);
-      const id = "n" + Date.now().toString(36) + "r";
-      await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", leftLogo: await leftCrest(env, html, ci, idx), clubLogos, stat: /#Raqamlarda/i.test(html) ? statFromPost(html) : null, face: await faceUrl(env, html), legion: /#Legionerlar\b/i.test(html) ? await legionFromPost(env, html, idx) : null, chan: html, rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 }); await repWatch(env, id, mid);
-      await ghDispatch(env, "card.yml", { job: id });
-      await tg(env, "sendMessage", { chat_id: chat, text: "🖼 " + mid + "-post uchun yangi kartochka chizilmoqda (liga: " + (ci.league || "—") + ", klublar: " + (ci.clubs || []).join(", ") + "). 2–3 daqiqada rasm almashtiriladi." });
+      await rasmRedo(env, chat, +text.split(/\s+/)[1], false);
     } else if (/^\/maqola\s+\S+\s*\n/.test(text)) {
       // Telegraph maqolasini tuzatish: rasm va oxirgi havola saqlanadi, matn yangilanadi ("# " bilan boshlangan qator — sarlavha)
       const path = decodeURIComponent(text.match(/^\/maqola\s+(\S+)/)[1].replace(/^https?:\/\/telegra\.ph\//, "")); const lines = text.split("\n").slice(1).map((l) => l.trim()).filter(Boolean);
