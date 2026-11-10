@@ -2424,9 +2424,25 @@ async function personCrest(post) {
   }
   return "";
 }
+// matnda eng birinchi tilga olingan (O'zbekistondan boshqa) terma jamoa gerbi — federatsiya gerbi Vikipediyadan
+async function natCrest(plain) {
+  let best = null;
+  for (const [cc, names] of COUNTRY_FLAGS) {
+    if (cc.length !== 2 || cc === "UZ") continue;
+    const re = new RegExp("(" + [...new Set(names.split("|").flatMap((n) => [n, newAlpha(n)]))].map((x) => x.replace(/[.*+?^${}()|[\]\\\/]/g, "\\$&").replace(/'/g, "['‘’ʻʼ`]?")).join("|") + ")\\s+(?:milliy\\s+)?(?:futbol\\s+)?terma\\s+jamoa", "iu");
+    const m = re.exec(plain); if (m && (!best || m.index < best.i)) best = { i: m.index, cc };
+  }
+  return best ? await wikiCrest(EN_COUNTRY(best.cc) + " national football team") : "";
+}
 const leftCrest = async (env, post, ci, idx) => {
   const plain = String(post || "").replace(/<[^>]+>/g, "");
   if (NAT_RE.test(plain) || /#Legionerlar\b|(O['‘’ʻ]|Ö)zbek legionerlari/i.test(plain)) return await ufaCrest(env); // legionerlar ham — o'zbek futboli
+  // BOSHQA TERMA JAMOA (2026-11-10, 207-post: Meksika futbolchisi kartasida UEFA Millatlar ligasi logotipi chiqqan edi): sarlavhada klub ham,
+  // liga ham bo'lmasa va matnda "X terma jamoasi" bo'lsa — chapda o'sha terma jamoa gerbi (qaysi jamoa haqida gap ketsa — o'shaniki)
+  if (!(ci && ci.subj && ci.subj.t === "club")) {
+    const tl = plain.split("\n").find((l) => l.trim()) || "";
+    if (!/\blig|league|kubog|[cç]empionat|chempionat|\bcup\b/i.test(tl)) { const nc = await natCrest(plain).catch(() => ""); if (nc) return nc; }
+  }
   if (ci && ci.subj && ci.subj.t === "club") { const n = ci.subj.n; return (await logoUrl(env, n, idx || {})) || ESPN_CREST[n] || ESPN_CREST[Object.keys(ESPN_CREST).find((k) => norm(k) === norm(n))] || (await findCrest(env, n, idx)); }
   if (ci && ci.subj) return ""; // mavzu liga bo'lsa — chapda liga logotipi (avvalgidek)
   return await personCrest(post); // mavzu topilmadi — sarlavhadagi odamning klubi
@@ -2461,6 +2477,7 @@ function cardInfo(post, extra = {}) {
   const all = [];
   // liga: sarlavhada bo'lsa o'sha, aks holda matnda ENG BIRINCHI tilga olingan liga (Saka postida Chempionlar ligasi, Millatlar ligasi emas)
   if (!(found.find((f) => f.lg))) { let li = -1, ln = ""; for (const [id, em, names] of CLUB_EMOJI) { if (!(LEAGUES.has(id) || isLg(names))) continue; for (const x of NA2(names)) { const mm = plain.match(rx(x)); if (mm && (li < 0 || mm.index < li)) { li = mm.index; ln = names[0]; } } } if (ln) league = ln; }
+  if (/UEFA Nations League/i.test(league) && !/UEFA|Yevropa|Evropa/i.test(plain) && /CONCACAF|KONKAKAF|Meksika|Yamayka|AQSh|AQŞ|Kanada|Kosta-Rika|Panama|Gonduras|Salvador|Gaiti|Trinidad|Gvatemala|Kyurasao/i.test(plain)) league = "CONCACAF Nations League"; // har turnirga faqat O'Z logotipi
   for (const [id, em, names] of CLUB_EMOJI) { if (LEAGUES.has(id) || isLg(names)) continue; let best = -1; for (const x of NA2(names)) { const mm = plain.match(rx(x)); if (mm && (best < 0 || mm.index < best)) best = mm.index; } if (best >= 0 && !all.some((a) => a.n === names[0])) all.push({ i: best, n: names[0] }); }
   const cl = [...clubs.map((c) => c.n), ...all.sort((a, b) => a.i - b.i).map((a) => a.n)].filter((n, k, arr) => arr.indexOf(n) === k).slice(0, 4);
   // ASOSIY MAVZU (Bahtiyor aka qoidasi, 2026-11-08: "qaysi klub yoki liga haqida gapirilsa o'shani qo'yasan"):
