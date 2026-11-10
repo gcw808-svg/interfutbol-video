@@ -45,6 +45,12 @@ def clean(im, box):
         c = (0, top, w, h); how = "tepadan"
     elif left >= bx1 - w * 0.03:
         c = (0, 0, left, h); how = "o'ngdan"
+    elif left >= bx0 + (bx1 - bx0) * 0.70 and left >= w * 0.6:
+        # belgi odamning chetiga (yelka, qo'l) tushgan — o'ng chetdan kesiladi, odam ramkasi enining ko'pi bilan 30% i ketadi
+        c = (0, 0, left, h); how = "o'ngdan (odam chetidan ozgina) kesildi"
+        out = im.crop(c)
+        nb = [max(0, bx0) / out.width, by0 / out.height, min(out.width, bx1) / out.width, min(out.height, by1) / out.height]
+        return out, [round(v, 3) for v in nb], "belgi " + how
     else:
         return None, None, "belgi odam ustida"
     out = im.crop(c)
