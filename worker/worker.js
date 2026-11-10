@@ -1539,21 +1539,21 @@ async function libIndex(env, m, edited) {
   const ix = P.ph.findIndex((p) => p.uid === ph.file_unique_id);
   if (ix < 0) P.ph.push(rec); else P.ph[ix] = { ...P.ph[ix], ...rec, t: P.ph[ix].t || rec.t };
   await kvPut(env, "faces", F);
-  if (!m.media_group_id || how || cap === String(m.caption || "").trim()) await libReply(env, m, (small ? "⚠️ Surat kichik (" + ph.width + "×" + ph.height + ") — saqlandi, lekin kattaroq surat yuborsangiz yaxshi. " : "✅ ") + name + " — bazada " + P.ph.length + " ta surat." + (box ? " ✂️ Asosiy odam topildi." : "") + how + (how ? " Noto'g'ri bo'lsa — suratga javob qilib to'g'ri ismni yozing." : ""));
+  if (!m.media_group_id || how || cap === String(m.caption || "").trim()) await libReply(env, m, (small ? "⚠️ Surat kichik (" + ph.width + "×" + ph.height + ") — saqlandi, lekin kattaroq surat yuborsangiz yaxshi. " : "✅ ") + name + " — bazada " + P.ph.length + " ta surat." + (box ? " ✂️ Asosiy odam topildi." : m.__guess ? " ⚠️ Asosiy odam ramkasi aniqlanmadi" + (g.err ? " (" + g.err + ")" : "") + "." : "") + how + (how ? " Noto'g'ri bo'lsa — suratga javob qilib to'g'ri ismni yozing." : ""));
 }
 // Surat kimligini aniqlash: FAQAT izoh matni va suratda yozilgan so'zlar (formadagi familiya, ekrandagi yozuv); yuz yoki tashqi ko'rinishdan EMAS
 async function libGuess(env, ph, cap) {
-  let img = null, iw = 0, ih = 0;
+  let img = null, iw = 0, ih = 0, err = "";
   try { const f = await tg(env, "getFile", { file_id: ph.file_id }); if (f.ok) { const r = await fetch(`https://api.telegram.org/file/bot${env.BOT_TOKEN}/${f.result.file_path}`); const raw0 = await r.arrayBuffer(); try { const inf = await env.IMAGES.info(new Blob([raw0]).stream()); iw = inf.width || 0; ih = inf.height || 0; } catch (e) {} img = await (await env.IMAGES.input(new Blob([raw0]).stream()).transform({ width: 1024 }).output({ format: "image/jpeg", quality: 80 })).response().arrayBuffer(); } } catch (e) {}
   const prompt = `You catalogue a football (soccer) photo library. NEVER identify a person from their face, body, hair or appearance. Decide who the photo shows ONLY from (1) the caption text below and (2) words printed in the image (a surname printed on a shirt, on-screen captions). If neither clearly names the single main person, leave "name" empty. You may give the club only from a clearly visible crest or printed club name, and a shirt number only if clearly visible.
 Caption: """${String(cap || "").slice(0, 1500)}"""
 Answer ONLY JSON: {"name":"full name in official Latin spelling, or empty","from":"caption" or "shirt" or "","club":"","number":"","people":number of prominent people in sharp focus whose head is visible (do NOT count blurred background people, the crowd, or someone cut off by the image edge with only an arm, shoulder or back showing),"main":[ymin,xmin,ymax,xmax] bounding box (integers 0-1000, relative to image height/width) of the visible body of the ONE main person - the largest, sharpest and most central one - or [] if there is no person,"watermark":true if logos/watermarks of TV channels, websites or news agencies are overlaid on the photo}`;
   for (let k = 0; k < 2; k++) try { // javob buzuq kelsa yoki model javob bermasa — yana bir marta
-    const raw = await callGemini(env, img ? [{ text: prompt }, { inline_data: { mime_type: "image/jpeg", data: toB64(img) } }] : prompt, 0, Date.now() + 22000, 1024, false, true);
+    const raw = await callGemini(env, img ? [{ text: prompt }, { inline_data: { mime_type: "image/jpeg", data: toB64(img) } }] : prompt, 0, Date.now() + 22000, 4096, false, true);
     const j = JSON.parse(raw.match(/\{[\s\S]*\}/)[0]);
     return { name: String(j.name || "").trim(), from: j.from || "", club: String(j.club || "").trim(), number: String(j.number || "").replace(/\D/g, ""), people: Number(j.people) || 1, watermark: j.watermark === true || j.watermark === "true", box: mainBox(j.main), w: iw, h: ih };
-  } catch (e) { console.log("libGuess", k, String(e && e.message || e).slice(0, 200)); }
-  return { w: iw, h: ih };
+  } catch (e) { err = String(e && e.message || e).slice(0, 160); console.log("libGuess", k, err); }
+  return { w: iw, h: ih, err: (img ? "" : "surat o'qilmadi; ") + err };
 }
 // asosiy odam ramkasi: Gemini [ymin,xmin,ymax,xmax] (0–1000) → [x0,y0,x1,y1] (0–1); juda kichik yoki buzuq ramka olinmaydi
 function mainBox(a) {
