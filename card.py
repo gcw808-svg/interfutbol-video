@@ -846,7 +846,14 @@ def _person_window(sw, sh, w, h, box, maxup=1.6, excl=None):
     ww = min(ww, xmax - xmin)
     wh = ww / a
     x = (bx0 + bx1) / 2 - ww / 2
-    y = by0 - ph * 0.08 if ph * 1.12 >= wh else (by0 + by1) / 2 - wh / 2  # odam oynadan uzun bo'lsa — bosh tomoni qoladi
+    if ph * 1.12 < wh:
+        y = (by0 + by1) / 2 - wh / 2
+    elif wh < ph * 0.62 and ph < pw * 1.7:
+        # yaqin plan (yuz kadrni to'ldirgan) va oyna odamdan ancha past: yuqoriga taqalsa faqat peshona qoladi (182, 156-postlar) —
+        # oyna ramkaning yuqori uchdan bir qismi atrofiga qo'yiladi (yuz o'sha yerda)
+        y = max(by0 - ph * 0.04, by0 + ph * 0.36 - wh / 2)
+    else:
+        y = by0 - ph * 0.08  # odam oynadan uzun — bosh tomoni qoladi
     x = max(xmin, min(x, xmax - ww))
     y = max(0.0, min(y, sh - wh))
     # yaxlitlash xatolari manfiy yoki suratdan tashqari qiymat bermasligi uchun (2026-11-10: "box offset can't be negative" — 10 ta post chizilmay qolgan edi)
