@@ -1589,7 +1589,7 @@ async function rasmRedo(env, chat, mid, quiet, ov) {
       // MUALLIF YOZUVI RASMDA EMAS, POST MATNIDA (Bahtiyor aka, 2026-11-11: "rasmdagi Wikimedia yozuvini ko'rinmaydigan qil"): erkin litsenziya (CC BY / BY-SA)
       // muallifni ko'rsatishni talab qiladi — shuning uchun yozuv butunlay olib tashlanmaydi, heshteglardan oldin kichik kursiv qator bo'lib qo'shiladi
       let html1 = html;
-      if (ov && ov.credit && !/Wikimedia Commons/i.test(html)) { const cl = "<i>⟦" + ov.credit + "⟧</i>"; html1 = /\n\s*#[^\n]*\s*$/.test(html) ? html.replace(/\n\s*(#[^\n]*\s*)$/, "\n" + cl + "\n\n$1") : html + "\n\n" + cl; }
+      if (ov && ov.credit && !/Wikimedia Commons/i.test(html)) { const cl = "<i>⟦" + ov.credit + "⟧</i>"; html1 = /\n\s*#[^\n]*\s*$/.test(html) ? html.replace(/\s*\n\s*(#[^\n]*\s*)$/, "\n\n" + cl + "\n\n$1") : html + "\n\n" + cl; }
       const id = "n" + Date.now().toString(36) + "r";
       await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", leftLogo: await leftCrest(env, html, ci, idx), clubLogos, stat: /#Raqamlarda/i.test(html) ? statFromPost(html) : null, face: own ? own.face : await faceUrl(env, html), po: own ? own.po : 0, legion: /#Legionerlar\b/i.test(html) ? await legionFromPost(env, html, idx) : null, scorers: /#Topurarlar\b/i.test(html) ? await scorersFromPost(env, html, idx) : null, chan: html1, rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 }); await repWatch(env, id, mid);
       await ghDispatch(env, "card.yml", { job: id });
