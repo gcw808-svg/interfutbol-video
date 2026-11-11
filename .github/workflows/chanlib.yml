@@ -4,7 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       posts:
-        required: true
+        default: ""
+      wiki:
+        default: ""
       redraw:
         default: "0"
       dry:
@@ -26,6 +28,7 @@ jobs:
       - env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           POSTS: ${{ inputs.posts }}
+          WIKI: ${{ inputs.wiki }}
           REDRAW: ${{ inputs.redraw }}
           DRY: ${{ inputs.dry }}
           ONLYDRAW: ${{ inputs.onlydraw }}

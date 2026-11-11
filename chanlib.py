@@ -5,7 +5,7 @@
 # REDRAW=1 bo'lsa post rasmi bazadagi surat bilan qayta chiziladi (tik karta, surat shu odam atrofida qirqiladi).
 # Bitta odam aniq ko'rinmagan (2+ kishi, ism noaniq) suratlar o'tkazib yuboriladi — bazaga noto'g'ri odam tushmasligi uchun.
 #   POSTS — post raqamlari (vergul bilan);  REDRAW — "1": post rasmi qayta chiziladi;  DRY — "1": faqat hisobot, hech narsa o'zgarmaydi
-import io, json, os, sys, time
+import io, json, os, re, sys, time
 
 import numpy as np
 import requests
@@ -58,7 +58,57 @@ def clean(im, box):
     return out, [round(v, 3) for v in nb], "belgi " + how + " kesildi"
 
 
+def wiki_one(pid, title):
+    # VIKIPEDIYADAN ASL SURAT (2026-11-12, 223-post — Philipp Lahm): tarix/fakt postlarining surati Vikipediya maqolasidan olingan bo'ladi,
+    # kanaldagi nusxasida esa iF belgisi yuz yonida turadi va kesib bo'lmaydi. Shuning uchun maqolaning ASL surati (Commons, faqat erkin
+    # litsenziya) olinadi: bazaga odam nomi bilan tushadi, post shu surat bilan qayta chiziladi, muallif qatori post matniga qo'shiladi.
+    import stadium
+    r = requests.get("https://en.wikipedia.org/w/api.php", params={"action": "query", "format": "json", "titles": title, "prop": "pageimages", "piprop": "name", "redirects": 1}, headers=stadium.UA, timeout=40).json()
+    fname = next(iter(r["query"]["pages"].values())).get("pageimage")
+    c = stadium.commons(fname) if fname else None
+    if not c:
+        print(pid, "O'TKAZILDI: Vikipediyada erkin litsenziyali surat yo'q |", title, "|", fname); return False
+    full = requests.get("https://commons.wikimedia.org/w/api.php", params={"action": "query", "format": "json", "titles": "File:" + fname, "prop": "imageinfo", "iiprop": "url", "iiurlwidth": 2560}, headers=stadium.UA, timeout=40).json()
+    ii = next(iter(full["query"]["pages"].values()))["imageinfo"][0]
+    im = Image.open(io.BytesIO(requests.get(ii.get("thumburl") or ii["url"], headers=stadium.UA, timeout=120).content)).convert("RGB")
+    w0, h0 = im.size
+    note = ""
+    if min(im.size) < sharp.MINSIDE:
+        im = sharp.sr4(im)
+        if max(im.size) > sharp.MAXLONG:
+            k = sharp.MAXLONG / max(im.size)
+            im = im.resize((int(im.width * k + .5), int(im.height * k + .5)), Image.LANCZOS)
+        note = "; tiniqlashtirilgan"
+    box, pn, ex = persons.analyse(im)
+    if not box or pn != 1:
+        print(pid, "O'TKAZILDI: suratda bitta odam emas |", title, pn); return False
+    art = re.sub(r"^User:", "", c["art"]).strip()
+    credit = f"Foto: {art}, {c['lic']}"
+    print(pid, title, fname, f"{w0}x{h0} -> {im.width}x{im.height}", "|", credit, "| ramka", box, "| chet", ex)
+    if os.environ.get("DRY") == "1":
+        return True
+    buf = io.BytesIO(); im.save(buf, "JPEG", quality=93, subsampling=0)
+    fn = "".join(ch if ch.isalnum() else "_" for ch in title)[:40] + ".jpg"
+    r = tg("sendDocument", data={"chat_id": LIB, "caption": f"{title}\n{credit} (Wikimedia Commons){note}\n📌 kanal posti: {pid}", "disable_notification": True, "disable_content_type_detection": True}, files={"document": (fn, buf.getvalue(), "image/jpeg")})
+    if not r.get("ok"):
+        print(pid, "XATO yuborish:", r.get("description")); return False
+    d = r["result"]["document"]
+    res = wpost("/ub/faceadd", {"name": title, "f": d["file_id"], "uid": d["file_unique_id"], "w": im.width, "h": im.height, "m": r["result"]["message_id"], "b": box, "x": ex, "src": pid})
+    if not res.get("ok"):
+        tg("deleteMessage", data={"chat_id": LIB, "message_id": r["result"]["message_id"]}); print(pid, "XATO baza:", res); return False
+    time.sleep(20)  # KV yangi yozuvni ko'rsatishi uchun
+    print(pid, "qayta chizish:", wpost("/ub/rasm", {"id": pid, "credit": credit + ", Wikimedia Commons"}))
+    return True
+
+
 def main():
+    for part in [x for x in os.environ.get("WIKI", "").split(";") if "=" in x]:  # "223=Philipp Lahm;230=..."
+        k, v = part.split("=", 1)
+        try:
+            wiki_one(int(k), v.strip())
+        except Exception as e:
+            print(k, "XATO:", str(e)[:200])
+        time.sleep(5)
     posts = [int(x) for x in os.environ.get("POSTS", "").replace(" ", "").split(",") if x.isdigit()]
     redraw, dry = os.environ.get("REDRAW") == "1", os.environ.get("DRY") == "1"
     F = requests.get(W + "/ub/faces", headers=H, timeout=40).json()
