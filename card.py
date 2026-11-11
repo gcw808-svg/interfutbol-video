@@ -1010,6 +1010,8 @@ def render_news_v(j):
         t = y / Hd
         d.line([0, y, Wd, y], fill=tuple(int(top[i] + (bot[i] - top[i]) * t) for i in range(3)))
     dark = sc(base, 18) if pal else (8, 10, 16)
+    fb = (getattr(face, "info", None) or {}).get("box") if face else None
+    tall = bool(fb) and not st and face.height >= face.width * 1.2 and (fb[2] - fb[0]) >= 0.8
     if st:
         LW = 660
         if face:
@@ -1052,6 +1054,21 @@ def render_news_v(j):
             d.text((62, y + 8), ln, font=font("med", 30), fill=(200, 215, 235)); y += 42
         if st.get("src"):
             d.text((62, Hd - 70), "Manba: " + st["src"], font=font("med", 22), fill=(150, 165, 190))
+    elif face and tall:
+        # YAQIN PLANLI TIK PORTRET (2026-11-12, 223-post — Philipp Lahm: yotiq surat joyiga sig'may, og'iz-iyak sarlavha ostida qolgan edi):
+        # surat butun kartani (1080x1350) egallaydi, sarlavha pastda qorayish ustida; gerb sarlavha tepasida; iF pastki o'ng burchakda
+        im.paste(_grade(_cover(face, Wd, Hd, 0.10), base, acc), (0, 0))
+        _vfade(im, 900, 1120, dark, 0, 175)
+        _vfade(im, 1120, Hd, dark, 175, 252)
+        title = j.get("title") or "Inter Futbol"
+        th = _title_v(ImageDraw.Draw(Image.new("RGB", (Wd, 600))), title, 0, 0, Wd - 250, 260, 60, 40)
+        ty = Hd - 64 - int(th)
+        if mark:
+            m2 = mark.copy(); m2.thumbnail((104, 104), Image.LANCZOS); _shadow_paste(im, m2, 60, ty - 44 - m2.height)
+        d = ImageDraw.Draw(im, "RGBA")
+        d.rectangle([60, ty - 22, 190, ty - 16], fill=tuple(acc))
+        _title_v(d, title, 60, ty, Wd - 250, 260, 60, 40)
+        yend = Hd
     elif face:
         im.paste(_grade(_cover(face, Wd, 900, 0.12), base, acc), (0, 0))
         _vfade(im, 600, 900, dark)
