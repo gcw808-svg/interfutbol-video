@@ -2412,8 +2412,15 @@ async function qcCheck(env, text, media) {
     for (const n of await qcTeams(env)) { const k = qcNorm(n); if (k.length < 4) continue; let at = nt.indexOf(" " + k), hit = false; while (at >= 0 && !hit) { hit = /^(?:'?(?:ning|ni|ga|ka|qa|dagi|dan|da|tan|ta|lik|chilar|chi|lar))? /.test(nt.slice(at + 1 + k.length)); at = nt.indexOf(" " + k, at + 1); } if (!hit) continue; if (QC_ALIAS.some((a) => a === k || (a.length > k.length && a.includes(k) && nt.includes(" " + a + " ")) || (a.length >= 5 && k.includes(a) && nt.includes(" " + a)))) continue; miss.add(n); }
     if (miss.size) warn.push("logotipsiz klub: " + [...miss].slice(0, 6).join(", "));
   } catch (e) {}
-  return { text: canonFix(raw), fatal: [...new Set(fatal)], warn: [...new Set(warn)] };
+  // 2026-11-11: "Mюнхенликлар" (lotin+kirill aralash so'z) chiqib ketdi — kirill 15% dan kam bo'lsa to'xtatilmas edi.
+  // Endi o'z matndagi (⟦ ⟧, heshteg, teg, havoladan tashqari) har qanday kirill harf yangi alifboga o'giriladi va adminga ogohlantirish.
+  let fixed = canonFix(raw);
+  if (cy && !fatal.some((f) => /kirill/.test(f))) { const c = cyrFix(fixed); if (c !== fixed) { fixed = c; warn.push("kirill harflar lotinga o'girildi — matnni ko'zdan kechiring"); } }
+  return { text: fixed, fatal: [...new Set(fatal)], warn: [...new Set(warn)] };
 }
+const CYR_MAP = { а: "a", б: "b", в: "v", г: "g", д: "d", ж: "j", з: "z", и: "i", й: "y", к: "k", л: "l", м: "m", н: "n", о: "o", п: "p", р: "r", с: "s", т: "t", у: "u", ф: "f", х: "x", ц: "ts", ч: "ç", ш: "ş", щ: "şç", ъ: "'", ы: "i", ь: "", э: "e", ю: "yu", я: "ya", ё: "yo", ў: "ö", қ: "q", ғ: "ğ", ҳ: "h", і: "i", ї: "yi", є: "ye", ґ: "g" };
+const cyrWord = (w) => w.replace(/[\u0400-\u04FF]/g, (ch, i) => { const lo = ch.toLowerCase(); let v = lo === "е" ? (i === 0 || /[aeiouаеёиоуэюяў'ʼ]/i.test(w[i - 1] || "") ? "ye" : "e") : (CYR_MAP[lo] ?? ""); if (ch !== lo && v) v = v[0].toUpperCase() + v.slice(1); return v; });
+const cyrFix = (t) => String(t || "").split(/(<[^>]*>|⟦[^⟧]*⟧|#[\p{L}\p{N}_]+|https?:\/\/\S+)/u).map((p, i) => (i % 2 ? p : p.replace(/[\p{L}'ʼ]*[\u0400-\u04FF][\p{L}'ʼ]*/gu, cyrWord))).join("");
 // null — post chiqaversin (matn tuzatilgan bo'lishi mumkin: r.text); obyekt — post to'xtatildi
 async function qcGate(env, text, img, url, video) {
   let r; try { r = await qcCheck(env, text, !!(img || video)); } catch (e) { return { text }; }
