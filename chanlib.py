@@ -117,7 +117,7 @@ def main():
     for pid in posts:
         try:
             if os.environ.get("ONLYDRAW") == "1":  # faqat qayta chizish (surat bazaga o'tkazilmaydi) — masalan to'purarlar jadvali
-                rr = wpost("/ub/rasm", {"id": pid}); print(pid, "qayta chizish:", rr); ok += 1; time.sleep(25); continue
+                rr = wpost("/ub/rasm", {"id": pid}); print(pid, "qayta chizish:", rr); ok += 1; time.sleep(18); continue
             if pid in have:
                 print(pid, "bazada bor:", have[pid])
             else:

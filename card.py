@@ -1200,6 +1200,8 @@ def render_scorers_v(j):
 
 
 def render_photo_v(j):
+    # QOIDA (Bahtiyor aka, 2026-11-12: "hamma rasmlar tagiga izoh yozaverma, rasm o'zi qolaversin"): SURATLI KARTADA SARLAVHA YOZILMAYDI —
+    # surati bor har qanday yangilik/fakt kartasi shu ko'rinishda chiziladi (faqat surat va iF); sarlavha faqat suratsiz (gerbli) kartalarda.
     # SARLAVHASIZ SURATLI KARTA (2026-11-10): post o'z surati bilan qoladi, lekin tik (1080x1350), asosiy odam atrofida qirqilgan,
     # chetdagi begona odamlarsiz va tiniqlashtirilgan; yozuv yo'q — faqat pastki o'ng burchakda iF. Post sarlavhasida shu odamning ismi
     # bo'lmaganda ishlatiladi (masalan klub haqidagi yangilik) — surat ustiga boshqa mavzudagi sarlavha yozilmasligi uchun.
@@ -1511,7 +1513,7 @@ def render(j):
         buf = io.BytesIO()
         im.save(buf, "PNG", optimize=True)
         return buf.getvalue()
-    im = render_scorers_v(j) if len((j.get("scorers") or {}).get("rows") or []) >= 3 else render_photo_v(j) if (j.get("po") and j.get("face")) else render_legion_v(j) if (j.get("legion") or {}).get("rows") else (render_news(j) if j.get("hz") else render_news_v(j))  # 2026-11-09: yangilik kartochkalari tik (1080x1350)
+    im = render_scorers_v(j) if len((j.get("scorers") or {}).get("rows") or []) >= 3 else render_photo_v(j) if (j.get("face") and not (j.get("stat") or {}).get("tiles")) else render_legion_v(j) if (j.get("legion") or {}).get("rows") else (render_news(j) if j.get("hz") else render_news_v(j))  # 2026-11-09: yangilik kartochkalari tik (1080x1350)
     buf = io.BytesIO()
     if j.get("face"):
         im.convert("RGB").save(buf, "JPEG", quality=92)  # suratli kartochka — hajm kichik bo'lsin
