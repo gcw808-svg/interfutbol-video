@@ -2412,6 +2412,9 @@ async function qcCheck(env, text, media) {
     const miss = new Set();
     for (const n of await qcTeams(env)) { const k = qcNorm(n); if (k.length < 4) continue; let at = nt.indexOf(" " + k), hit = false; while (at >= 0 && !hit) { hit = /^(?:'?(?:ning|ni|ga|ka|qa|dagi|dan|da|tan|ta|lik|chilar|chi|lar))? /.test(nt.slice(at + 1 + k.length)); at = nt.indexOf(" " + k, at + 1); } if (!hit) continue; if (QC_ALIAS.some((a) => a === k || (a.length > k.length && a.includes(k) && nt.includes(" " + a + " ")) || (a.length >= 5 && k.includes(a) && nt.includes(" " + a)))) continue; miss.add(n); }
     if (miss.size) warn.push("logotipsiz klub: " + [...miss].slice(0, 6).join(", "));
+    // 2026-11-12: logotipsiz klub LOGO ROBOTI navbatiga ham tushadi (04:00 da emojiadd.yml to'plamga qo'shadi) — postda 1 ta, so'rovlarni tejash uchun
+    const mlist = [...miss].filter((n) => ![...miss].some((o) => o !== n && o.length > n.length && qcNorm(o).includes(qcNorm(n))));
+    if (mlist.length) { const q0 = await kvGet(env, "emojiNeed", []); const nm = mlist.find((n) => !q0.some((x) => norm(x.n) === norm(n))); if (nm) { const lg = await findCrest(env, nm, {}).catch(() => ""); if (lg) await emojiNeed(env, nm, lg); } }
   } catch (e) {}
   // 2026-11-11: "Mюнхенликлар" (lotin+kirill aralash so'z) chiqib ketdi — kirill 15% dan kam bo'lsa to'xtatilmas edi.
   // Endi o'z matndagi (⟦ ⟧, heshteg, teg, havoladan tashqari) har qanday kirill harf yangi alifboga o'giriladi va adminga ogohlantirish.
