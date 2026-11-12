@@ -1430,9 +1430,10 @@ async function autoResults(env) {
       if (F && F.done && (F.sh !== ft.home || F.sa !== ft.away)) { if (age < 170 * 60e3) continue; if (!warned.includes(m.id)) { warned.push(m.id); await tg(env, "sendMessage", { chat_id: (await getAdmins(env))[0], text: `⚠️ Natija chiqarilmadi: manbalar hisobda kelishmadi.\n${H} – ${A}\nfootball-data: ${ft.home}:${ft.away}\nAPI-Football: ${F.sh}:${F.sa}` }); } continue; }
     }
     if (E && !E.goalsOk && !pens && age < 170 * 60e3) continue; // gollar ma'lumoti hali to'liq emas
-    const stage = await matchRound(env, m, H, A, F);
-    if (!stage && age < 170 * 60e3) continue; // tur hali aniqlanmadi — keyingi aylanishda yana urinamiz
-    if (!stage) await tg(env, "sendMessage", { chat_id: (await getAdmins(env))[0], text: "⚠️ Natija posti turisiz chiqdi (tur hech bir manbada topilmadi): " + H + " – " + A + ". /tur XABAR_ID N bilan qo'shing." });
+    const friendly = m.competition?.code === "FR"; /* 2026-11-12: o'rtoqlik o'yinida tur bo'lmaydi — O'zbekiston–Rossiya natijasi tur kutib 170 daqiqa ushlanib qolgan edi */
+    const stage = friendly ? "" : await matchRound(env, m, H, A, F);
+    if (!stage && !friendly && age < 170 * 60e3) continue; /* tur hali aniqlanmadi — keyingi aylanishda yana urinamiz */
+    if (!stage && !friendly) await tg(env, "sendMessage", { chat_id: (await getAdmins(env))[0], text: "⚠️ Natija posti turisiz chiqdi (tur hech bir manbada topilmadi): " + H + " – " + A + ". /tur XABAR_ID N bilan qo'shing." });
     done.push(m.id);
     const comp = FD_COMPS[m.competition?.code] || m.competition?.name || "";
     let line;
@@ -2408,7 +2409,7 @@ async function qcCheck(env, text, media) {
       }
     }
   } catch (e) {}
-  if (/#Natija\b/.test(raw) && !/\d+-tur|final|guruh|pley-?off|saralash|1\/\d+|bosqich|raund/i.test(plain)) warn.push("natija postida tur ko'rsatilmagan");
+  if (/#Natija\b/.test(raw) && !/\d+-tur|[oö]['ʻ‘’]?rtoqlik|final|guruh|pley-?off|saralash|1\/\d+|bosqich|raund/i.test(plain)) warn.push("natija postida tur ko'rsatilmagan");
   for (const [re, why] of AUDIT_RULES) if (re.test(plain.replace(/⟦[^⟧]*⟧/g, (m) => m.replace(/ı/g, "i")))) warn.push(why);
   // logotipsiz klub: ESPN ro'yxatidagi klub matnda bor, lekin logotip to'plamida (CLUB_EMOJI) yo'q
   try {
