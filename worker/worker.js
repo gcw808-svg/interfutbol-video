@@ -2388,7 +2388,7 @@ async function qcCheck(env, text, media) {
   for (const t of ["b", "i", "a", "u", "s", "code", "blockquote"]) { const o = (raw.match(new RegExp("<" + t + "(\\s[^>]*)?>", "g")) || []).length, cl = (raw.match(new RegExp("</" + t + ">", "g")) || []).length; if (o !== cl) fatal.push("HTML teg buzilgan (<" + t + ">)"); }
   const lt = (own.match(/\p{L}/gu) || []).length, cy = (own.match(/[\u0400-\u04FF]/g) || []).length;
   if (lt > 40 && cy / lt > 0.15) fatal.push("matnda kirill (ruscha) qismi qolgan");
-  else { const cw = own.match(/[\p{L}]*[\u0400-\u04FF][\p{L}]*/gu) || []; const cwl = cw.filter((w) => w.length >= 3); if (cwl.length) fatal.push("matnda kirill harfli so'z qolgan: " + cwl.slice(0, 3).join(", ")); } // 2026-11-12: 226-postda bitta "Mюнхенликлар" so'zi 15% chegaradan o'tib ketgan edi
+  else { const cw = own.match(/[\p{L}]*[\u0400-\u04FF][\p{L}]*/gu) || []; const cwl = cw.filter((w) => w.length >= 3 && !((w.match(/[A-Za-zÀ-ɏ]/g) || []).length >= (w.match(/[\u0400-\u04FF]/g) || []).length)); if (cwl.length) fatal.push("matnda kirill harfli so'z qolgan: " + cwl.slice(0, 3).join(", ")); } // 2026-11-13: lotin harflari ko'p aralash so'z ("o'ртоqlik" — 10:21 da to'xtatilgan Shomurodov posti) to'xtatilmaydi, cyrFix bilan lotinga o'giriladi; 2026-11-12: 226-postda bitta "Mюнхенликлар" so'zi 15% chegaradan o'tib ketgan edi
   const en = (own.match(/\b(the|and|with|has|have|been|will|from|after|their|this|that|was|were|for)\b/gi) || []).length;
   if (en >= 5) fatal.push("matnda tarjima qilinmagan inglizcha qism bor");
   if (BOOKIE_RE.test(plain)) fatal.push("matnda bukmeker nomi bor (bukmeker reklamasi kanalda taqiqlangan)");
