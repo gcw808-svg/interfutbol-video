@@ -944,6 +944,21 @@ async function dateCheck(env, post, item) {
     if (Math.abs(cur - now) > 60 * 86400e3 || src.includes(String(y))) continue;
     text = text.split(m[0]).join(y0 + "-yil " + d + "-" + UZ_MON[mo]); fixes.push(m[0] + " → " + y0 + "-yil");
   }
+  // 2026-11-14: faqat hafta kuni ("juma oqshomi") — kelasi zamondagi gapda (o'yin bo'ladi, kutilmoqda) aniq sana qo'shiladi.
+  // Sana UTC kunidan (Yevropa/Afrika mahalliy kuniga yaqin) 0–6 kun ichidagi shu hafta kuni; o'tgan zamon yoki aniq sana bor gapga tegilmaydi.
+  { const WD = ["yakshanba", "dushanba", "seshanba", "chorshanba", "payshanba", "juma", "shanba"]; const AP = "['ʻ’‘ʼ`]";
+    const FUT = new RegExp("(adigan|ydigan|moqda|kutil|rejalashtir|niyat|bo" + AP + "lib o" + AP + "tadi|o" + AP + "tkaziladi|o" + AP + "ynaydi|uchrashadi|bo" + AP + "ladi)", "iu");
+    const PAST = new RegExp("(bo" + AP + "lib o" + AP + "td|o" + AP + "tkazild|o" + AP + "ynad|kechgan|yakunland|g" + AP + "alaba qozond|mag" + AP + "lub bo" + AP + "ld|yutd|yutqazd)", "iu");
+    const WRE = /(?<![\p{L}])(dushanba|seshanba|chorshanba|payshanba|juma|shanba|yakshanba)(\s+)(kuni|oqshomi|kechqurun|ertalab|kechasi)(?![\p{L}])/iu;
+    const parts = text.split(/(?<=[.!?])(\s+)/);
+    for (let i = 0; i < parts.length; i++) { const sn = parts[i]; const m = sn.match(WRE); if (!m) continue;
+      const before = sn.slice(0, m.index); if (/\d{1,2}-(yanvar|fevral|mart|aprel|may|iyun|iyul|avgust|sentabr|oktabr|noyabr|dekabr)\S*\s*,?\s*$/i.test(before)) continue;
+      if (DATE_RE.test(sn)) { DATE_RE.lastIndex = 0; continue; } DATE_RE.lastIndex = 0;
+      if (!FUT.test(sn) || PAST.test(sn)) continue;
+      const wd = WD.indexOf(m[1].toLowerCase()); const base = new Date(now); const k = (wd - base.getUTCDay() + 7) % 7; const t = new Date(now + k * 86400e3);
+      const ds = t.getUTCFullYear() + "-yil " + t.getUTCDate() + "-" + UZ_MON[t.getUTCMonth()];
+      parts[i] = sn.slice(0, m.index) + ds + ", " + m[0].toLowerCase() + sn.slice(m.index + m[0].length); fixes.push(m[0] + " → " + ds + " (hafta kuni)"); }
+    text = parts.join(""); }
   // o'yin sanasi: gaplarga bo'lib, har gapda sana + klublar
   const names = [...new Set(CLUB_EMOJI.flatMap(([, , ns]) => ns))].filter((n) => n.length >= 4).sort((a, b) => b.length - a.length);
   const plain = text.replace(/<[^>]+>/g, "").replace(/[⟦⟧]/g, "");
