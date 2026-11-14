@@ -1666,6 +1666,9 @@ function faceFor(F, text) {
   const t = " " + pnorm(String(text || "").replace(/<[^>]+>/g, " ").split("\n").slice(0, 2).join(" ")) + " ";
   let best = null;
   for (const [k, P] of Object.entries(F || {})) if (isFaceName(P.n)) for (const a of [P.n, ...(P.al || [])]) { const q = pnorm(a); if (q.length < 3) continue; const mm = new RegExp(" " + q.replace(/ /g, " ") + "(?:ga|ni|ning|niki|dan|da|day|lar|larni)? ").exec(t); const i = mm ? mm.index : -1; if (i >= 0 && (!best || i < best.i || (i === best.i && q.length > best.l))) best = { k, i, l: q.length }; }
+  // 2026-11-15 (256-post "Adrien Silva: Dunyo Ronaldoni noto'g'ri tushundi" umumiy iF rasmi bilan chiqqan — bazada Cristiano Ronaldo surati bor edi):
+  // sarlavhada faqat FAMILIYA bo'lsa ham surat olinadi, agar post matnida shu odamning TO'LIQ ismi bo'lsa (boshqa "Silva" bilan adashmaslik uchun)
+  if (!best) { const full = " " + pnorm(String(text || "").replace(/<[^>]+>/g, " ")) + " "; for (const [k, P] of Object.entries(F || {})) { if (!isFaceName(P.n)) continue; const w = pnorm(P.n).split(" "); if (w.length < 2 || w.length > 3) continue; const sn = w[w.length - 1]; if (sn.length < 5 || !full.includes(" " + w.join(" "))) continue; const mm = new RegExp(" " + sn + "(?:ga|ni|ning|niki|dan|da|day|lar|larni)? ").exec(t); if (mm && (!best || mm.index < best.i)) best = { k, i: mm.index, l: sn.length }; } }
   return best ? best.k : null;
 }
 // ESKI POST RASMINI ALMASHTIRISH NAZORATI (/rasm, /kartaqayta; 2026-11-09, 126-post holatidan keyin):
