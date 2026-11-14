@@ -1212,7 +1212,12 @@ def render_photo_v(j):
     im = _grade(_cover(face, Wd, Hd, 0.12), (10, 14, 22), GREEN).convert("RGB")
     _vfade(im, Hd - 260, Hd, (6, 8, 12), 0, 150)
     mk = logo(92, False)
-    im.paste(mk, (Wd - 92 - 40, Hd - 92 - 34), mk)
+    if j.get("wm") == "tr":
+        # "/rasm ID tepa" (Bahtiyor aka, 2026-11-15, 258-post: pastki burchakda iF klub gerbi ustiga tushgan): iF tepa o'ng burchakda, ostida yengil qorayish
+        _vfade(im, 0, 220, (6, 8, 12), 110, 0)
+        im.paste(mk, (Wd - 92 - 40, 40), mk)
+    else:
+        im.paste(mk, (Wd - 92 - 40, Hd - 92 - 34), mk)
     return im
 
 

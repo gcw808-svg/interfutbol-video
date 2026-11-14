@@ -1618,7 +1618,7 @@ async function rasmRedo(env, chat, mid, quiet, ov) {
       let html1 = html;
       if (ov && ov.credit && !/Wikimedia Commons/i.test(html)) { const cl = "<i>⟦" + ov.credit + "⟧</i>"; html1 = /\n\s*#[^\n]*\s*$/.test(html) ? html.replace(/\s*\n\s*(#[^\n]*\s*)$/, "\n\n" + cl + "\n\n$1") : html + "\n\n" + cl; }
       const id = "n" + Date.now().toString(36) + "r";
-      await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", leftLogo: await leftCrest(env, html, ci, idx), clubLogos, stat: /#Raqamlarda/i.test(html) ? statFromPost(html) : null, face: own ? own.face : await faceUrl(env, html), po: own ? own.po : 0, legion: /#Legionerlar\b/i.test(html) ? await legionFromPost(env, html, idx) : null, scorers: /#Topurarlar\b/i.test(html) ? await scorersFromPost(env, html, idx) : null, chan: html1, rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 }); await repWatch(env, id, mid);
+      await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", leftLogo: await leftCrest(env, html, ci, idx), clubLogos, stat: /#Raqamlarda/i.test(html) ? statFromPost(html) : null, face: own ? own.face : await faceUrl(env, html, ov && ov.pick), wm: (ov && ov.wm) || "", po: own ? own.po : 0, legion: /#Legionerlar\b/i.test(html) ? await legionFromPost(env, html, idx) : null, scorers: /#Topurarlar\b/i.test(html) ? await scorersFromPost(env, html, idx) : null, chan: html1, rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 }); await repWatch(env, id, mid);
       await ghDispatch(env, "card.yml", { job: id });
       if (!quiet) await tg(env, "sendMessage", { chat_id: chat, text: "🖼 " + mid + "-post uchun yangi kartochka chizilmoqda (liga: " + (ci.league || "—") + ", klublar: " + (ci.clubs || []).join(", ") + "). 2–3 daqiqada rasm almashtiriladi." });
       return true;
@@ -1642,11 +1642,11 @@ async function squadByNumber(club, num) {
   } catch (e) { return ""; }
 }
 // kartochka uchun bazadagi surat (Rasmlar bazasi): post kim haqida bo'lsa — o'sha odamning surati (bir nechta bo'lsa — navbat bilan)
-async function faceUrl(env, post) {
+async function faceUrl(env, post, pick) {
   try {
     const F = await kvGet(env, "faces", {}); const k = faceFor(F, post); if (!k) return "";
     const ph = (F[k].ph || []).filter((p) => !p.low); const L = ph.length ? ph : F[k].ph || []; if (!L.length) return "";
-    const p = L[Math.floor(Date.now() / 3600e3) % L.length];
+    const p = pick ? L[(pick - 1) % L.length] : L[Math.floor(Date.now() / 3600e3) % L.length];
     return phUrl(p);
   } catch (e) { return ""; }
 }
@@ -3202,8 +3202,10 @@ return;
       if (!rm && !/^https:\/\/telegra\.ph\//.test(arg)) { await tg(env, "sendMessage", { chat_id: chat, text: "Havola telegra.ph maqolasi bo'lishi kerak yoki «olib»." }); return; }
       const r = await tg(env, "editMessageReplyMarkup", { chat_id: env.CHANNEL, message_id: +id, reply_markup: rm ? { inline_keyboard: [] } : readMore(arg) });
       await tg(env, "sendMessage", { chat_id: chat, text: r.ok ? (rm ? "✅ " + id + "-postdan tugma olib tashlandi." : "✅ " + id + "-post tugmasi yangilandi.") : "⚠️ " + (r.description || "o'zgarmadi") });
-    } else if (/^\/rasm\s+\d+$/.test(text)) {
-      await rasmRedo(env, chat, +text.split(/\s+/)[1], false);
+    } else if (/^\/rasm\s+\d+(?:\s+(?:tepa|\d))*$/i.test(text)) {
+      { // 2026-11-15: "/rasm ID tepa" — iF belgisi tepa o'ng burchakda; "/rasm ID 2" — bazadagi 2-surat (bir odamning bir nechta surati bo'lsa)
+        const ra = text.split(/\s+/).slice(2); const wm = ra.some((x) => /^tepa$/i.test(x)) ? "tr" : ""; const pick = +(ra.find((x) => /^\d$/.test(x)) || 0);
+        await rasmRedo(env, chat, +text.split(/\s+/)[1], false, wm || pick ? { wm, pick } : null); }
     } else if (/^\/maqola\s+\S+\s*\n/.test(text)) {
       // Telegraph maqolasini tuzatish: rasm va oxirgi havola saqlanadi, matn yangilanadi ("# " bilan boshlangan qator — sarlavha)
       const path = decodeURIComponent(text.match(/^\/maqola\s+(\S+)/)[1].replace(/^https?:\/\/telegra\.ph\//, "")); const lines = text.split("\n").slice(1).map((l) => l.trim()).filter(Boolean);
