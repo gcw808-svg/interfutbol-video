@@ -955,18 +955,14 @@ def _title_v(d, title, x, y, maxw, maxh, start=72, minsize=44):
 
 def _grade(ph, base, acc):
     # SURATGA YENGIL ISHLOV (2026-11-09, Bahtiyor aka: "asosiy shaxslar o'zgarmagan holda ozgina o'zgartirish va qo'shimcha"):
-    # odamlarga tegilmaydi — faqat rang (kontrast, klub rangida yengil tus), chetlarini qoraytirish va nozik don
+    # odamlarga tegilmaydi — faqat rang (kontrast, klub rangida yengil tus) va nozik don; chetlar qoraytirilmaydi
     from PIL import ImageEnhance
     ph = ImageEnhance.Contrast(ph).enhance(1.08)
     ph = ImageEnhance.Color(ph).enhance(1.06)
     tint = Image.new("RGB", ph.size, tuple(acc))
     ph = Image.blend(ph, Image.composite(tint, ph, Image.new("L", ph.size, 255)), 0.07)
+    # CHETLAR QORAYTIRILMAYDI (Bahtiyor aka, 2026-11-16, 300-post: "chetlarini qoraytirma, rasm qanday bo'lsa shu holatda bo'laversin")
     w, h = ph.size
-    vg = Image.new("L", (w, h), 0)
-    ImageDraw.Draw(vg).ellipse([-w * 0.25, -h * 0.2, w * 1.25, h * 1.15], fill=255)
-    vg = vg.filter(ImageFilter.GaussianBlur(min(w, h) // 6))
-    dark = Image.new("RGB", (w, h), tuple(int(v * 0.25) for v in base))
-    ph = Image.composite(ph, Image.blend(ph, dark, 0.55), vg)
     try:
         noise = Image.effect_noise((w, h), 18).convert("L").point(lambda v: 128 + (v - 128) // 5)
         ph = Image.blend(ph, Image.merge("RGB", (noise, noise, noise)), 0.05)
@@ -1210,14 +1206,13 @@ def render_photo_v(j):
     if not face:
         return render_news_v({**j, "po": 0, "face": ""})
     im = _grade(_cover(face, Wd, Hd, 0.12), (10, 14, 22), GREEN).convert("RGB")
-    _vfade(im, Hd - 260, Hd, (6, 8, 12), 0, 150)
-    mk = logo(92, False)
+    # 2026-11-16: sarlavhasiz suratda past va tepa ham qoraytirilmaydi — iF belgisining o'z to'q kvadrati bor
+    mk = logo(120, True)
     if j.get("wm") == "tr":
         # "/rasm ID tepa" (Bahtiyor aka, 2026-11-15, 258-post: pastki burchakda iF klub gerbi ustiga tushgan): iF tepa o'ng burchakda, ostida yengil qorayish
-        _vfade(im, 0, 220, (6, 8, 12), 110, 0)
-        im.paste(mk, (Wd - 92 - 40, 40), mk)
+        im.paste(mk, (Wd - 120 - 36, 36), mk)
     else:
-        im.paste(mk, (Wd - 92 - 40, Hd - 92 - 34), mk)
+        im.paste(mk, (Wd - 120 - 36, Hd - 120 - 36), mk)
     return im
 
 
