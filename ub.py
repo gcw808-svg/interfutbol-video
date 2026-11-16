@@ -143,11 +143,19 @@ def same_title(a, b):
 
 async def already_posted(c, ch, html):
     # takror chiqmasin: kanalning oxirgi 15 xabarida xuddi shu sarlavha bo'lsa, qayta yubormaydi
-    head = plain(html.split("\n")[0])[:60]
+    # 2026-11-17: faqat 40 belgili boshlanish yetarli emas edi — "Mauricio Pochettino [logo] Manchester United ..." bilan boshlangan
+    # turli yangiliklar (302-post va 16-noyabr 18:11, 20:42) takror deb tashlab yuborildi. Endi logotip/emoji olib tashlanib, TO'LIQ sarlavha solishtiriladi
+    import re
+    def head_of(s):
+        h = plain(s.split("\n")[0])
+        h = re.sub(r"[^\w\s'‘’ʻʼ`:.,!?()\-–]", "", h)
+        return re.sub(r"\s+", " ", h).strip().lower()
+    head = head_of(html)
     if len(head) < 15:
         return None
     async for m in c.iter_messages(ch, limit=15):
-        if plain(m.raw_text or "").startswith(head[:40]) or same_title(html.split("\n")[0], (m.raw_text or "").split("\n")[0]):
+        mh = head_of(m.raw_text or "")
+        if mh == head or same_title(html.split("\n")[0], (m.raw_text or "").split("\n")[0]):
             return m.id
     return None
 
