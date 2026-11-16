@@ -2,7 +2,7 @@
 # manba surati bilan chiqqan eski postlarda to'q kvadratli belgi rasmga qotib qolgan. Har post uchun: bot postning hozirgi rasmini beradi (/ub/postimg) ->
 # belgi yashil "F" bo'yicha topiladi -> o'sha joy LaMa (big-lama, Apache-2.0) bilan fon qilib to'ldiriladi (odamlar o'zgarmaydi) ->
 # yangi fonsiz belgi qo'yiladi (card.paste_mark; burchak odam boshiga tushmaydigan qilib tanlanadi) -> /ub/repimg post rasmini almashtiradi (matn va tugma saqlanadi).
-import hashlib, io, json, os, sys, time, urllib.request
+import base64, hashlib, io, json, os, sys, time, urllib.request
 import numpy as np
 from PIL import Image
 
@@ -149,13 +149,15 @@ def main():
             out, pos = process(im, FORCE.get(mid, ""))
             if out is None:
                 print(mid, "- eski belgi topilmadi, tegilmadi", im.size); continue
-            buf = io.BytesIO(); out.save(buf, "JPEG", quality=94, subsampling=0)
+            if max(out.size) > 1920:  # juda katta rasm bot so'roviga og'irlik qiladi (503) — Telegram baribir 1280–2560 gacha siqadi
+                kk = 1920 / max(out.size); out = out.resize((int(out.width * kk + .5), int(out.height * kk + .5)), Image.LANCZOS)
+            buf = io.BytesIO(); out.save(buf, "JPEG", quality=92)
             if dry:
                 print(mid, "+ (sinov)", im.size, pos); continue
             r = ""
             for k in range(3):  # bot vaqtincha javob bermasa (503) — 40 soniyadan keyin qayta urinadi; ikki marta almashtirish zararsiz
                 try:
-                    r = urllib.request.urlopen(urllib.request.Request(W + "/ub/repimg?id=%d" % mid, data=buf.getvalue(), headers={**H, "content-type": "image/jpeg"}), timeout=60).read().decode()[:120]
+                    r = urllib.request.urlopen(urllib.request.Request(W + "/ub/repimg?id=%d" % mid, data=buf.getvalue(), headers={**H, "content-type": "image/jpeg", **({"x-html": base64.b64encode(j["html"].encode()).decode()} if j.get("html") else {})}), timeout=60).read().decode()[:120]
                     break
                 except Exception as e:
                     if k == 2:

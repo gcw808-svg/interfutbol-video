@@ -2889,15 +2889,21 @@ async function ubRoute(env, req, url) {
     if (!m) return J({ ok: false, why: "post topilmadi" });
     await tg(env, "deleteMessage", { chat_id: admin, message_id: m.message_id }).catch(() => null);
     if (!m.photo || m.media_group_id) return J({ ok: false, why: m.media_group_id ? "albom" : "postda surat yo'q" });
-    const ph = m.photo[m.photo.length - 1]; return J({ ok: true, f: ph.file_id, w: ph.width, h: ph.height });
+    const ph = m.photo[m.photo.length - 1];
+    // html shu yerda tayyorlanadi va /ub/repimg ga qaytarib beriladi — post ikki marta uzatilmaydi (Telegram cheklovi) va bitta so'rovga yuk kamroq tushadi (2026-11-17)
+    return J({ ok: true, f: ph.file_id, w: ph.width, h: ph.height, html: hashFix(CANON.reduce((a, [re, v]) => a.replace(re, v), entHtmlNoLogo(m.caption || "", m.caption_entities))) });
   }
   if (url.pathname === "/ub/repimg" && req.method === "POST") {
     const mid = +url.searchParams.get("id"); const buf = await req.arrayBuffer(); if (!mid || buf.byteLength < 5000) return J({ ok: false, why: "rasm yo'q" });
-    const fw = await tg(env, "forwardMessage", { chat_id: admin, from_chat_id: env.CHANNEL, message_id: mid, disable_notification: true }); const m = fw && fw.result;
-    if (!m) return J({ ok: false, why: "post topilmadi" });
-    await tg(env, "deleteMessage", { chat_id: admin, message_id: m.message_id }).catch(() => null);
-    if (!m.photo || m.media_group_id) return J({ ok: false, why: "postda bitta surat emas" });
-    const html = hashFix(CANON.reduce((a, [re, v]) => a.replace(re, v), entHtmlNoLogo(m.caption || "", m.caption_entities)));
+    let html = ""; const hx = req.headers.get("x-html");
+    if (hx) { try { html = new TextDecoder().decode(Uint8Array.from(atob(hx), (c) => c.charCodeAt(0))); } catch (e) { html = ""; } }
+    if (!html) {
+      const fw = await tg(env, "forwardMessage", { chat_id: admin, from_chat_id: env.CHANNEL, message_id: mid, disable_notification: true }); const m = fw && fw.result;
+      if (!m) return J({ ok: false, why: "post topilmadi" });
+      await tg(env, "deleteMessage", { chat_id: admin, message_id: m.message_id }).catch(() => null);
+      if (!m.photo || m.media_group_id) return J({ ok: false, why: "postda bitta surat emas" });
+      html = hashFix(CANON.reduce((a, [re, v]) => a.replace(re, v), entHtmlNoLogo(m.caption || "", m.caption_entities)));
+    }
     const id = "w" + Date.now().toString(36) + mid; await env.STATE.put("lgb:rc_" + id, buf, { expirationTtl: 3 * 86400 });
     const html2 = newAlpha(addLogos(html)); const uid = "e" + Date.now().toString(36) + mid;
     await kvPut(env, "ujob:" + uid, { html: html2, html2, edit: mid, editPhoto: WURL + "/lg/rc_" + id, photo: null, video: null, chat: null, raw: { text: html, img: null, url: null, video: null }, t: Date.now(), tries: 0, repId: id }, { expirationTtl: 86400 });

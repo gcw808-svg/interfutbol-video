@@ -51,6 +51,6 @@ jobs:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           POSTS: ${{ steps.q.outputs.posts }}
           DRY: ${{ inputs.dry }}
-          GAP: "12"
+          GAP: "25"
           POS: ${{ inputs.pos }}
         run: python3 wmfix.py
