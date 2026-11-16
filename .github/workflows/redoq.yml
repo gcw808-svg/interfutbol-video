@@ -1,0 +1,34 @@
+name: redoq
+# Eski post rasmlarini qayta chizish navbatiga qo'shish (bot har 10 daqiqada bittadan, kuniga cheklangan miqdorda bajaradi) — 2026-11-17
+# items: JSON ro'yxat [{"id":308,"c":"r"},{"id":98,"c":"k"},{"id":80,"c":"r","nf":1},{"id":258,"c":"r","nf":1,"wm":"tr"}]; clear=1 — navbatni tozalash
+on:
+  workflow_dispatch:
+    inputs:
+      items:
+        default: "[]"
+      max:
+        default: ""
+      clear:
+        default: ""
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          ITEMS: ${{ inputs.items }}
+          MAXN: ${{ inputs.max }}
+          CLEAR: ${{ inputs.clear }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, urllib.request
+          key = hashlib.sha256(("ub-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:40]
+          body = {"items": json.loads(os.environ["ITEMS"] or "[]")}
+          if os.environ.get("MAXN"): body["max"] = int(os.environ["MAXN"])
+          if os.environ.get("CLEAR"): body["clear"] = 1
+          rq = urllib.request.Request("https://inter-futbol-bot.gcw808.workers.dev/ub/redoq", data=json.dumps(body).encode(), headers={"x-key": key, "content-type": "application/json", "user-agent": "InterFutbolRedo"})
+          print(urllib.request.urlopen(rq, timeout=40).read().decode()[:200])
+          PY

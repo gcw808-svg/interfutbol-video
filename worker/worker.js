@@ -1640,15 +1640,34 @@ async function rasmRedo(env, chat, mid, quiet, ov) {
       const [leagueLogo0, ...cls] = await Promise.all([leagueLogoUrl(env, ci.league, idx), ...(ci.clubs || []).map((n) => logoUrl(env, n, idx))]);
       const clubLogos = cls.map((u, k) => u || ESPN_CREST[ci.clubs[k]] || "").filter(Boolean).slice(0, 4);
       const own = ov && ov.face ? { face: ov.face, po: 0 } : await ownFace(env, mid, html); // ov — aniq berilgan surat (masalan stadion)
+      const face0 = own ? own.face : await faceUrl(env, html, ov && ov.pick);
+      // needFace (2026-11-17, 300-post sabog'i): suratli postni qayta chizishda bazada surat topilmasa TEGILMAYDI — aks holda surat gerbli kartochkaga almashib qoladi
+      if (ov && ov.needFace && !face0) return false;
       // MUALLIF YOZUVI RASMDA EMAS, POST MATNIDA (Bahtiyor aka, 2026-11-11: "rasmdagi Wikimedia yozuvini ko'rinmaydigan qil"): erkin litsenziya (CC BY / BY-SA)
       // muallifni ko'rsatishni talab qiladi — shuning uchun yozuv butunlay olib tashlanmaydi, heshteglardan oldin kichik kursiv qator bo'lib qo'shiladi
       let html1 = html;
       if (ov && ov.credit && !/Wikimedia Commons/i.test(html)) { const cl = "<i>⟦" + ov.credit + "⟧</i>"; html1 = /\n\s*#[^\n]*\s*$/.test(html) ? html.replace(/\s*\n\s*(#[^\n]*\s*)$/, "\n\n" + cl + "\n\n$1") : html + "\n\n" + cl; }
       const id = "n" + Date.now().toString(36) + "r";
-      await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", leftLogo: await leftCrest(env, html, ci, idx), clubLogos, stat: /#Raqamlarda/i.test(html) ? statFromPost(html) : null, face: own ? own.face : await faceUrl(env, html, ov && ov.pick), wm: (ov && ov.wm) || "", sr: ov && ov.sr ? 1 : 0, po: own ? own.po : 0, legion: /#Legionerlar\b/i.test(html) ? await legionFromPost(env, html, idx) : null, scorers: /#Topurarlar\b/i.test(html) ? await scorersFromPost(env, html, idx) : null, chan: html1, rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 }); await repWatch(env, id, mid);
+      await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", leftLogo: await leftCrest(env, html, ci, idx), clubLogos, stat: /#Raqamlarda/i.test(html) ? statFromPost(html) : null, face: face0, wm: (ov && ov.wm) || "", sr: ov && ov.sr ? 1 : 0, po: own ? own.po : 0, legion: /#Legionerlar\b/i.test(html) ? await legionFromPost(env, html, idx) : null, scorers: /#Topurarlar\b/i.test(html) ? await scorersFromPost(env, html, idx) : null, chan: html1, rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 }); await repWatch(env, id, mid);
       await ghDispatch(env, "card.yml", { job: id });
       if (!quiet) await tg(env, "sendMessage", { chat_id: chat, text: "🖼 " + mid + "-post uchun yangi kartochka chizilmoqda (liga: " + (ci.league || "—") + ", klublar: " + (ci.clubs || []).join(", ") + "). 2–3 daqiqada rasm almashtiriladi." });
       return true;
+}
+// ESKI RASMLAR NAVBATI (2026-11-17, Bahtiyor aka: "kanaldagi barcha rasmlarni shunaqa o'zgartirib chiq" — yangi iF belgisi): KV redoQ {q:[{id,c,nf,wm}],day,n,max,log}.
+// c: "r" — /rasm (nf:1 — bazada surat bo'lmasa tegilmaydi), "k" — /kartaqayta. Har 10 daqiqada BITTA post, kuniga max (36) ta — KV yozish limiti (kuniga 1000) va
+// Telegram tahrir cheklovi uchun; tejash rejimida va oldingi almashtirish tugamaguncha kutadi. Yuklash: /ub/redoq (redoq.yml). Tugagach adminga hisobot.
+async function redoTick(env) {
+  const Q = await kvGet(env, "redoQ", null); if (!Q || !Q.q || !Q.q.length) return;
+  if (+(await kvGet(env, "ecoMode", 0))) return;
+  const day = new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10);
+  if (Q.day !== day) { Q.day = day; Q.n = 0; }
+  if ((Q.n || 0) >= (Q.max || 36)) return;
+  if ((await kvGet(env, "repWait", [])).length >= 2) return;
+  const it = Q.q.shift(); Q.n = (Q.n || 0) + 1; const admin = (await getAdmins(env))[0]; let ok = 0;
+  try { if (it.c === "k") { await resRedo(env, admin, it.id, true); ok = 1; } else ok = (await rasmRedo(env, admin, it.id, true, { wm: it.wm || "", needFace: it.nf ? 1 : 0 })) ? 1 : 0; } catch (e) { ok = 0; }
+  Q.log = [...(Q.log || []), [it.id, ok]].slice(-400);
+  await kvPut(env, "redoQ", Q);
+  if (!Q.q.length && admin) { const bad = Q.log.filter((x) => !x[1]).map((x) => x[0]); await tg(env, "sendMessage", { chat_id: admin, text: "✅ Eski rasmlar navbati tugadi: " + Q.log.filter((x) => x[1]).length + " ta post yangi iF belgisi bilan qayta chizildi." + (bad.length ? "\nTegilmadi (bazada surat yo'q yoki xato): " + bad.join(", ") : "") }); }
 }
 // asosiy odam ramkasi: Gemini [ymin,xmin,ymax,xmax] (0–1000) → [x0,y0,x1,y1] (0–1); juda kichik yoki buzuq ramka olinmaydi
 function mainBox(a) {
@@ -2713,7 +2732,7 @@ async function logoFix(env, chat, ids, opt = {}) {
   await tg(env, "sendMessage", { chat_id: chat, text: "✅ " + edits.length + " ta post tayyorlandi, hisobingiz orqali tahrirlanmoqda (2–3 daqiqa)." + (bad.length ? "\nO'tkazib yuborildi: " + bad.join(", ") : "") });
 }
 // /kartaqayta XABAR_ID: kanaldagi natija posti noto'g'ri rasm bilan chiqqan bo'lsa, rasmini natija kartochkasiga almashtiradi (matn va logotiplar saqlanadi, klub nomlari rasmiy shaklga keltiriladi)
-async function resRedo(env, chat, mid) {
+async function resRedo(env, chat, mid, quiet) {
   const esc = (x) => String(x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const fw = await tg(env, "forwardMessage", { chat_id: chat, from_chat_id: env.CHANNEL, message_id: mid, disable_notification: true });
   const m = fw && fw.result; if (!m) throw new Error("kanalda bu raqamli xabar topilmadi");
@@ -2753,7 +2772,7 @@ async function resRedo(env, chat, mid) {
   const ycs = await espnCardsFor(H, A, ymd).catch(() => ({ hy: [], ay: [] }));
   await kvPut(env, "cjob:" + id, { title: newAlpha(t0), home: cardNm(H), away: cardNm(A), hy: ycs.hy, ay: ycs.ay, score: sm[2] + ":" + sm[3], league: newAlpha(lgLogoName), homeLogo: hl || ycs.hl || ESPN_CREST[H] || ESPN_CREST[Object.keys(ESPN_CREST).find((k) => norm(k) === norm(H))] || "", awayLogo: al || ycs.al || ESPN_CREST[A] || ESPN_CREST[Object.keys(ESPN_CREST).find((k) => norm(k) === norm(A))] || "", leagueLogo: ll || espnLgLogo(lg) || "", ...goals, chan: html, rep: mid, kind: "res", story: 0 }, { expirationTtl: 7 * 3600 }); await repWatch(env, id, mid);
   await ghDispatch(env, "card.yml", { job: id });
-  await tg(env, "sendMessage", { chat_id: chat, text: "✅ ⟦" + H + "⟧ – ⟦" + A + "⟧" + ": kartochka chizilmoqda. 2–3 daqiqada kanaldagi post rasmi natija kartochkasiga almashtiriladi." });
+  if (!quiet) await tg(env, "sendMessage", { chat_id: chat, text: "✅ ⟦" + H + "⟧ – ⟦" + A + "⟧" + ": kartochka chizilmoqda. 2–3 daqiqada kanaldagi post rasmi natija kartochkasiga almashtiriladi." });
 }
 async function cardDone(env, id, png) {
   const j = await kvGet(env, "cjob:" + id, null);
@@ -2864,6 +2883,7 @@ async function ubRoute(env, req, url) {
     if (!P.ph.some((p) => p.uid === b0.uid || (b0.src && p.src === b0.src))) P.ph.push({ f: b0.f, uid: b0.uid, w: b0.w || 0, h: b0.h || 0, m: b0.m, low: b0.w && Math.min(b0.w, b0.h) < 500 ? 1 : 0, t: Date.now(), sr: 1, ...(b0.b ? { b: b0.b, x: b0.x || [], d: 1 } : {}), ...(b0.src ? { src: b0.src } : {}) });
     await kvPut(env, "faces", F); return J({ ok: true, n: P.ph.length });
   }
+  if (url.pathname === "/ub/redoq" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); const Q = (await kvGet(env, "redoQ", null)) || { q: [], n: 0, day: "", log: [] }; if (b0.clear) Q.q = []; const have = new Set(Q.q.map((x) => x.id)); for (const x of b0.items || []) if (+x.id > 0 && !have.has(+x.id)) Q.q.push({ id: +x.id, c: x.c === "k" ? "k" : "r", ...(x.nf ? { nf: 1 } : {}), ...(x.wm === "tr" ? { wm: "tr" } : {}) }); if (b0.max) Q.max = Math.min(60, Math.max(1, +b0.max)); await kvPut(env, "redoQ", Q); return J({ ok: true, left: Q.q.length, done: (Q.log || []).length }); }
   if (url.pathname === "/ub/rasm" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); return J({ ok: await rasmRedo(env, admin, +b0.id, true, b0.face || b0.credit || b0.wm || b0.sr ? { face: b0.face ? String(b0.face) : "", credit: String(b0.credit || "").slice(0, 90), wm: b0.wm === "tr" ? "tr" : "", sr: b0.sr ? 1 : 0 } : null) }); }
   if (url.pathname === "/ub/facesharp" && req.method === "POST") {
     const b0 = await req.json().catch(() => ({})); const F = await kvGet(env, "faces", {}); let hit = 0;
@@ -3927,6 +3947,7 @@ if (url.pathname === "/hook" && req.method === "POST") {
     if (on("B")) try { await resFallback(env); } catch (e) { await err("resfb", e); }
     if (on("B")) try { await repSweep(env); } catch (e) { await err("repsw", e); }
     if (on("B")) try { await ujobSweep(env); } catch (e) { await err("usweep", e); }
+    if (on("B")) try { await redoTick(env); } catch (e) { await err("redoq", e); }
     if (on("A")) try { await sendNext(env, { st, kind: "v" }); } catch (e) { await err("sendv", e); }
     if (on("A")) try { await fillPending(env); } catch (e) {}
     if (on("A")) try { await fillArticles(env); } catch (e) { await err("fill", e); } if (on("A")) try { await newsWatch(env); } catch (e) { await err("watch", e); } if (on("C")) try { await healthCheck(env); } catch (e) { await err("health", e); }
