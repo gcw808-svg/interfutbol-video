@@ -42,6 +42,34 @@ def logo(size, bg=True):
     return img.resize((size, size), Image.LANCZOS)
 
 
+MARK_K = 132 / 1080  # iF belgisi eni = rasm enining 12,2% i (Bahtiyor aka tasdiqlagan o'lcham, 2026-11-17: 1080 px rasmda 132 px)
+
+
+def mark_size(Wd):
+    return int(round(Wd * MARK_K / 2) * 2)
+
+
+def paste_mark(im, pos="br", my=None):
+    # YAGONA iF BELGISI (Bahtiyor aka, 2026-11-17: "qora fonsiz, logoning o'zi bo'lsin; hamma rasmlarda bir xil o'lchamda"):
+    # to'q kvadratsiz, ostida yengil soya (och fonda yo'qolmasligi uchun), o'lchami har doim rasm eniga nisbatan bir xil.
+    # pos: "br" pastki o'ng, "tr" tepa o'ng, "bc" pastda o'rtada; my — chetdan masofa (berilmasa standart).
+    Wd, Hd = im.size
+    s = mark_size(Wd)
+    lg = logo(s, False)
+    pad = s // 3
+    out = Image.new("RGBA", (s + 2 * pad, s + 2 * pad), (0, 0, 0, 0))
+    sh = Image.new("RGBA", out.size, (0, 0, 0, 0))
+    sh.paste(Image.new("RGBA", lg.size, (0, 0, 0, 255)), (pad, pad + max(1, s // 40)), lg.split()[3].point(lambda v: int(v * 0.55)))
+    out = Image.alpha_composite(out, sh.filter(ImageFilter.GaussianBlur(s / 14)))
+    out.paste(lg, (pad, pad), lg)
+    m = int(round(Wd * 44 / 1080))
+    my = m if my is None else my
+    x = (Wd - s) // 2 if pos == "bc" else Wd - s - m
+    y = my if pos == "tr" else Hd - s - my
+    im.paste(out, (x - pad, y - pad), out)
+    return s
+
+
 def background(Wd, Hd):
     bg = Image.new("RGB", (Wd, Hd))
     px = bg.load()
@@ -393,8 +421,7 @@ def render_card_plain(j):
     d = ImageDraw.Draw(im, "RGBA")
     d.text((Wd // 2, 375), f"{a} - {b}", font=font("black", 120), fill=WHITE, anchor="mm")
     d.text((Wd // 2, 478), "\u00d6YIN YAKUNLANDI", font=font("bold", 22), fill=(230, 235, 240), anchor="mm")
-    lg = logo(74, False)
-    im.paste(lg, (Wd // 2 - 37, 626), lg)
+    paste_mark(im, "bc", 36)
     return im
 
 
@@ -557,8 +584,7 @@ def render_card(j):
     a, b = j["score"].split(":")
     d.text((Wd // 2, 330), f"{a} - {b}", font=font("black", 120), fill=WHITE, anchor="mm")
     d.text((Wd // 2, 430), "ÖYIN YAKUNLANDI", font=font("bold", 22), fill=(230, 235, 240), anchor="mm")
-    lg = logo(64, False)
-    im.paste(lg, (Wd // 2 - 32, Hd - 110 if yc else Hd - 120), lg)
+    paste_mark(im, "bc", 36)
     return im
 
 
@@ -609,8 +635,7 @@ def render_lineup(j):
         d.text((Wd // 2, 420), "Toşkent vaqti", font=font("bold", 20), fill=(220, 226, 232), anchor="mm")
     if j.get("date"):
         d.text((Wd // 2, 456), j["date"], font=font("bold", 20), fill=(220, 226, 232), anchor="mm")
-    lg = logo(64, False)
-    im.paste(lg, (Wd // 2 - 32, 596), lg)
+    paste_mark(im, "bc", 36)
     for bx, lg_, name, col, L, fm in ((boxes[0], hl, j["home"], c1, j.get("hl") or [], j.get("hf")), (boxes[1], al, j["away"], c2, j.get("al") or [], j.get("af"))):
         cx = (bx[0] + bx[2]) // 2
         if lg_:
@@ -1119,12 +1144,11 @@ def render_news_v(j):
         yend = _title_v(d, j.get("title") or "Inter Futbol", 60, 760, Wd - 120, 420, 76, 44)
     if not st:
         # pastki qism bo'sh qolmasin (Bahtiyor aka, 2026-11-09): balandlik kontentga qarab, 1080..1350
-        Hn = max(1080, min(Hd, int(yend) + 160))
+        Hn = max(1080, min(Hd, int(yend) + 210))
         if Hn < Hd:
             im = im.crop((0, 0, Wd, Hn))
             Hd = Hn
-    mk = logo(92, False)
-    im.paste(mk, (Wd - 92 - 40, Hd - 92 - 34), mk)
+    paste_mark(im, "br", 38)
     return im
 
 
@@ -1202,11 +1226,10 @@ def render_scorers_v(j):
         d.text((972, y + rh // 2), str(a) if a else "–", font=font("bold", int(rh * 0.40)), fill=WHITE if a else soft + (150,), anchor="mm")
         d.line([908, y + 24, 908, y + rh - 24], fill=(255, 255, 255, 40), width=2)
         y += rh + gap
-    Hn = min(Hd, max(1080, y - gap + 136))  # pastda bo'sh joy qolmasin
+    Hn = min(Hd, max(1080, y - gap + 196))  # pastda bo'sh joy qolmasin
     if Hn < Hd:
         im = im.crop((0, 0, Wd, Hn)); Hd = Hn
-    mk = logo(92, False)
-    im.paste(mk, ((Wd - 92) // 2, Hd - 92 - 28), mk)
+    paste_mark(im, "bc", 30)
     return im
 
 
@@ -1221,13 +1244,12 @@ def render_photo_v(j):
     if not face:
         return render_news_v({**j, "po": 0, "face": ""})
     im = (_grade(_sharp_cover(face, Wd, Hd, 0.12), (10, 14, 22), GREEN, grain=False) if j.get("sr") else _grade(_cover(face, Wd, Hd, 0.12), (10, 14, 22), GREEN)).convert("RGB")
-    # 2026-11-16: sarlavhasiz suratda past va tepa ham qoraytirilmaydi — iF belgisining o'z to'q kvadrati bor
-    mk = logo(120, True)
+    # 2026-11-16: sarlavhasiz suratda past va tepa qoraytirilmaydi; 2026-11-17: iF belgisi to'q kvadratsiz, yagona o'lchamda
     if j.get("wm") == "tr":
         # "/rasm ID tepa" (Bahtiyor aka, 2026-11-15, 258-post: pastki burchakda iF klub gerbi ustiga tushgan): iF tepa o'ng burchakda, ostida yengil qorayish
-        im.paste(mk, (Wd - 120 - 36, 36), mk)
+        paste_mark(im, "tr")
     else:
-        im.paste(mk, (Wd - 120 - 36, Hd - 120 - 36), mk)
+        paste_mark(im, "br")
     return im
 
 
@@ -1294,12 +1316,11 @@ def render_legion_v(j):
                 d.text((x, ly), w, font=font("med", 26), fill=(215, 225, 238))
                 ly += 34
     bottom = y0 + n * (rh + 22) - 22
-    Hn = max(1080, min(Hd, bottom + 150))
+    Hn = max(1080, min(Hd, bottom + 200))
     if Hn < Hd:
         im = im.crop((0, 0, Wd, Hn))
         Hd = Hn
-    mk = logo(92, False)
-    im.paste(mk, (Wd - 92 - 40, Hd - 92 - 34), mk)
+    paste_mark(im, "br", 38)
     return im
 
 
@@ -1384,8 +1405,7 @@ def render_news(j):
     st = j.get("stat")
     if st and st.get("tiles"):
         stat_block(im, st, acc)
-        mk = logo(84, False)
-        im.paste(mk, (Wd - 80 - 42, Hd - 70 - 42), mk)
+        paste_mark(im, "br", 40)
         return im
     title = j.get("title") or "Inter Futbol"
     size = 56
@@ -1401,8 +1421,7 @@ def render_news(j):
     for ln in lines:
         d.text((610, y), ln, font=f, fill=WHITE)
         y += lh
-    mk = logo(84, False)
-    im.paste(mk, (Wd - 80 - 42, Hd - 70 - 42), mk)
+    paste_mark(im, "br", 40)
     return im
 
 
@@ -1501,8 +1520,7 @@ def render_story_result(j):
     d.text((Wd // 2, 990), f"{a.strip()} : {b.strip()}", font=font("black", 220), fill=WHITE, anchor="mm")
     _spaced(d, (Wd // 2, 1125), "ÖYIN YAKUNLANDI", font("bold", 30), (168, 179, 194), 7)
     panel(1200, al, j["away"], acol, arows)
-    lg = logo(86, False)
-    im.paste(lg, (Wd // 2 - 43, Hd - 150 - 86), lg)
+    paste_mark(im, "bc", 150)
     buf = io.BytesIO()
     im.convert("RGB").save(buf, "JPEG", quality=95, subsampling=0)
     return buf.getvalue()

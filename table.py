@@ -96,8 +96,7 @@ def header(im, j, sub=""):
 
 
 def footer(im, h):
-    l = logo(64, False)
-    im.paste(l, (Wd // 2 - 32, h - 86), l)
+    card.paste_mark(im, "bc", 28)  # 2026-11-17: yagona iF belgisi (qora fonsiz, bir xil o'lcham)
 
 
 # ---------- turnir jadvali ----------
@@ -225,7 +224,7 @@ def draw_catalog(im, d, j, kind, y, h, data):
 
 # ---------- istoriya: o'yinlar jadvali (tik 1080x1920, 2026-yil 7-noyabr tasdiqlangan "1-variant") ----------
 SW, SH = 1080, 1920
-S_TOP, S_BOTTOM = 230, 1670  # Telegram/Instagram tugmalari yopmaydigan xavfsiz qism
+S_TOP, S_BOTTOM = 230, 1625  # Telegram/Instagram tugmalari yopmaydigan xavfsiz qism
 S_ROW, S_HDR = 92, 70
 
 
@@ -326,8 +325,7 @@ def render_story(j):
                 d.text((cx - pw // 2 - 72, cy), clip(d, m["h"], fn, 300), font=fn, fill=WHITE, anchor="rm")
                 d.text((cx + pw // 2 + 72, cy), clip(d, m["a"], fn, 300), font=fn, fill=WHITE, anchor="lm")
                 y += S_ROW
-        l = logo(86, False)
-        im.paste(l, (SW // 2 - 43, SH - 150 - 86), l)
+        card.paste_mark(im, "bc", 150)
         buf = io.BytesIO()
         im.convert("RGB").save(buf, "JPEG", quality=95, subsampling=0)
         out.append(buf.getvalue())
@@ -357,7 +355,7 @@ def render_pages(j):
         pages.append(cur)
     out = []
     for i, pg in enumerate(pages):
-        h = 182 + sum(b[1] for b in pg) + 130
+        h = 182 + sum(b[1] for b in pg) + 196
         im = background(h)
         sub = f"{i + 1}/{len(pages)}" if len(pages) > 1 else j.get("sub", "")
         y = header(im, j, sub)
