@@ -95,7 +95,21 @@ def clean(im):
     box = (max(0, int(b[0] - p)), max(0, int(b[1] - p)), min(Wd, int(b[2] + p + 1)), min(Hd, int(b[3] + p + 1)))
     mask = Image.new("L", (Wd, Hd), 0)
     mask.paste(255, box)
-    res = _L["m"](im, mask).crop((0, 0, Wd, Hd)).convert("RGB")
+    # TEZLIK (2026-11-17): model butun rasmda emas, belgi atrofidagi bo'lakda ishlaydi (2560 px rasmda 30 soniya o'rniga 2-3 soniya — GitHub daqiqalari tejaladi)
+    side = int(max(384, (box[2] - box[0]) * 4.5))
+    side = min(side, Wd, Hd) // 8 * 8
+    cx0 = min(max(0, (box[0] + box[2]) // 2 - side // 2), Wd - side)
+    cy0 = min(max(0, (box[1] + box[3]) // 2 - side // 2), Hd - side)
+    reg = (cx0, cy0, cx0 + side, cy0 + side)
+    sub = im.crop(reg)
+    k = min(1.0, 768 / side)  # juda katta bo'lak kichraytirib ishlanadi, keyin faqat belgi joyi qaytariladi
+    if k < 1:
+        ss = int(side * k) // 8 * 8
+        r0 = _L["m"](sub.resize((ss, ss), Image.LANCZOS), mask.crop(reg).resize((ss, ss), Image.NEAREST)).crop((0, 0, ss, ss)).convert("RGB").resize((side, side), Image.LANCZOS)
+    else:
+        r0 = _L["m"](sub, mask.crop(reg)).crop((0, 0, side, side)).convert("RGB")
+    res = im.copy()
+    res.paste(r0, reg[:2])
     out = im.copy()
     f = max(2, int(p * 0.4))  # faqat belgi atrofi almashtiriladi, chegarasi yumshoq
     from PIL import ImageFilter

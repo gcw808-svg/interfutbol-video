@@ -1,6 +1,6 @@
 name: wmfix
 # Eski (to'q kvadratli) iF belgisini olib tashlab, fonsiz yangi belgini qo'yish — manba surati bilan chiqqan eski postlar (2026-11-17).
-# posts berilsa — o'sha postlar; berilmasa bot navbatidan (wmQ) take ta oladi (jadval bo'yicha 60 tagacha). Kuniga ikki marta, navbat bo'sh bo'lsa darhol tugaydi.
+# posts berilsa — o'sha postlar; berilmasa bot navbatidan (wmQ) take ta oladi (jadval bo'yicha 60 tagacha). Jadval yo'q (GitHub daqiqalarini tejash uchun) — qo'lda ishga tushiriladi; navbat bo'sh bo'lsa darhol tugaydi.
 on:
   workflow_dispatch:
     inputs:
@@ -14,9 +14,6 @@ on:
         default: ""
       pos:
         default: ""
-  schedule:
-    - cron: "17 3 * * *"
-    - cron: "17 15 * * *"
 permissions:
   contents: read
 jobs:
@@ -54,6 +51,6 @@ jobs:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           POSTS: ${{ steps.q.outputs.posts }}
           DRY: ${{ inputs.dry }}
-          GAP: "20"
+          GAP: "12"
           POS: ${{ inputs.pos }}
         run: python3 wmfix.py
