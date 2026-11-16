@@ -135,7 +135,7 @@ def main():
     gap = int(os.environ.get("GAP", "25"))
     dry = bool(os.environ.get("DRY"))
     FORCE = {int(a): b for a, b in (x.split(":") for x in os.environ.get("POS", "").split() if ":" in x)}  # POS="310:bl 136:tl" — burchakni qo'lda berish
-    ok = []
+    ok = []; fail = []
     for n, mid in enumerate(posts):
         try:
             j = json.load(urllib.request.urlopen(urllib.request.Request(W + "/ub/postimg?id=%d" % mid, headers=H), timeout=40))
@@ -165,7 +165,12 @@ def main():
             if n < len(posts) - 1:
                 time.sleep(gap)
         except Exception as e:
-            print(mid, "- xato:", repr(e)[:200])
+            print(mid, "- xato:", repr(e)[:200]); fail.append(mid); time.sleep(15)
+    if fail and not dry:  # xato bergan postlar navbatga qaytariladi (Telegram/bot vaqtincha javob bermagan bo'lishi mumkin)
+        try:
+            print("navbatga qaytdi:", fail, urllib.request.urlopen(urllib.request.Request(W + "/ub/wmq", data=json.dumps({"items": fail}).encode(), headers={**H, "content-type": "application/json"}), timeout=40).read().decode()[:100])
+        except Exception as e:
+            print("navbatga qaytarilmadi:", fail, repr(e)[:100])
     print("TAYYOR:", len(ok), "ta —", ok)
 
 
