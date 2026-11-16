@@ -57,21 +57,27 @@ def heads(im):
 
 
 def corner(im):
-    import card
+    # belgi joyi: odam boshiga tushmaydigan burchak; bir nechta bo'lsa — tepa o'ng afzal, lekin u yerda mayda tafsilot ko'p bo'lsa (gerb, yozuv)
+    # eng "tinch" burchak olinadi (310-post: belgi formadagi klub gerbi ustiga tushgan edi, 2026-11-17)
+    import card, cv2
     Wd, Hd = im.size
     s = card.mark_size(Wd)
     m = int(round(Wd * 44 / 1080))
     hs = heads(im)
-    best = ("tr", 1e9)
+    lap = np.abs(cv2.Laplacian(cv2.cvtColor(np.asarray(im.convert("RGB")), cv2.COLOR_RGB2GRAY), cv2.CV_32F, ksize=3))
+    sc = {}
     for pos in ("tr", "tl", "br", "bl"):
         x = m if pos in ("tl", "bl") else Wd - s - m
         y = m if pos in ("tr", "tl") else Hd - s - m
-        ov = sum(max(0, min(x + s, h[2]) - max(x, h[0])) * max(0, min(y + s, h[3]) - max(y, h[1])) for h in hs)
-        if ov < s * s * 0.04:
-            return pos
-        if ov < best[1]:
-            best = (pos, ov)
-    return best[0]
+        ov = sum(max(0, min(x + s, h[2]) - max(x, h[0])) * max(0, min(y + s, h[3]) - max(y, h[1])) for h in hs) / float(s * s)
+        sc[pos] = (ov, float(lap[max(0, y):y + s, max(0, x):x + s].mean()))
+    free = [p for p in sc if sc[p][0] < 0.04]
+    if not free:
+        return min(sc, key=lambda p: sc[p][0])
+    calm = min(sc[p][1] for p in free)
+    if "tr" in free and sc["tr"][1] <= max(calm * 2.2, calm + 6):
+        return "tr"
+    return min(free, key=lambda p: sc[p][1])
 
 
 _L = {}
@@ -97,12 +103,12 @@ def clean(im):
     return out
 
 
-def process(im):
+def process(im, force=""):
     import card
     c = clean(im)
     if c is None:
         return None, ""
-    pos = corner(c)
+    pos = force or corner(c)
     card.paste_mark(c, pos)
     return c, pos
 
@@ -114,6 +120,7 @@ def main():
     posts = [int(x) for x in os.environ.get("POSTS", "").replace(",", " ").split() if x.isdigit()]
     gap = int(os.environ.get("GAP", "25"))
     dry = bool(os.environ.get("DRY"))
+    FORCE = {int(a): b for a, b in (x.split(":") for x in os.environ.get("POS", "").split() if ":" in x)}  # POS="310:bl 136:tl" — burchakni qo'lda berish
     ok = []
     for n, mid in enumerate(posts):
         try:
@@ -122,7 +129,10 @@ def main():
                 print(mid, "- rasm yo'q:", j.get("why")); continue
             fp = json.load(urllib.request.urlopen("https://api.telegram.org/bot%s/getFile?file_id=%s" % (bot, j["f"]), timeout=40))["result"]["file_path"]
             im = Image.open(io.BytesIO(urllib.request.urlopen("https://api.telegram.org/file/bot%s/%s" % (bot, fp), timeout=120).read())).convert("RGB")
-            out, pos = process(im)
+            src = os.path.join("tmpimg", "wm_%d.jpg" % mid)  # qo'lda tuzatish: omborga qo'yilgan eski belgili nusxa (post rasmi allaqachon almashgan bo'lsa)
+            if os.path.exists(src):
+                im = Image.open(src).convert("RGB")
+            out, pos = process(im, FORCE.get(mid, ""))
             if out is None:
                 print(mid, "- eski belgi topilmadi, tegilmadi", im.size); continue
             buf = io.BytesIO(); out.save(buf, "JPEG", quality=94, subsampling=0)
