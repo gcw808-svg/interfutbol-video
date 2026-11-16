@@ -1,0 +1,26 @@
+name: rasmfile
+# Kanal posti rasmini Wikimedia Commons faylidan tiklash/almashtirish (sarlavhasiz suratli karta). wm=tr — iF tepa o'ng burchakda
+on:
+  workflow_dispatch:
+    inputs:
+      file:
+        required: true
+      post:
+        required: true
+      wm:
+        default: ""
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install -q requests
+      - env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          FILE: ${{ inputs.file }}
+          POST: ${{ inputs.post }}
+          WM: ${{ inputs.wm }}
+        run: python3 rasmfile.py
