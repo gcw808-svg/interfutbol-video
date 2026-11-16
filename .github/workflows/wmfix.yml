@@ -1,6 +1,6 @@
 name: wmfix
 # Eski (to'q kvadratli) iF belgisini olib tashlab, fonsiz yangi belgini qo'yish — manba surati bilan chiqqan eski postlar (2026-11-17).
-# posts berilsa — o'sha postlar; berilmasa bot navbatidan (wmQ) take ta oladi. Jadval bo'yicha kuniga ikki marta, navbat bo'sh bo'lsa darhol tugaydi.
+# posts berilsa — o'sha postlar; berilmasa bot navbatidan (wmQ) take ta oladi (jadval bo'yicha 60 tagacha). Kuniga ikki marta, navbat bo'sh bo'lsa darhol tugaydi.
 on:
   workflow_dispatch:
     inputs:
@@ -20,13 +20,13 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 58
     steps:
       - id: q
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           POSTS: ${{ inputs.posts }}
-          TAKE: ${{ inputs.take || '15' }}
+          TAKE: ${{ inputs.take || '60' }}
           LOAD: ${{ inputs.load }}
         run: |
           python3 - <<'PY'
@@ -52,4 +52,5 @@ jobs:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           POSTS: ${{ steps.q.outputs.posts }}
           DRY: ${{ inputs.dry }}
+          GAP: "20"
         run: python3 wmfix.py

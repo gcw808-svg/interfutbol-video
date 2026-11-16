@@ -10,23 +10,34 @@ W = "https://inter-futbol-bot.gcw808.workers.dev"
 
 
 def wmbox(im):
+    # yashil "F" — o'ng yuqori burchakka eng yaqin, shakli mos (eni/bo'yi ~0,86) yashil bo'lak; chapida oq "i" ustuni bo'lishi shart
+    import cv2
     Wd, Hd = im.size
     s = int(min(Wd, Hd) * 0.34)
     a = np.asarray(im.crop((Wd - s, 0, Wd, s)).convert("RGB")).astype(int)
-    g = (abs(a[..., 0] - 91) < 38) & (abs(a[..., 1] - 182) < 38) & (abs(a[..., 2] - 55) < 45)
-    if g.sum() < 12:
+    g = ((abs(a[..., 0] - 91) < 38) & (abs(a[..., 1] - 182) < 38) & (abs(a[..., 2] - 55) < 45)).astype(np.uint8)
+    kk = max(3, int(s * 0.05)) | 1
+    gc = cv2.morphologyEx(g, cv2.MORPH_CLOSE, np.ones((kk, 3), np.uint8))  # "F" ikki bo'lakdan iborat — tik yo'nalishda birlashtiriladi
+    n, lab, st, _ = cv2.connectedComponentsWithStats(gc, connectivity=8)
+    best = None
+    for k in range(1, n):
+        x, y, w, h, ar = [int(v) for v in st[k]]
+        if w < 6 or h < 6 or w > s * 0.5 or h > s * 0.5 or not (0.55 <= w / h <= 1.25) or not (0.25 <= ar / (w * h) <= 0.8):
+            continue
+        ix0, ix1 = max(0, int(x - w * 0.42)), max(1, int(x - w * 0.10))
+        col = a[y:y + h, ix0:ix1]
+        if col.size == 0 or (col.min(axis=2) > 185).mean() < 0.45:
+            continue  # chapida oq "i" yo'q — belgi emas
+        d = (s - (x + w)) + y  # burchakka yaqinlik
+        if best is None or d < best[0]:
+            best = (d, x, y, w, h)
+    if not best:
         return None
-    ys, xs = np.where(g)
-    fx0, fx1, fy0, fy1 = np.percentile(xs, 1), np.percentile(xs, 99), np.percentile(ys, 1), np.percentile(ys, 99)
-    fw, fh = fx1 - fx0 + 1, fy1 - fy0 + 1
-    if fw > s * 0.5 or fh > s * 0.5 or fw < 5:
-        return None
+    _, x, y, fw, fh = best
     gw, gh = fw / 0.716, fh / 0.785
-    cx = (fx1 + 1 - gw / 2) + (Wd - s)
-    cy = fy1 + 1 - gh / 2
+    cx = (x + fw - gw / 2) + (Wd - s)
+    cy = y + fh - gh / 2
     S = max(gh, gw) * 220 / 152
-    if S > min(Wd, Hd) * 0.24 or cx + S / 2 < Wd * 0.8:
-        return None  # belgi emas (yashil forma, maydon va h.k.)
     return [cx - S / 2, cy - S / 2, cx + S / 2, cy + S / 2]
 
 

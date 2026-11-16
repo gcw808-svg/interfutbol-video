@@ -2909,7 +2909,7 @@ async function ubRoute(env, req, url) {
   if (url.pathname === "/ub/wmq") {
     let q = await kvGet(env, "wmQ", []);
     if (req.method === "POST") { const b0 = await req.json().catch(() => ({})); if (b0.clear) q = []; for (const x of b0.items || []) if (+x > 0 && !q.includes(+x)) q.push(+x); await kvPut(env, "wmQ", q); return J({ ok: true, left: q.length }); }
-    const n = Math.min(40, Math.max(0, +url.searchParams.get("take") || 0)); const out = q.slice(0, n);
+    const n = Math.min(60, Math.max(0, +url.searchParams.get("take") || 0)); const out = q.slice(0, n);
     if (out.length) { await kvPut(env, "wmQ", q.slice(n)); if (q.length <= n && admin) await tg(env, "sendMessage", { chat_id: admin, text: "✅ Eski iF belgisini almashtirish navbatining oxirgi qismi ishga tushdi (" + out.length + " ta post)." }); }
     return J({ ok: true, posts: out, left: Math.max(0, q.length - n) });
   }
