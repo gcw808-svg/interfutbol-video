@@ -1,0 +1,55 @@
+name: wmfix
+# Eski (to'q kvadratli) iF belgisini olib tashlab, fonsiz yangi belgini qo'yish — manba surati bilan chiqqan eski postlar (2026-11-17).
+# posts berilsa — o'sha postlar; berilmasa bot navbatidan (wmQ) take ta oladi. Jadval bo'yicha kuniga ikki marta, navbat bo'sh bo'lsa darhol tugaydi.
+on:
+  workflow_dispatch:
+    inputs:
+      posts:
+        default: ""
+      take:
+        default: "15"
+      load:
+        default: ""
+      dry:
+        default: ""
+  schedule:
+    - cron: "17 3 * * *"
+    - cron: "17 15 * * *"
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - id: q
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          POSTS: ${{ inputs.posts }}
+          TAKE: ${{ inputs.take || '15' }}
+          LOAD: ${{ inputs.load }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, urllib.request
+          key = hashlib.sha256(("ub-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:40]
+          H = {"x-key": key, "user-agent": "InterFutbolWmfix", "content-type": "application/json"}
+          U = "https://inter-futbol-bot.gcw808.workers.dev/ub/wmq"
+          posts = os.environ.get("POSTS", "").strip()
+          if os.environ.get("LOAD"):
+              ids = [int(x) for x in os.environ["LOAD"].replace(",", " ").split() if x.isdigit()]
+              print(urllib.request.urlopen(urllib.request.Request(U, data=json.dumps({"items": ids}).encode(), headers=H), timeout=40).read().decode()[:200])
+          elif not posts:
+              r = json.load(urllib.request.urlopen(urllib.request.Request(U + "?take=" + os.environ["TAKE"], headers=H), timeout=40))
+              posts = " ".join(str(x) for x in r.get("posts") or []); print("navbatdan:", posts, "| qoldi:", r.get("left"))
+          open(os.environ["GITHUB_OUTPUT"], "a").write("posts=" + posts + "\n")
+          PY
+      - uses: actions/checkout@v4
+        if: steps.q.outputs.posts != ''
+      - if: steps.q.outputs.posts != ''
+        run: pip install -q torch --index-url https://download.pytorch.org/whl/cpu && pip install -q numpy pillow onnxruntime opencv-python-headless fire && pip install -q --no-deps simple-lama-inpainting
+      - if: steps.q.outputs.posts != ''
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          POSTS: ${{ steps.q.outputs.posts }}
+          DRY: ${{ inputs.dry }}
+        run: python3 wmfix.py

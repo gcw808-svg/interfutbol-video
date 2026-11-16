@@ -2883,6 +2883,36 @@ async function ubRoute(env, req, url) {
     if (!P.ph.some((p) => p.uid === b0.uid || (b0.src && p.src === b0.src))) P.ph.push({ f: b0.f, uid: b0.uid, w: b0.w || 0, h: b0.h || 0, m: b0.m, low: b0.w && Math.min(b0.w, b0.h) < 500 ? 1 : 0, t: Date.now(), sr: 1, ...(b0.b ? { b: b0.b, x: b0.x || [], d: 1 } : {}), ...(b0.src ? { src: b0.src } : {}) });
     await kvPut(env, "faces", F); return J({ ok: true, n: P.ph.length });
   }
+  // ESKI iF BELGISINI ALMASHTIRISH (wmfix.py, 2026-11-17): /ub/postimg — postning hozirgi rasmi (file_id); /ub/repimg — tayyor rasm bilan post rasmini almashtirish (matn, logotiplar va tugma saqlanadi)
+  if (url.pathname === "/ub/postimg") {
+    const mid = +url.searchParams.get("id"); const fw = await tg(env, "forwardMessage", { chat_id: admin, from_chat_id: env.CHANNEL, message_id: mid, disable_notification: true }); const m = fw && fw.result;
+    if (!m) return J({ ok: false, why: "post topilmadi" });
+    await tg(env, "deleteMessage", { chat_id: admin, message_id: m.message_id }).catch(() => null);
+    if (!m.photo || m.media_group_id) return J({ ok: false, why: m.media_group_id ? "albom" : "postda surat yo'q" });
+    const ph = m.photo[m.photo.length - 1]; return J({ ok: true, f: ph.file_id, w: ph.width, h: ph.height });
+  }
+  if (url.pathname === "/ub/repimg" && req.method === "POST") {
+    const mid = +url.searchParams.get("id"); const buf = await req.arrayBuffer(); if (!mid || buf.byteLength < 5000) return J({ ok: false, why: "rasm yo'q" });
+    const fw = await tg(env, "forwardMessage", { chat_id: admin, from_chat_id: env.CHANNEL, message_id: mid, disable_notification: true }); const m = fw && fw.result;
+    if (!m) return J({ ok: false, why: "post topilmadi" });
+    await tg(env, "deleteMessage", { chat_id: admin, message_id: m.message_id }).catch(() => null);
+    if (!m.photo || m.media_group_id) return J({ ok: false, why: "postda bitta surat emas" });
+    const html = hashFix(CANON.reduce((a, [re, v]) => a.replace(re, v), entHtmlNoLogo(m.caption || "", m.caption_entities)));
+    const id = "w" + Date.now().toString(36) + mid; await env.STATE.put("lgb:rc_" + id, buf, { expirationTtl: 3 * 86400 });
+    const html2 = newAlpha(addLogos(html)); const uid = "e" + Date.now().toString(36) + mid;
+    await kvPut(env, "ujob:" + uid, { html: html2, html2, edit: mid, editPhoto: WURL + "/lg/rc_" + id, photo: null, video: null, chat: null, raw: { text: html, img: null, url: null, video: null }, t: Date.now(), tries: 0, repId: id }, { expirationTtl: 86400 });
+    const rw = (await kvGet(env, "repWait", [])).filter((x) => Date.now() - x.t0 < 6 * 3600e3); rw.push({ id, mid, st: "edit", uid, t: Date.now(), t0: Date.now(), n: 0 }); await kvPut(env, "repWait", rw.slice(-30));
+    await ghDispatch(env, "ubpost.yml", { job: uid });
+    return J({ ok: true });
+  }
+  // wmQ — eski belgini almashtirish navbati (wmfix.yml kuniga ikki marta ?take=N bilan oladi): POST {items:[id..], clear} — yuklash
+  if (url.pathname === "/ub/wmq") {
+    let q = await kvGet(env, "wmQ", []);
+    if (req.method === "POST") { const b0 = await req.json().catch(() => ({})); if (b0.clear) q = []; for (const x of b0.items || []) if (+x > 0 && !q.includes(+x)) q.push(+x); await kvPut(env, "wmQ", q); return J({ ok: true, left: q.length }); }
+    const n = Math.min(40, Math.max(0, +url.searchParams.get("take") || 0)); const out = q.slice(0, n);
+    if (out.length) { await kvPut(env, "wmQ", q.slice(n)); if (q.length <= n && admin) await tg(env, "sendMessage", { chat_id: admin, text: "✅ Eski iF belgisini almashtirish navbatining oxirgi qismi ishga tushdi (" + out.length + " ta post)." }); }
+    return J({ ok: true, posts: out, left: Math.max(0, q.length - n) });
+  }
   if (url.pathname === "/ub/redoq" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); const Q = (await kvGet(env, "redoQ", null)) || { q: [], n: 0, day: "", log: [] }; if (b0.clear) Q.q = []; const have = new Set(Q.q.map((x) => x.id)); for (const x of b0.items || []) if (+x.id > 0 && !have.has(+x.id)) Q.q.push({ id: +x.id, c: x.c === "k" ? "k" : "r", ...(x.nf ? { nf: 1 } : {}), ...(x.wm === "tr" ? { wm: "tr" } : {}) }); if (b0.max) Q.max = Math.min(60, Math.max(1, +b0.max)); await kvPut(env, "redoQ", Q); return J({ ok: true, left: Q.q.length, done: (Q.log || []).length }); }
   if (url.pathname === "/ub/rasm" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); return J({ ok: await rasmRedo(env, admin, +b0.id, true, b0.face || b0.credit || b0.wm || b0.sr ? { face: b0.face ? String(b0.face) : "", credit: String(b0.credit || "").slice(0, 90), wm: b0.wm === "tr" ? "tr" : "", sr: b0.sr ? 1 : 0 } : null) }); }
   if (url.pathname === "/ub/facesharp" && req.method === "POST") {

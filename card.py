@@ -52,7 +52,7 @@ def mark_size(Wd):
 def paste_mark(im, pos="br", my=None):
     # YAGONA iF BELGISI (Bahtiyor aka, 2026-11-17: "qora fonsiz, logoning o'zi bo'lsin; hamma rasmlarda bir xil o'lchamda"):
     # to'q kvadratsiz, ostida yengil soya (och fonda yo'qolmasligi uchun), o'lchami har doim rasm eniga nisbatan bir xil.
-    # pos: "br" pastki o'ng, "tr" tepa o'ng, "bc" pastda o'rtada; my — chetdan masofa (berilmasa standart).
+    # pos: "br" pastki o'ng, "tr" tepa o'ng, "tl" tepa chap, "bl" pastki chap, "bc" pastda o'rtada; my — chetdan masofa (berilmasa standart).
     Wd, Hd = im.size
     s = mark_size(Wd)
     lg = logo(s, False)
@@ -64,8 +64,8 @@ def paste_mark(im, pos="br", my=None):
     out.paste(lg, (pad, pad), lg)
     m = int(round(Wd * 44 / 1080))
     my = m if my is None else my
-    x = (Wd - s) // 2 if pos == "bc" else Wd - s - m
-    y = my if pos == "tr" else Hd - s - my
+    x = (Wd - s) // 2 if pos == "bc" else m if pos in ("tl", "bl") else Wd - s - m
+    y = my if pos in ("tr", "tl") else Hd - s - my
     im.paste(out, (x - pad, y - pad), out)
     return s
 
