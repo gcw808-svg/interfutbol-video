@@ -117,7 +117,15 @@ def main():
             buf = io.BytesIO(); out.save(buf, "JPEG", quality=94, subsampling=0)
             if dry:
                 print(mid, "+ (sinov)", im.size, pos); continue
-            r = urllib.request.urlopen(urllib.request.Request(W + "/ub/repimg?id=%d" % mid, data=buf.getvalue(), headers={**H, "content-type": "image/jpeg"}), timeout=60).read().decode()[:120]
+            r = ""
+            for k in range(3):  # bot vaqtincha javob bermasa (503) — 40 soniyadan keyin qayta urinadi; ikki marta almashtirish zararsiz
+                try:
+                    r = urllib.request.urlopen(urllib.request.Request(W + "/ub/repimg?id=%d" % mid, data=buf.getvalue(), headers={**H, "content-type": "image/jpeg"}), timeout=60).read().decode()[:120]
+                    break
+                except Exception as e:
+                    if k == 2:
+                        raise
+                    print(mid, "qayta urinish:", repr(e)[:80]); time.sleep(40)
             print(mid, "+", im.size, pos, r); ok.append(mid)
             if n < len(posts) - 1:
                 time.sleep(gap)
