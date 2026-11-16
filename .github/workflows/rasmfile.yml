@@ -9,6 +9,8 @@ on:
         required: true
       wm:
         default: ""
+      sharp:
+        default: ""
 permissions:
   contents: read
 jobs:
@@ -23,4 +25,5 @@ jobs:
           FILE: ${{ inputs.file }}
           POST: ${{ inputs.post }}
           WM: ${{ inputs.wm }}
+          SHARP: ${{ inputs.sharp }}
         run: python3 rasmfile.py

@@ -14,4 +14,4 @@ url = ii.get("thumburl") or ii["url"]
 cr = re.sub(r"^(User:)?", "", c["art"]).strip()
 credit = f"Foto: {cr}, {c['lic']}, Wikimedia Commons"
 print("surat:", url, ii.get("width"), ii.get("height"), "|", credit)
-print("post:", requests.post(W + "/ub/rasm", headers={**H, "content-type": "application/json"}, data=json.dumps({"id": int(post), "face": url, "credit": credit, "wm": "tr" if wm == "tr" else ""}), timeout=60).text[:120])
+print("post:", requests.post(W + "/ub/rasm", headers={**H, "content-type": "application/json"}, data=json.dumps({"id": int(post), "face": url, "credit": credit, "wm": "tr" if wm == "tr" else "", "sr": 1 if os.environ.get("SHARP") else 0}), timeout=60).text[:120])

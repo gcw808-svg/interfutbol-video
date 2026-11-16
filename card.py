@@ -909,6 +909,19 @@ def _cover(src, w, h, fy=0.15):
     return im
 
 
+def _sharp_cover(src, w, h, fy=0.15):
+    # MAJBURIY TINIQLASHTIRISH (2026-11-16, Bahtiyor aka, 300-post: "rasm juda xira, tiniqlashtir"): surat yetarli katta bo'lsa ham o'zi
+    # xira/donli bo'lishi mumkin — kadr avval yarim o'lchamga kichraytiriladi (don yo'qoladi), keyin Real-ESRGAN bilan 4 marta
+    # kattalashtirilib karta o'lchamiga keltiriladi va oddiy nusxa bilan 80/20 aralashtiriladi. Yuz qayta chizilmaydi.
+    im = _cover(src, w, h, fy)
+    up = _sr(im.resize((w // 2, h // 2), Image.LANCZOS))
+    if not up:
+        return im
+    im = Image.blend(im, up.resize((w, h), Image.LANCZOS), 0.8)
+    print("sharp ok")
+    return im.filter(ImageFilter.UnsharpMask(radius=1.5, percent=40, threshold=2))
+
+
 def _vfade(im, y0, y1, col, a0=0, a1=255, x0=0, x1=None):
     g = Image.new("RGBA", im.size, (0, 0, 0, 0))
     d = ImageDraw.Draw(g)
@@ -953,7 +966,7 @@ def _title_v(d, title, x, y, maxw, maxh, start=72, minsize=44):
     return y
 
 
-def _grade(ph, base, acc):
+def _grade(ph, base, acc, grain=True):
     # SURATGA YENGIL ISHLOV (2026-11-09, Bahtiyor aka: "asosiy shaxslar o'zgarmagan holda ozgina o'zgartirish va qo'shimcha"):
     # odamlarga tegilmaydi — faqat rang (kontrast, klub rangida yengil tus) va nozik don; chetlar qoraytirilmaydi
     from PIL import ImageEnhance
@@ -963,6 +976,8 @@ def _grade(ph, base, acc):
     ph = Image.blend(ph, Image.composite(tint, ph, Image.new("L", ph.size, 255)), 0.07)
     # CHETLAR QORAYTIRILMAYDI (Bahtiyor aka, 2026-11-16, 300-post: "chetlarini qoraytirma, rasm qanday bo'lsa shu holatda bo'laversin")
     w, h = ph.size
+    if not grain:
+        return ph
     try:
         noise = Image.effect_noise((w, h), 18).convert("L").point(lambda v: 128 + (v - 128) // 5)
         ph = Image.blend(ph, Image.merge("RGB", (noise, noise, noise)), 0.05)
@@ -1205,7 +1220,7 @@ def render_photo_v(j):
     face = get_photo(j.get("face"))
     if not face:
         return render_news_v({**j, "po": 0, "face": ""})
-    im = _grade(_cover(face, Wd, Hd, 0.12), (10, 14, 22), GREEN).convert("RGB")
+    im = (_grade(_sharp_cover(face, Wd, Hd, 0.12), (10, 14, 22), GREEN, grain=False) if j.get("sr") else _grade(_cover(face, Wd, Hd, 0.12), (10, 14, 22), GREEN)).convert("RGB")
     # 2026-11-16: sarlavhasiz suratda past va tepa ham qoraytirilmaydi — iF belgisining o'z to'q kvadrati bor
     mk = logo(120, True)
     if j.get("wm") == "tr":

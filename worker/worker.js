@@ -1644,7 +1644,7 @@ async function rasmRedo(env, chat, mid, quiet, ov) {
       let html1 = html;
       if (ov && ov.credit && !/Wikimedia Commons/i.test(html)) { const cl = "<i>⟦" + ov.credit + "⟧</i>"; html1 = /\n\s*#[^\n]*\s*$/.test(html) ? html.replace(/\s*\n\s*(#[^\n]*\s*)$/, "\n\n" + cl + "\n\n$1") : html + "\n\n" + cl; }
       const id = "n" + Date.now().toString(36) + "r";
-      await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", leftLogo: await leftCrest(env, html, ci, idx), clubLogos, stat: /#Raqamlarda/i.test(html) ? statFromPost(html) : null, face: own ? own.face : await faceUrl(env, html, ov && ov.pick), wm: (ov && ov.wm) || "", po: own ? own.po : 0, legion: /#Legionerlar\b/i.test(html) ? await legionFromPost(env, html, idx) : null, scorers: /#Topurarlar\b/i.test(html) ? await scorersFromPost(env, html, idx) : null, chan: html1, rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 }); await repWatch(env, id, mid);
+      await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", leftLogo: await leftCrest(env, html, ci, idx), clubLogos, stat: /#Raqamlarda/i.test(html) ? statFromPost(html) : null, face: own ? own.face : await faceUrl(env, html, ov && ov.pick), wm: (ov && ov.wm) || "", sr: ov && ov.sr ? 1 : 0, po: own ? own.po : 0, legion: /#Legionerlar\b/i.test(html) ? await legionFromPost(env, html, idx) : null, scorers: /#Topurarlar\b/i.test(html) ? await scorersFromPost(env, html, idx) : null, chan: html1, rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 }); await repWatch(env, id, mid);
       await ghDispatch(env, "card.yml", { job: id });
       if (!quiet) await tg(env, "sendMessage", { chat_id: chat, text: "🖼 " + mid + "-post uchun yangi kartochka chizilmoqda (liga: " + (ci.league || "—") + ", klublar: " + (ci.clubs || []).join(", ") + "). 2–3 daqiqada rasm almashtiriladi." });
       return true;
@@ -2863,7 +2863,7 @@ async function ubRoute(env, req, url) {
     if (!P.ph.some((p) => p.uid === b0.uid || (b0.src && p.src === b0.src))) P.ph.push({ f: b0.f, uid: b0.uid, w: b0.w || 0, h: b0.h || 0, m: b0.m, low: b0.w && Math.min(b0.w, b0.h) < 500 ? 1 : 0, t: Date.now(), sr: 1, ...(b0.b ? { b: b0.b, x: b0.x || [], d: 1 } : {}), ...(b0.src ? { src: b0.src } : {}) });
     await kvPut(env, "faces", F); return J({ ok: true, n: P.ph.length });
   }
-  if (url.pathname === "/ub/rasm" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); return J({ ok: await rasmRedo(env, admin, +b0.id, true, b0.face || b0.credit || b0.wm ? { face: b0.face ? String(b0.face) : "", credit: String(b0.credit || "").slice(0, 90), wm: b0.wm === "tr" ? "tr" : "" } : null) }); }
+  if (url.pathname === "/ub/rasm" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); return J({ ok: await rasmRedo(env, admin, +b0.id, true, b0.face || b0.credit || b0.wm || b0.sr ? { face: b0.face ? String(b0.face) : "", credit: String(b0.credit || "").slice(0, 90), wm: b0.wm === "tr" ? "tr" : "", sr: b0.sr ? 1 : 0 } : null) }); }
   if (url.pathname === "/ub/facesharp" && req.method === "POST") {
     const b0 = await req.json().catch(() => ({})); const F = await kvGet(env, "faces", {}); let hit = 0;
     for (const P of Object.values(F)) for (const p of P.ph || []) {
@@ -3228,10 +3228,10 @@ return;
       if (!rm && !/^https:\/\/telegra\.ph\//.test(arg)) { await tg(env, "sendMessage", { chat_id: chat, text: "Havola telegra.ph maqolasi bo'lishi kerak yoki «olib»." }); return; }
       const r = await tg(env, "editMessageReplyMarkup", { chat_id: env.CHANNEL, message_id: +id, reply_markup: rm ? { inline_keyboard: [] } : readMore(arg) });
       await tg(env, "sendMessage", { chat_id: chat, text: r.ok ? (rm ? "✅ " + id + "-postdan tugma olib tashlandi." : "✅ " + id + "-post tugmasi yangilandi.") : "⚠️ " + (r.description || "o'zgarmadi") });
-    } else if (/^\/rasm\s+\d+(?:\s+(?:tepa|\d))*$/i.test(text)) {
+    } else if (/^\/rasm\s+\d+(?:\s+(?:tepa|tiniq|\d))*$/i.test(text)) {
       { // 2026-11-15: "/rasm ID tepa" — iF belgisi tepa o'ng burchakda; "/rasm ID 2" — bazadagi 2-surat (bir odamning bir nechta surati bo'lsa)
-        const ra = text.split(/\s+/).slice(2); const wm = ra.some((x) => /^tepa$/i.test(x)) ? "tr" : ""; const pick = +(ra.find((x) => /^\d$/.test(x)) || 0);
-        await rasmRedo(env, chat, +text.split(/\s+/)[1], false, wm || pick ? { wm, pick } : null); }
+        const ra = text.split(/\s+/).slice(2); const wm = ra.some((x) => /^tepa$/i.test(x)) ? "tr" : ""; const pick = +(ra.find((x) => /^\d$/.test(x)) || 0); const sr = ra.some((x) => /^tiniq$/i.test(x)) ? 1 : 0; // 2026-11-16: "/rasm ID tiniq" — xira surat majburiy tiniqlashtiriladi
+        await rasmRedo(env, chat, +text.split(/\s+/)[1], false, wm || pick || sr ? { wm, pick, sr } : null); }
     } else if (/^\/maqola\s+\S+\s*\n/.test(text)) {
       // Telegraph maqolasini tuzatish: rasm va oxirgi havola saqlanadi, matn yangilanadi ("# " bilan boshlangan qator — sarlavha)
       const path = decodeURIComponent(text.match(/^\/maqola\s+(\S+)/)[1].replace(/^https?:\/\/telegra\.ph\//, "")); const lines = text.split("\n").slice(1).map((l) => l.trim()).filter(Boolean);
