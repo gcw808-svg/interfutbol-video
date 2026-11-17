@@ -1121,17 +1121,23 @@ async function resultDup(env, post) { const first = head1(post); if (!RES_RE.tes
     if (Date.now() - item.date > MAX_AGE_HOURS * 3600e3 || !isFocus(item)) continue; if (RATING_RE.test(String(item.title || ""))) { const lgr = await kvGet(env, "autoLog", []); lgr.push({ t: Date.now(), title: item.title, skip: "reyting yangiligi" }); await kvPut(env, "autoLog", lgr.slice(-40), { expirationTtl: 7 * 86400 }); continue; }
     await enrich(item);
     if (womenItem(item)) { const lgw0 = await kvGet(env, "autoLog", []); lgw0.push({ t: Date.now(), title: item.title, skip: "ayollar futboli" }); await kvPut(env, "autoLog", lgw0.slice(-40), { expirationTtl: 7 * 86400 }); continue; }
-    let post;
+    let post, fc;
+    // 2026-11-17: tayyorlangan post (oldingi ishga tushishda yozilib, nazoratdan o'tgan) qayta yozilmaydi
+    if (item.pre?.post) { post = item.pre.post; fc = { bad: [], text: item.pre.post, fixed: item.pre.fixed || [] }; delete item.pre; }
+    else {
     try { post = await writePost(env, item, 0, Date.now() + 45000); } catch (e) { Q.unshift(item); await kvPut(env, "st", st); return "busy"; }
     if (!post) continue;
-    let fc;
     try { fc = await factCheck(env, item, post, Date.now() + 45000); } catch (e) { Q.unshift(item); await kvPut(env, "st", st); return "busy"; }
+    }
     if (fc.bad.length) { if (fc.rad) { const lgx = await kvGet(env, "autoLog", []); lgx.push({ t: Date.now(), title: item.title, skip: "asosiy fakt manbada yo'q: " + fc.rad }); await kvPut(env, "autoLog", lgx.slice(-40), { expirationTtl: 7 * 86400 }); } continue; }
     const hs0 = headSig(post), hs1 = headSig(fc.text); if ((hs0 && hs1 && hs0 !== hs1) || (await resultDup(env, fc.text)) || ["bad", "women"].includes(await scoreGuard(fc.text).catch(() => "unknown"))) { const lgw = await kvGet(env, "autoLog", []); lgw.push({ t: Date.now(), title: item.title, skip: "hisob/g'olib o'zgardi yoki takror natija" }); await kvPut(env, "autoLog", lgw.slice(-40), { expirationTtl: 7 * 86400 }); continue; } post = fc.text;
     // sana nazorati (2026-11-08): o'yin sanasi rasmiy jadval (ESPN) bilan solishtiriladi, yil xatosi manbaga qarab tuzatiladi
     try { const dc = await dateCheck(env, post, item); if (dc.fixes.length) { post = dc.text; const L0 = await kvGet(env, "dateFix", []); L0.push({ t: Date.now(), h: newsHead(post).slice(0, 80), f: dc.fixes }); await kvPut(env, "dateFix", L0.slice(-30), { expirationTtl: 30 * 86400 }); } } catch (e) {}
     // takror yangilik (boshqa manbadan kelgan xuddi shu voqea) chiqmasin
     if (await dupNews(env, post)) { const lgd = await kvGet(env, "autoLog", []); lgd.push({ t: Date.now(), title: item.title, dup: 1 }); await kvPut(env, "autoLog", lgd.slice(-40), { expirationTtl: 7 * 86400 }); continue; }
+    // 2026-11-17: shu ishga tushishda oldingi yangilik(lar) tashlab yuborilgan bo'lsa, tashqi so'rovlar chegarasi (bepul tarif: 50 ta) tugab qolmasligi uchun
+    // tayyor post navbatga qaytariladi va rasm/maqola/chiqarish keyingi ishga tushishda bajariladi (10:31 va 10:42 dagi postlar shu sababli jimgina yo'qolgan edi)
+    if (tries > 0) { item.pre = { post, fixed: fc.fixed }; Q.unshift(item); await kvPut(env, "st", st); return "later"; }
     const pb = await pickBranded(env, item, Date.now() + 30000).catch(() => null);
     const img = pb || (await kvGet(env, "defImg", null));
     const p = { item, post, img };
