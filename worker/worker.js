@@ -164,13 +164,16 @@ const FEEDS = [
 
     // yangi o'zbek lotin alifbosi (2026): O' → Ö, G' → Ğ, Sh → Ş, Ch → Ç. HTML teglar, havolalar, @nomlar, heshteglar,
 // ⟦…⟧ ichidagi original nomlar (klub, futbolchi, murabbiy) va chet tilidagi so'zlar o'zgarmaydi
-const NA_KEEP = /^(Christian|Christopher|Chris|Christensen|Achraf|Sanchez|Schmeichel|Pochettino|Chivu|Marchisio|Echeverri|Ochoa|Shaqiri|Fischer|Bochum|Mönchengladbach|Gladbach|Manchester|Michael|Mitchell|Richarlison|Sancho|Chiesa|Shaw|Ashley|Charlton|Chalobah|Chilwell|Kimmich|Fletcher|Richards|Rashford|Champions|Chiellini|Sheffield|Shakhtar|Chicharito|Shearer|Schick|Sesko)$/;
+const NA_KEEP = /^(Christian|Christopher|Chris|Christensen|Achraf|Sanchez|Schmeichel|Pochettino|Chivu|Marchisio|Echeverri|Ochoa|Shaqiri|Fischer|Bochum|Mönchengladbach|Gladbach|Manchester|Michael|Mitchell|Richarlison|Sancho|Chiesa|Shaw|Ashley|Charlton|Chalobah|Chilwell|Kimmich|Fletcher|Richards|Rashford|Champions|Chiellini|Sheffield|Shakhtar|Chicharito|Shearer|Schick|Sesko|Eintracht|Gregoritsch)$/;
 const NA_FOREIGN = /^sch|c(?!h)|w|ea|ou|th|ph|ck|ee|oo|ae|[àáâãäåæèéêëìíîïñòóôõøùúûüýÿœß]/i;
 const naWord = (w) => (NA_FOREIGN.test(w) || NA_KEEP.test(w) ? w : w
   .replace(/O['‘’ʻʼ`]/g, "Ö").replace(/o['‘’ʻʼ`]/g, "ö")
   .replace(/G['‘’ʻʼ`]/g, "Ğ").replace(/g['‘’ʻʼ`]/g, "ğ")
   .replace(/S[Hh]/g, "Ş").replace(/sh/g, "ş")
   .replace(/C[Hh]/g, "Ç").replace(/ch/g, "ç"));
+// KANALDAN QAYTA O'QILGAN MATN (2026-11-17, 320-post: /ub/rasm dan keyin "Eintracht" → "Eintraçt", "Gregoritsch" → "Gregoritsç"):
+// kanal matni allaqachon yangi alifboda — unda qolgan "ch"/"sh" faqat xorijiy nomlarda bo'ladi, shuning uchun ular ⟦ ⟧ bilan himoyalanadi
+const keepLatin = (t) => (typeof t !== "string" || !t ? t : t.split(/(<[^>]*>|https?:\/\/[^\s<]+|@\w+|⟦[^⟧]*⟧|#[\p{L}\p{N}_]+)/u).map((p, i) => (i % 2 ? p : p.replace(/[\p{L}'‘’ʻʼ`]+/gu, (w) => (/[cs]h/i.test(w) ? "⟦" + w + "⟧" : w)))).join(""));
 function newAlpha(t) {
   if (typeof t !== "string" || !t) return t;
   return t.split(/(<[^>]*>|https?:\/\/[^\s<]+|@\w+|⟦[^⟧]*⟧|#[\p{L}\p{N}_]+)/u).map((p, i) => (i % 2
@@ -1680,7 +1683,7 @@ async function rasmRedo(env, chat, mid, quiet, ov) {
       let html1 = html;
       if (ov && ov.credit && !/Wikimedia Commons/i.test(html)) { const cl = "<i>⟦" + ov.credit + "⟧</i>"; html1 = /\n\s*#[^\n]*\s*$/.test(html) ? html.replace(/\s*\n\s*(#[^\n]*\s*)$/, "\n\n" + cl + "\n\n$1") : html + "\n\n" + cl; }
       const id = "n" + Date.now().toString(36) + "r";
-      await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", leftLogo: await leftCrest(env, html, ci, idx), clubLogos, stat: /#Raqamlarda/i.test(html) ? statFromPost(html) : null, face: face0, wm: (ov && ov.wm) || "", sr: ov && ov.sr ? 1 : 0, po: own ? own.po : 0, legion: /#Legionerlar\b/i.test(html) ? await legionFromPost(env, html, idx) : null, scorers: /#Topurarlar\b/i.test(html) ? await scorersFromPost(env, html, idx) : null, chan: html1, rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 }); await repWatch(env, id, mid);
+      await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", leftLogo: await leftCrest(env, html, ci, idx), clubLogos, stat: /#Raqamlarda/i.test(html) ? statFromPost(html) : null, face: face0, wm: (ov && ov.wm) || "", sr: ov && ov.sr ? 1 : 0, po: own ? own.po : 0, legion: /#Legionerlar\b/i.test(html) ? await legionFromPost(env, html, idx) : null, scorers: /#Topurarlar\b/i.test(html) ? await scorersFromPost(env, html, idx) : null, chan: keepLatin(html1), rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 }); await repWatch(env, id, mid);
       await ghDispatch(env, "card.yml", { job: id });
       if (!quiet) await tg(env, "sendMessage", { chat_id: chat, text: "🖼 " + mid + "-post uchun yangi kartochka chizilmoqda (liga: " + (ci.league || "—") + ", klublar: " + (ci.clubs || []).join(", ") + "). 2–3 daqiqada rasm almashtiriladi." });
       return true;
@@ -2767,7 +2770,7 @@ async function logoFix(env, chat, ids, opt = {}) {
     if (!text) { bad.push(mid + " (matnsiz)"); continue; }
     await natTeamNeeds(env, text); // logo roboti navbatiga (terma jamoa logotipi yo'q bo'lsa)
     const FLAGS_RX = /(?:[\u{1F1E6}-\u{1F1FF}]{2}|\u{1F3F4}[\u{E0061}-\u{E007A}]+\u{E007F})\s?/gu;
-    let html = addLogos(hashFix(CANON.reduce((a, [re, v]) => a.replace(re, v), entHtmlNoLogo(text, ents).replace(FLAGS_RX, ""))));
+    let html = addLogos(keepLatin(hashFix(CANON.reduce((a, [re, v]) => a.replace(re, v), entHtmlNoLogo(text, ents).replace(FLAGS_RX, "")))));
     if (opt.tur) { const h2 = html.replace(/(\d{4}-yil [^,\n]+, [^\n]*?)(?:, \d+-tur)?\. (U[çc]h?ra[şs]h?uv)/, "$1, " + opt.tur + "-tur. $2"); if (h2 === html) { bad.push(mid + " (tur joyi topilmadi)"); continue; } html = h2; }
     edits.push({ id: mid, html });
   }
@@ -2958,7 +2961,7 @@ async function ubRoute(env, req, url) {
       html = hashFix(CANON.reduce((a, [re, v]) => a.replace(re, v), entHtmlNoLogo(m.caption || "", m.caption_entities)));
     }
     const id = "w" + Date.now().toString(36) + mid; await env.STATE.put("lgb:rc_" + id, buf, { expirationTtl: 3 * 86400 });
-    const html2 = ready || newAlpha(addLogos(html)); const uid = "e" + Date.now().toString(36) + mid;
+    const html2 = ready || newAlpha(addLogos(keepLatin(html))); const uid = "e" + Date.now().toString(36) + mid;
     await kvPut(env, "ujob:" + uid, { html: html2, html2, edit: mid, editPhoto: WURL + "/lg/rc_" + id, photo: null, video: null, chat: null, raw: { text: html, img: null, url: null, video: null }, t: Date.now(), tries: 0, repId: id, ...(keep ? { keep: 1 } : {}) }, { expirationTtl: 86400 });
     // keep rejimida repWait ga yozilmaydi: ketma-ket almashtirishlarda KV kechikib yangilangani uchun tugagan yozuvlar qaytib qolib, adminga soxta "almashtirilmadi" ogohlantirishi ketardi (2026-11-17); natija wmfix dan keyin kanaldan ko'rib tekshiriladi
     if (!keep) { const rw = (await kvGet(env, "repWait", [])).filter((x) => Date.now() - x.t0 < 6 * 3600e3); rw.push({ id, mid, st: "edit", uid, t: Date.now(), t0: Date.now(), n: 0 }); await kvPut(env, "repWait", rw.slice(-30)); }
