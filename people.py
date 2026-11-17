@@ -96,7 +96,9 @@ def files(q, names=()):
                 continue
             if need is not None:  # qidiruv natijasi: fayl shu odamning Commons turkumida (yoki nomi bor ichki turkumda) turishi shart
                 cats = " | ".join(pn(c_["title"].replace("Category:", "")) for c_ in pg.get("categories", []))
-                if not any(n_ and n_ in cats for n_ in need):
+                # turkum nomi AYNAN shu odamniki bo'lishi kerak ("Luis Enrique Mejía Godoy", "Igor Sergeev (voice actor)" — boshqa odamlar, 2026-11-17 sabog'i)
+                ok_ = lambda c_: any(n_ and re.fullmatch(re.escape(n_) + r"( (in|by|at|with|during|as|playing|training|portraits?|\d{4}).*)?", c_) for n_ in need)
+                if not any(ok_(c_) for c_ in cats.split(" | ")):
                     continue
             md = ii.get("extmetadata", {})
             lic = clean((md.get("LicenseShortName") or {}).get("value"))
@@ -163,8 +165,12 @@ def delete():
 
 
 def main():
+    if os.environ.get("REG"):  # kanalga tushgan, lekin bazaga yozilmay qolgan suratlarni ro'yxatga olish: REG = JSON (faceaddm items)
+        print("baza:", requests.post(W + "/ub/faceaddm", headers=H, data=json.dumps({"items": json.loads(os.environ["REG"])}), timeout=60).text[:120])
     if os.environ.get("DEL"):
         return delete()
+    if os.environ.get("REG"):
+        return
     have = requests.get(W + "/ub/faces", headers=H, timeout=30).json()
     seen = set(x.strip() for x in open("people_seen.txt", encoding="utf-8").read().split("\n") if x.strip()) if os.path.exists("people_seen.txt") else set()
     seen |= {p.get("wt") for P in have.values() for p in P.get("ph", []) if p.get("wt")}
@@ -227,8 +233,8 @@ def main():
         except Exception as ex_:
             print("-", name, "xato", str(ex_)[:120])
         time.sleep(0.4)
-    if items:
-        print("baza:", requests.post(W + "/ub/faceaddm", headers=H, data=json.dumps({"items": items}), timeout=60).text[:120])
+    for k in range(0, len(items), 150):  # worker bir so'rovda 200 tagacha oladi
+        print("baza:", requests.post(W + "/ub/faceaddm", headers=H, data=json.dumps({"items": items[k:k + 150]}), timeout=60).text[:120])
     print("ITEMS", json.dumps([{k: it[k] for k in ("name", "f", "uid", "m", "wt")} for it in items]))
     print("qo'shildi:", len(items))
 

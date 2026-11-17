@@ -18,6 +18,8 @@ on:
         default: "0"
       del:
         default: ""
+      reg:
+        default: ""
 permissions:
   contents: read
 concurrency:
@@ -39,4 +41,5 @@ jobs:
           MAXP: ${{ inputs.maxp }}
           DRY: ${{ inputs.dry }}
           DEL: ${{ inputs.del }}
+          REG: ${{ inputs.reg }}
         run: python3 people.py
