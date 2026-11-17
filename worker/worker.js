@@ -2955,7 +2955,7 @@ async function ubRoute(env, req, url) {
       const P = (F[key] = F[key] || { n: name, al: [], ph: [], u: 0 });
       P.al = [...new Set([...(P.al || []), name, ...(Array.isArray(b0.al) ? b0.al.map((x) => String(x).trim()).filter(isFaceName) : [])])].slice(0, 12);
       if (P.ph.some((p) => p.uid === b0.uid)) continue;
-      P.ph.push({ f: b0.f, uid: b0.uid, w: b0.w || 0, h: b0.h || 0, m: b0.m, low: 0, t: Date.now(), sr: 1, ...(b0.b ? { b: b0.b, x: b0.x || [], d: 1 } : {}), ...(b0.c ? { c: String(b0.c).slice(0, 160) } : {}), wc: 1 }); n++;
+      P.ph.push({ f: b0.f, uid: b0.uid, w: b0.w || 0, h: b0.h || 0, m: b0.m, low: 0, t: Date.now(), sr: 1, ...(b0.b ? { b: b0.b, x: b0.x || [], d: 1 } : {}), ...(b0.c ? { c: String(b0.c).slice(0, 160) } : {}), ...(b0.wt ? { wt: String(b0.wt).slice(0, 200) } : {}), wc: 1 }); n++;
     }
     if (n) await kvPut(env, "faces", F); return J({ ok: true, n });
   }

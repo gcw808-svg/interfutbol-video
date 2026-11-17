@@ -52,6 +52,12 @@ PEOPLE = [
 
 pn = lambda x: re.sub(r"[^a-z0-9]+", " ", __import__("unicodedata").normalize("NFD", x.lower().replace("ş", "sh").replace("ç", "ch")).encode("ascii", "ignore").decode()).strip()
 
+# 2-bosqich (2026-11-17): bizning klublar tarkibidagi boshqa futbolchilar
+PEOPLE += [(n, "", [n.split()[-1]] if len(n.split()) > 1 and len(n.split()[-1]) >= 5 else []) for n in """Aurélien Tchouaméni|Eduardo Camavinga|Éder Militão|Antonio Rüdiger|Dani Carvajal|Arda Güler|Trent Alexander-Arnold|Dean Huijsen|Gavi|Frenkie de Jong|Jules Koundé|Pau Cubarsí|Alejandro Balde|Dani Olmo|Fermín López|Ferran Torres|Marcus Rashford|Bernardo Silva|Rúben Dias|Joško Gvardiol|Omar Marmoush|Jérémy Doku|Tijjani Reijnders|Rayan Cherki|Dominik Szoboszlai|Alexis Mac Allister|Cody Gakpo|Hugo Ekitike|Ibrahima Konaté|Jeremie Frimpong|William Saliba|Gabriel Magalhães|Kai Havertz|Gabriel Martinelli|Leandro Trossard|David Raya|Martín Zubimendi|Eberechi Eze|Enzo Fernández|Moisés Caicedo|Reece James|Marc Cucurella|Pedro Neto|Bryan Mbeumo|Matheus Cunha|Benjamin Šeško|Kobbie Mainoo|Harry Maguire|Matthijs de Ligt|Amad Diallo|Jan Oblak|Koke|Alexander Sørloth|Nicolò Barella|Alessandro Bastoni|Marcus Thuram|Hakan Çalhanoğlu|Federico Dimarco|Yann Sommer|Denzel Dumfries|Mike Maignan|Christian Pulisic|Adrien Rabiot|Fikayo Tomori|Dušan Vlahović|Gleison Bremer|Manuel Locatelli|Francisco Conceição|Jonathan David|Manuel Neuer|Joshua Kimmich|Alphonso Davies|Dayot Upamecano|Luis Díaz|Serge Gnabry|Leon Goretzka|Serhou Guirassy|Gregor Kobel|Karim Adeyemi|Julian Brandt|Nico Schlotterbeck|Vitinha|João Neves|Marquinhos|Désiré Doué|Bradley Barcola|Nuno Mendes|Warren Zaïre-Emery|Lucas Chevalier|Niclas Füllkrug|Patrik Schick|Senne Lammens|Sergio Busquets|Jordi Alba|Rodrigo De Paul|Sadio Mané|Marcelo Brozović|João Félix|Karim Benzema|Toni Kroos|Thomas Müller|Sergio Ramos|Zlatan Ibrahimović|Erik ten Hag|Xavi Hernández|Simone Inzaghi|Roberto Mancini|Unai Emery|Eddie Howe|Ange Postecoglou|Oliver Glasner|Andoni Iraola|Marcelo Bielsa|Lionel Scaloni|Roberto De Zerbi|Luciano Spalletti|Gennaro Gattuso|Roberto Martínez|Ronald Koeman|Luis de la Fuente|Srečko Katanec""".split("|")]
+# afsonalar (tarixiy faktlar uchun) — eski suratlar ham olinadi
+LEGENDS = """Diego Maradona|Ronaldinho|Ronaldo Nazário|David Beckham|Thierry Henry|Andrés Iniesta|Gianluigi Buffon|Paolo Maldini|Francesco Totti|Andrea Pirlo|Kaká|Wayne Rooney|Steven Gerrard|Frank Lampard|Carles Puyol|Iker Casillas|Bastian Schweinsteiger|Arjen Robben|Franck Ribéry|Robin van Persie|Dennis Bergkamp|Eric Cantona|Ryan Giggs|Paul Scholes|Alex Ferguson|Arsène Wenger|Roberto Baggio|Alessandro Del Piero|Javier Zanetti|Raúl González|Luís Figo|Roberto Carlos|Cafu|Rivaldo|Samuel Eto'o|Didier Drogba|Fernando Torres|David Villa|Xabi Alonso|Philipp Lahm|Miroslav Klose|Oliver Kahn|Michael Ballack|Andriy Shevchenko|Pavel Nedvěd|Clarence Seedorf|Patrick Vieira|Petr Čech|John Terry|Rio Ferdinand|Michael Owen|Alan Shearer|Gary Lineker|Fabio Capello|Marcello Lippi|Vicente del Bosque|Louis van Gaal|Guus Hiddink|Rafael Benítez|Claudio Ranieri|Zinedine Zidane""".split("|")
+PEOPLE += [(n, "", [n.split()[-1]] if len(n.split()) > 1 and len(n.split()[-1]) >= 5 else []) for n in LEGENDS if n not in [p[0] for p in PEOPLE]]
+
 
 def get(url, params, tries=3):
     for k in range(tries):
@@ -78,16 +84,20 @@ def clean(v):
     return html.unescape(re.sub(r"<[^>]+>", "", v or "")).strip()
 
 
-def files(q):
+def files(q, names=()):
     e = get("https://www.wikidata.org/w/api.php", {"format": "json", "action": "wbgetentities", "ids": q, "props": "claims"}).get("entities", {}).get(q, {})
     cl = e.get("claims", {})
     val = lambda p: [c["mainsnak"]["datavalue"]["value"] for c in cl.get(p, []) if c.get("mainsnak", {}).get("datavalue")]
     out = {}
-    def add(pages, main=False):
+    def add(pages, main=False, need=None):
         for pg in pages:
             ii = (pg.get("imageinfo") or [None])[0]
-            if not ii or ii.get("mime") != "image/jpeg" or min(ii.get("width", 0), ii.get("height", 0)) < 1000:
+            if not ii or ii.get("mime") != "image/jpeg" or min(ii.get("width", 0), ii.get("height", 0)) < 900:
                 continue
+            if need is not None:  # qidiruv natijasi: fayl shu odamning Commons turkumida (yoki nomi bor ichki turkumda) turishi shart
+                cats = " | ".join(pn(c_["title"].replace("Category:", "")) for c_ in pg.get("categories", []))
+                if not any(n_ and n_ in cats for n_ in need):
+                    continue
             md = ii.get("extmetadata", {})
             lic = clean((md.get("LicenseShortName") or {}).get("value"))
             if not OK_LIC.search(lic):
@@ -108,8 +118,21 @@ def files(q):
         # ichki turkumlar ("Erling Haaland in 2024" kabi) — eng yangi yillar birinchi, 5 tagacha
         sub = get("https://commons.wikimedia.org/w/api.php", {"format": "json", "action": "query", "list": "categorymembers", "cmtitle": "Category:" + c, "cmtype": "subcat", "cmlimit": 60}).get("query", {}).get("categorymembers", [])
         yr = lambda t: max([int(x) for x in re.findall(r"(?:19|20)\d\d", t)] or [0])
-        for sc in sorted([x["title"] for x in sub if not re.search(r"signature|autograph|shirt|jersey|statue|mural|family|wife|videos|audio", x["title"], re.I)], key=lambda t: -yr(t))[:5]:
-            add(cm(sc)); time.sleep(0.3)
+        subs = sorted([x["title"] for x in sub if not re.search(r"signature|autograph|shirt|jersey|statue|mural|family|wife|videos|audio", x["title"], re.I)], key=lambda t: -yr(t))[:6]
+        for sc in subs:
+            add(cm(sc)); time.sleep(0.25)
+        # ikkinchi daraja ("... by year" → "... in 2025"): eng yangi 4 ta
+        deep = []
+        for sc in subs[:3]:
+            deep += [x["title"] for x in get("https://commons.wikimedia.org/w/api.php", {"format": "json", "action": "query", "list": "categorymembers", "cmtitle": sc, "cmtype": "subcat", "cmlimit": 40}).get("query", {}).get("categorymembers", [])]
+        for sc in sorted(set(deep), key=lambda t: -yr(t))[:4]:
+            add(cm(sc)); time.sleep(0.25)
+    # FAYL NOMI BO'YICHA QIDIRUV (2026-11-17, ikkinchi bosqich): turkumda nomsiz yotgan suratlardan tashqari Commons'ning o'zida ism bo'yicha qidiriladi;
+    # natija faqat shu odamning turkumiga (yoki nomi bor turkumga) tegishli bo'lsa olinadi — bir xil ismli boshqa odam aralashmasin
+    need = [pn(c) for c in val("P373")[:1]] + [pn(x) for x in names if len(pn(x).split()) >= 2 or len(pn(x)) >= 6]
+    for nm in names[:2]:
+        add(get("https://commons.wikimedia.org/w/api.php", {**ip, "prop": "imageinfo|categories", "cllimit": 500, "generator": "search", "gsrsearch": '"' + nm + '"', "gsrnamespace": 6, "gsrlimit": 40}).get("query", {}).get("pages", {}).values(), False, need)
+        time.sleep(0.25)
     return sorted(out.values(), key=lambda x: (not x["main"], -x["y"]))
 
 
@@ -143,6 +166,8 @@ def main():
     if os.environ.get("DEL"):
         return delete()
     have = requests.get(W + "/ub/faces", headers=H, timeout=30).json()
+    seen = set(x.strip() for x in open("people_seen.txt", encoding="utf-8").read().split("\n") if x.strip()) if os.path.exists("people_seen.txt") else set()
+    seen |= {p.get("wt") for P in have.values() for p in P.get("ph", []) if p.get("wt")}
     only = [x.strip().lower() for x in os.environ.get("ONLY", "").split(",") if x.strip()]
     extra = [(x.strip(), "", []) for x in os.environ.get("ADD", "").split(",") if x.strip()]
     items, total = [], 0
@@ -162,16 +187,16 @@ def main():
             # turkumda boshqa odam nomi bilan atalgan suratlar ham uchraydi (sinovda Pochettino turkumidan "Jenny Taft ..." chiqqan)
             keys = [w for w in pn(term or name).split() + pn(name).split() if len(w) >= 4] or pn(name).split()
             keys = keys[-1:] + keys[:1] + [pn(a) for a in al if len(pn(a)) >= 4]
-            raw = files(q)
+            raw = [c for c in files(q, [x for x in dict.fromkeys([name, term or name])]) if c["t"] not in seen]
             cand = [c for c in raw if c["main"] or any(k in pn(c["t"]) for k in keys)]
             print(" ", name, q, "nomzodlar:", len(raw), "→ ismi bor:", len(cand))
             got, days = 0, set()
-            for c in cand[:14]:
+            for c in cand[:18]:
                 if got >= min(PER, MAXP - cur) or total >= LIMIT:
                     break
                 if c["d"] and c["d"] in days:
                     continue
-                if not c["main"] and 0 < c["y"] < 2016:
+                if not c["main"] and 0 < c["y"] < 2016 and name not in LEGENDS:
                     continue  # eskirgan surat (hozirgi murabbiy futbolchilik davrida va h.k.) — yangilikka mos emas
                 if not c["main"] and other(c["t"], keys):
                     continue  # fayl nomida boshqa odam ham bor (ikki futbolchi kurashi) — kim asosiy ekanini aniqlab bo'lmaydi
@@ -195,7 +220,7 @@ def main():
                 if not r.get("ok"):
                     print("  yuborilmadi", r.get("description")); got -= 1; total -= 1; time.sleep(5); continue
                 d = r["result"]["document"]
-                items.append({"name": name, "al": al, "f": d["file_id"], "uid": d["file_unique_id"], "w": im.width, "h": im.height, "m": r["result"]["message_id"], "b": box, "x": ex, "c": credit})
+                items.append({"name": name, "al": al, "f": d["file_id"], "uid": d["file_unique_id"], "w": im.width, "h": im.height, "m": r["result"]["message_id"], "b": box, "x": ex, "c": credit, "wt": c["t"]})
                 time.sleep(3.2)
             if not got:
                 print("-", name, "mos surat yo'q (nomzodlar:", len(cand), ")")
@@ -204,7 +229,7 @@ def main():
         time.sleep(0.4)
     if items:
         print("baza:", requests.post(W + "/ub/faceaddm", headers=H, data=json.dumps({"items": items}), timeout=60).text[:120])
-    print("ITEMS", json.dumps([{k: it[k] for k in ("name", "f", "uid", "m")} for it in items]))
+    print("ITEMS", json.dumps([{k: it[k] for k in ("name", "f", "uid", "m", "wt")} for it in items]))
     print("qo'shildi:", len(items))
 
 
