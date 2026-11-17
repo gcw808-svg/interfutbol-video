@@ -332,9 +332,13 @@ async function tg(env, method, body) {
         } catch (e) { return null; }
         }
         async function brandBuf(env, im) {
-        const gs = Math.max(36, Math.round(im.W * 132 / 1080)); // belgi eni; PNG atrofida soya uchun har tomondan gs/3 bo'sh joy bor
-        const ow = Math.round(gs * 5 / 3), m = Math.max(0, Math.round(im.W * 44 / 1080 - gs / 3));
-        const out = await env.IMAGES.input(new Blob([im.buf]).stream())
+        // KATTA SURATDA BELGI KICHRAYIB QOLMASIN (2026-11-17, 317-post: manba surati juda katta edi, WM PNG (440 px) esa kattalashtirilmaydi —
+        // belgi enning 12,2% i o'rniga ~5% bo'lib qolgan): surat avval eni 1920 px gacha kichraytiriladi, belgi o'lchami shu enga qarab hisoblanadi
+        const W = Math.min(im.W, 1920);
+        const gs = Math.max(36, Math.round(W * 132 / 1080)); // belgi eni; PNG atrofida soya uchun har tomondan gs/3 bo'sh joy bor
+        const ow = Math.round(gs * 5 / 3), m = Math.max(0, Math.round(W * 44 / 1080 - gs / 3));
+        let base = env.IMAGES.input(new Blob([im.buf]).stream()); if (im.W > 1920) base = base.transform({ width: 1920 });
+        const out = await base
         .draw(env.IMAGES.input(new Blob([b64bytes(WM)]).stream()).transform({ width: ow }), { top: m, right: m })
         .output({ format: "image/jpeg", quality: 90 });
         const blob = await out.response().blob();
