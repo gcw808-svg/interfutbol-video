@@ -100,8 +100,14 @@ def files(q):
     for f in val("P18")[:2]:
         add(get("https://commons.wikimedia.org/w/api.php", {**ip, "titles": "File:" + f}).get("query", {}).get("pages", {}).values(), True)
     for c in val("P373")[:1]:
-        add(get("https://commons.wikimedia.org/w/api.php", {**ip, "generator": "categorymembers", "gcmtitle": "Category:" + c, "gcmtype": "file", "gcmlimit": 120}).get("query", {}).get("pages", {}).values())
-    return sorted(out.values(), key=lambda x: (-x["y"], not x["main"]))
+        cm = lambda title: get("https://commons.wikimedia.org/w/api.php", {**ip, "generator": "categorymembers", "gcmtitle": title, "gcmtype": "file", "gcmlimit": 120}).get("query", {}).get("pages", {}).values()
+        add(cm("Category:" + c))
+        # ichki turkumlar ("Erling Haaland in 2024" kabi) — eng yangi yillar birinchi, 5 tagacha
+        sub = get("https://commons.wikimedia.org/w/api.php", {"format": "json", "action": "query", "list": "categorymembers", "cmtitle": "Category:" + c, "cmtype": "subcat", "cmlimit": 60}).get("query", {}).get("categorymembers", [])
+        yr = lambda t: max([int(x) for x in re.findall(r"(?:19|20)\d\d", t)] or [0])
+        for sc in sorted([x["title"] for x in sub if not re.search(r"signature|autograph|shirt|jersey|statue|mural|family|wife|videos|audio", x["title"], re.I)], key=lambda t: -yr(t))[:5]:
+            add(cm(sc)); time.sleep(0.3)
+    return sorted(out.values(), key=lambda x: (not x["main"], -x["y"]))
 
 
 def gray(im):
@@ -127,9 +133,12 @@ def main():
             q = qid(term or name)
             if not q:
                 print("-", name, "Wikidata topilmadi"); continue
-            cand = files(q)
+            # KIMLIGI ANIQ BO'LISHI SHART: fayl nomida shu odamning familiyasi (yoki ismi) bo'lishi kerak yoki u Wikidata'dagi asosiy surat (P18) —
+            # turkumda boshqa odam nomi bilan atalgan suratlar ham uchraydi (sinovda Pochettino turkumidan "Jenny Taft ..." chiqqan)
+            keys = [w for w in pn(term or name).split() + pn(name).split() if len(w) >= 4] or pn(name).split()
+            cand = [c for c in files(q) if c["main"] or any(k in pn(c["t"]) for k in keys[-1:] + keys[:1])]
             got, days = 0, set()
-            for c in cand[:9]:
+            for c in cand[:14]:
                 if got >= min(PER, MAXP - cur) or total >= LIMIT:
                     break
                 if c["d"] and c["d"] in days:
