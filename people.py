@@ -90,7 +90,7 @@ def files(q):
             if not OK_LIC.search(lic):
                 continue
             t = pg["title"]
-            if re.search(r"signature|autograph|logo|shirt|jersey|maillot|camiseta|trikot|trophy|statue|mural|graffiti|wax|stamp|cropped|boots|poster|banner|tifo", t, re.I):
+            if re.search(r"signature|autograph|logo|shirt|jersey|maillot|camiseta|trikot|trophy|statue|mural|graffiti|wax|tussaud|figure|escultura|sculpture|estatua|stamp|cropped|boots|predator|poster|banner|tifo|parade", t, re.I):
                 continue
             ym = re.search(r"(19|20)\d\d", clean((md.get("DateTimeOriginal") or {}).get("value")) or "")
             art = re.sub(r"^(User:)", "", clean((md.get("Artist") or {}).get("value")))[:70] or "noma'lum muallif"
@@ -115,7 +115,17 @@ def gray(im):
     return sum(max(p) - min(p) for p in sm.getdata()) / (48 * 48) < 9
 
 
+def delete():
+    # tekshiruvdan o'tmagan suratlarni bazadan va rasmlar kanalidan olib tashlash: DEL = JSON [{"name":..., "uid":..., "m": xabar raqami}]
+    for it in json.loads(os.environ["DEL"]):
+        r = requests.post(W + "/ub/facedel", headers=H, data=json.dumps({"name": it["name"], "uid": it["uid"]}), timeout=30).text[:60]
+        d = requests.post(API + "deleteMessage", data={"chat_id": LIB, "message_id": it["m"]}, timeout=30).json().get("ok")
+        print("x", it["name"], it["m"], r, "kanal:", d); time.sleep(0.6)
+
+
 def main():
+    if os.environ.get("DEL"):
+        return delete()
     have = requests.get(W + "/ub/faces", headers=H, timeout=30).json()
     pn = lambda x: re.sub(r"[^a-z0-9]+", " ", __import__("unicodedata").normalize("NFD", x.lower().replace("ş", "sh").replace("ç", "ch")).encode("ascii", "ignore").decode()).strip()
     only = [x.strip().lower() for x in os.environ.get("ONLY", "").split(",") if x.strip()]
@@ -146,6 +156,10 @@ def main():
                     break
                 if c["d"] and c["d"] in days:
                     continue
+                if not c["main"] and 0 < c["y"] < 2016:
+                    continue  # eskirgan surat (hozirgi murabbiy futbolchilik davrida va h.k.) — yangilikka mos emas
+                if re.search(r"\b(and|with|vs|und|et|y)\b|,| -\d", re.sub(r"\b(v|vs)\b[^-]*$", "", c["t"]).replace("File:", "")) and not c["main"] and len(re.findall(r"[A-ZÀ-Ý][a-zà-ÿ]+ [A-ZÀ-Ý][a-zà-ÿ]+", c["t"])) > 1 + sum(1 for k in keys if k in pn(c["t"])):
+                    continue  # fayl nomida boshqa odam ham bor (ikki futbolchi kurashi) — kim asosiy ekanini aniqlab bo'lmaydi
                 try:
                     im = Image.open(io.BytesIO(requests.get(c["url"], headers=UA, timeout=90).content)).convert("RGB")
                 except Exception:
