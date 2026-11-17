@@ -1739,7 +1739,9 @@ async function repSweep(env) {
     if (x.st === "edit") {
       if (age < 15 * 60e3) { left.push(x); continue; }
       ch = true; // tahrir ishi javob bermadi (/ub/done kelmadi)
-      if (admin) await tg(env, "sendMessage", { chat_id: admin, text: "⚠️ " + x.mid + "-post rasmi almashtirilmadi (javob kelmadi). Qayta: /rasm " + x.mid });
+      // 2026-11-17: /ub/done muvaffaqiyatda ujob ni o'chiradi — ujob yo'q bo'lsa ish bajarilgan, yozuv faqat parallel repWait yozuvlari (wmfix) tufayli qayta tirilgan: soxta ogohlantirish yuborilmaydi
+      if (x.uid && !(await kvGet(env, "ujob:" + x.uid, null))) continue;
+      if (admin) await tg(env, "sendMessage", { chat_id: admin, text: "⚠️ " + x.mid + "-post rasmi almashtirilmadi (javob kelmadi). Qayta: " + (/^w/.test(String(x.id)) ? "wmfix.yml posts=" + x.mid + " (/rasm EMAS — manba surati gerbli kartaga almashib qoladi)" : "/rasm " + x.mid) });
       continue;
     }
   }
@@ -2987,7 +2989,7 @@ async function ubRoute(env, req, url) {
     if (j && j.repId) { const rw = await kvGet(env, "repWait", []); const e0 = rw.find((x) => x.id === j.repId);
       if (b.ok || !e0 || /not modified/i.test(String(b.err || ""))) { if (e0) await kvPut(env, "repWait", rw.filter((x) => x !== e0)); } // rasm o'zgarmagan bo'lsa ham — muvaffaqiyat
       else if ((e0.n || 0) < 1) { e0.n = 1; e0.t = Date.now(); await kvPut(env, "repWait", rw); await kvPut(env, "ujob:" + b.id, { ...j, t: Date.now() }, { expirationTtl: 86400 }); await ghDispatch(env, "ubpost.yml", { job: b.id }, true); return J({ ok: true }); }
-      else { await kvPut(env, "repWait", rw.filter((x) => x !== e0)); if (admin) await tg(env, "sendMessage", { chat_id: admin, text: "⚠️ " + e0.mid + "-post rasmi 2 marta urinib ham almashmadi: " + String(b.err || "xato").slice(0, 150) + ". Qayta: /rasm " + e0.mid }); } }
+      else { await kvPut(env, "repWait", rw.filter((x) => x !== e0)); if (admin) await tg(env, "sendMessage", { chat_id: admin, text: "⚠️ " + e0.mid + "-post rasmi 2 marta urinib ham almashmadi: " + String(b.err || "xato").slice(0, 150) + ". Qayta: " + (/^w/.test(String(e0.id)) ? "wmfix.yml posts=" + e0.mid : "/rasm " + e0.mid) }); } }
     if (j && j.edits) { if (admin || j.chat) await tg(env, "sendMessage", { chat_id: j.chat || admin, text: b.ok ? "✅ Logotiplar qo'yildi: " + (b.edited || 0) + " ta post tahrirlandi." + (b.failed && b.failed.length ? "\nTahrirlanmadi: " + b.failed.join(", ") : "") : "⚠️ Logotiplarni qo'yib bo'lmadi: " + (b.err || "xato") }); return J({ ok: true }); }
     if (j && j.check) { await kvPut(env, "healthTg", { t: Date.now(), ok: b.ok ? 1 : 0 }, { expirationTtl: 7 * 86400 }); if (!b.ok && admin) await tg(env, "sendMessage", { chat_id: admin, text: "⚠️ Telegram hisobingiz botdan uzilgan: " + (b.err || "xato") + ". Bugungi 09:00 Telegram istoriyasi chiqmaydi. Tuzatish: botga /ulanish yuboring." }); return J({ ok: true }); } if (j && j.story) { if (!b.ok) { if ((j.tries || 0) < 1 && !/auth|session|unauthori/i.test(String(b.err || ""))) { await kvPut(env, "ujob:" + b.id, { ...j, tries: (j.tries || 0) + 1 }, { expirationTtl: 86400 }); await ghDispatch(env, "ubpost.yml", { job: b.id }); } else await tg(env, "sendMessage", { chat_id: admin, text: "⚠️ Istoriya chiqmadi: " + (b.err || "xato") }); } else await kvPut(env, "storyLast", { t: Date.now(), id: b.story || 0 }); return J({ ok: true }); }
     // "Batafsil o'qish" tugmasini bot qo'shadi; bo'lmasa — hisob orqali matn ichiga havola qo'shiladi
