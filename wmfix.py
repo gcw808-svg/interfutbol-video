@@ -138,7 +138,7 @@ def main():
     ok = []; fail = []
     for n, mid in enumerate(posts):
         try:
-            j = json.load(urllib.request.urlopen(urllib.request.Request(W + "/ub/postimg?id=%d" % mid, headers=H), timeout=40))
+            j = json.load(urllib.request.urlopen(urllib.request.Request(W + "/ub/postimg?raw=1&id=%d" % mid, headers=H), timeout=40))
             if not j.get("f"):
                 print(mid, "- rasm yo'q:", j.get("why")); continue
             fp = json.load(urllib.request.urlopen("https://api.telegram.org/bot%s/getFile?file_id=%s" % (bot, j["f"]), timeout=40))["result"]["file_path"]
@@ -165,7 +165,7 @@ def main():
             r = ""
             for k in range(3):  # bot vaqtincha javob bermasa (503) — 40 soniyadan keyin qayta urinadi; ikki marta almashtirish zararsiz
                 try:
-                    r = urllib.request.urlopen(urllib.request.Request(W + "/ub/repimg?id=%d" % mid, data=buf.getvalue(), headers={**H, "content-type": "image/jpeg", **({"x-html2": base64.b64encode(h2.encode()).decode()} if h2 else {"x-html": base64.b64encode(j["html"].encode()).decode()} if j.get("html") else {})}), timeout=60).read().decode()[:120]
+                    r = urllib.request.urlopen(urllib.request.Request(W + "/ub/repimg?id=%d" % mid, data=buf.getvalue(), headers={**H, "content-type": "image/jpeg", "x-keep": "1"}), timeout=60).read().decode()[:120]
                     break
                 except Exception as e:
                     if k == 2:

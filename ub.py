@@ -218,7 +218,17 @@ async def post(job):
             if j.get("editPhoto"):
                 ef = io.BytesIO(http(j["editPhoto"], headers={"user-agent": "InterFutbolUB"}, timeout=60))
                 ef.name = "photo.jpg"
-            m = await c.edit_message(ch, int(j["edit"]), j["html"], parse_mode="html", link_preview=bool(j.get("video")), file=ef)
+            if j.get("keep") and ef:
+                # faqat rasm almashtiriladi — matn, logotiplar (maxsus emoji) va tugma o'z holicha qoladi (wmfix, 2026-11-17)
+                # xom so'rov: message/entities maydonlari yuborilmaydi — Telegram izohni (matn va maxsus emoji) o'zgartirmaydi
+                from telethon import functions as _fn, types as _tp
+                up = await c.upload_file(ef)
+                await c(_fn.messages.EditMessageRequest(peer=await c.get_input_entity(ch), id=int(j["edit"]), media=_tp.InputMediaUploadedPhoto(file=up)))
+                await c.disconnect()
+                done({"id": job, "ok": True, "msg_id": int(j["edit"])})
+                return
+            else:
+                m = await c.edit_message(ch, int(j["edit"]), j["html"], parse_mode="html", link_preview=bool(j.get("video")), file=ef)
         elif j.get("photo"):
             f = io.BytesIO(http(j["photo"], headers={"user-agent": "InterFutbolUB"}, timeout=60))
             f.name = "photo.jpg"

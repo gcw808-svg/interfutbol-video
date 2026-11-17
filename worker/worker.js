@@ -2859,7 +2859,7 @@ async function ubRoute(env, req, url) {
   if (url.pathname === "/ub/limits" && req.method === "POST") { const b = await req.json().catch(() => ({})); return J(await limitsReport(env, b, admin)); }
   if (url.pathname === "/ub/job") {
     const j = await kvGet(env, "ujob:" + url.searchParams.get("id"), null);
-        return J(j ? { html: j.edit ? j.html2 : j.html, edit: j.edit || 0, story: j.story || null, check: j.check || 0, photo: j.photo, editPhoto: j.editPhoto || null, edits: j.edits || null, video: j.video, channel: env.CHANNEL, session: await kvGet(env, "usess", null) } : {});
+        return J(j ? { html: j.edit ? j.html2 : j.html, edit: j.edit || 0, story: j.story || null, check: j.check || 0, photo: j.photo, editPhoto: j.editPhoto || null, keep: j.keep || 0, edits: j.edits || null, video: j.video, channel: env.CHANNEL, session: await kvGet(env, "usess", null) } : {});
   }
   if (url.pathname === "/ub/lgput" && req.method === "POST") { const nm = (url.searchParams.get("name") || "").trim(); if (!nm) return J({ ok: false }); await env.STATE.put("lgb:" + nm.toLowerCase(), await req.arrayBuffer()); const idx = await kvGet(env, "lgidx", {}); const k = Object.keys(idx).find((x) => x.toLowerCase() === nm.toLowerCase()) || nm; idx[k] = { t: url.searchParams.get("t") || "club", a: (idx[k] && idx[k].a) || [] }; await kvPut(env, "lgidx", idx); const cm = await kvGet(env, "cemoji", {}); const lc = nm.toLowerCase(); const emoji = CLUB_EMOJI.some((c) => c[2].some((x) => x.toLowerCase() === lc)) || Object.keys(cm).some((x) => x.toLowerCase() === lc); return J({ ok: true, emoji }); }
   if (url.pathname === "/ub/emojineed") return J(await kvGet(env, "emojiNeed", []));
@@ -2892,6 +2892,7 @@ async function ubRoute(env, req, url) {
     await tg(env, "deleteMessage", { chat_id: admin, message_id: m.message_id }).catch(() => null);
     if (!m.photo || m.media_group_id) return J({ ok: false, why: m.media_group_id ? "albom" : "postda surat yo'q" });
     const ph = m.photo[m.photo.length - 1];
+    if (url.searchParams.get("raw")) return J({ ok: true, f: ph.file_id, w: ph.width, h: ph.height }); // matnsiz (wmfix keep rejimi) — og'ir matn ishlovi yo'q
     // html shu yerda tayyorlanadi va /ub/repimg ga qaytarib beriladi — post ikki marta uzatilmaydi (Telegram cheklovi) va bitta so'rovga yuk kamroq tushadi (2026-11-17)
     return J({ ok: true, f: ph.file_id, w: ph.width, h: ph.height, html: hashFix(CANON.reduce((a, [re, v]) => a.replace(re, v), entHtmlNoLogo(m.caption || "", m.caption_entities))) });
   }
@@ -2900,7 +2901,9 @@ async function ubRoute(env, req, url) {
     const mid = +url.searchParams.get("id"); const buf = await req.arrayBuffer(); if (!mid || buf.byteLength < 5000) return J({ ok: false, why: "rasm yo'q" });
     // x-html2 — tayyor (logotipli, yangi alifbodagi) matn: og'ir ishlov alohida so'rovda (/ub/html2) bajariladi, shunda bu so'rov CPU chegarasidan oshmaydi (503 xatolari, 2026-11-17)
     const b64 = (v) => { try { return new TextDecoder().decode(Uint8Array.from(atob(v), (c) => c.charCodeAt(0))); } catch (e) { return ""; } };
-    const hx2 = req.headers.get("x-html2"); const ready = hx2 ? b64(hx2) : "";
+    // x-keep: 1 — FAQAT RASM almashtiriladi, post matni umuman o'zgarmaydi (ub.py matnsiz edit_message; 2026-11-17: uzun matnli postlarda matn ishlovi 503 berardi)
+    const keep = req.headers.get("x-keep") === "1";
+    const hx2 = req.headers.get("x-html2"); const ready = keep ? " " : hx2 ? b64(hx2) : "";
     let html = ready; const hx = ready ? "" : req.headers.get("x-html");
     if (hx) html = b64(hx);
     if (!html) {
@@ -2912,7 +2915,7 @@ async function ubRoute(env, req, url) {
     }
     const id = "w" + Date.now().toString(36) + mid; await env.STATE.put("lgb:rc_" + id, buf, { expirationTtl: 3 * 86400 });
     const html2 = ready || newAlpha(addLogos(html)); const uid = "e" + Date.now().toString(36) + mid;
-    await kvPut(env, "ujob:" + uid, { html: html2, html2, edit: mid, editPhoto: WURL + "/lg/rc_" + id, photo: null, video: null, chat: null, raw: { text: html, img: null, url: null, video: null }, t: Date.now(), tries: 0, repId: id }, { expirationTtl: 86400 });
+    await kvPut(env, "ujob:" + uid, { html: html2, html2, edit: mid, editPhoto: WURL + "/lg/rc_" + id, photo: null, video: null, chat: null, raw: { text: html, img: null, url: null, video: null }, t: Date.now(), tries: 0, repId: id, ...(keep ? { keep: 1 } : {}) }, { expirationTtl: 86400 });
     const rw = (await kvGet(env, "repWait", [])).filter((x) => Date.now() - x.t0 < 6 * 3600e3); rw.push({ id, mid, st: "edit", uid, t: Date.now(), t0: Date.now(), n: 0 }); await kvPut(env, "repWait", rw.slice(-30));
     await ghDispatch(env, "ubpost.yml", { job: uid });
     return J({ ok: true });
