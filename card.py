@@ -1176,13 +1176,21 @@ def render_scorers_v(j):
     _stripes(im, (255, 255, 255), 0, 7)
     if mark:
         wm = mark.copy()
-        if pal:  # logo fon bilan bir xil rangda (Premier League) — oq siluetga aylantiriladi
+        # Oq siluet FAQAT bir rangli logoga (Premier League — fon bilan bir xil rangda, shakli shaffoflikdan ko'rinadi).
+        # Ichida oq/boshqa rangli tasviri bor logo (Bundesliga: qizil to'rtburchak ichida oq futbolchi) siluetga aylantirilsa
+        # yaxlit OQ TO'RTBURCHAK bo'lib qoladi (320-post xatosi, 2026-11-17) — bunday logo ASL RANGIDA, ortida yengil oq nur bilan qo'yiladi.
+        solid = bool(pal) and blends(mark)
+        if solid:
             wm = Image.merge("RGBA", (*Image.new("RGB", wm.size, (255, 255, 255)).split(), wm.getchannel("A")))
         big = wm.resize((int(wm.width * 760 / max(wm.size)), int(wm.height * 760 / max(wm.size))), Image.LANCZOS)
-        big.putalpha(big.getchannel("A").point(lambda v: int(v * 0.05)))
+        big.putalpha(big.getchannel("A").point(lambda v: int(v * (0.05 if solid or not pal else 0.10))))
         im.paste(big, (Wd - 560, 40), big)
         m2 = wm.copy(); m2.thumbnail((150, 150), Image.LANCZOS)
-        im.paste(m2, (60 + (150 - m2.width) // 2, 62 + (150 - m2.height) // 2), m2)
+        mx, my = 60 + (150 - m2.width) // 2, 62 + (150 - m2.height) // 2
+        if pal and not solid:
+            paste_glow(im, m2, mx, my, 150, 14)
+        else:
+            im.paste(m2, (mx, my), m2)
     d = ImageDraw.Draw(im, "RGBA")
     tx = 236 if mark else 60
     title = (j.get("title") or "")
