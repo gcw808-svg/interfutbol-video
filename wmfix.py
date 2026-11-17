@@ -154,15 +154,23 @@ def main():
             buf = io.BytesIO(); out.save(buf, "JPEG", quality=92)
             if dry:
                 print(mid, "+ (sinov)", im.size, pos); continue
+            h2 = ""
+            if j.get("html"):  # og'ir matn ishlovi alohida so'rovda — xato bersa zararsiz qayta uriniladi
+                for k in range(4):
+                    try:
+                        h2 = json.load(urllib.request.urlopen(urllib.request.Request(W + "/ub/html2", data=json.dumps({"html": j["html"]}).encode(), headers={**H, "content-type": "application/json"}), timeout=40)).get("html2") or ""
+                        break
+                    except Exception as e:
+                        time.sleep(6)
             r = ""
             for k in range(3):  # bot vaqtincha javob bermasa (503) — 40 soniyadan keyin qayta urinadi; ikki marta almashtirish zararsiz
                 try:
-                    r = urllib.request.urlopen(urllib.request.Request(W + "/ub/repimg?id=%d" % mid, data=buf.getvalue(), headers={**H, "content-type": "image/jpeg", **({"x-html": base64.b64encode(j["html"].encode()).decode()} if j.get("html") else {})}), timeout=60).read().decode()[:120]
+                    r = urllib.request.urlopen(urllib.request.Request(W + "/ub/repimg?id=%d" % mid, data=buf.getvalue(), headers={**H, "content-type": "image/jpeg", **({"x-html2": base64.b64encode(h2.encode()).decode()} if h2 else {"x-html": base64.b64encode(j["html"].encode()).decode()} if j.get("html") else {})}), timeout=60).read().decode()[:120]
                     break
                 except Exception as e:
                     if k == 2:
                         raise
-                    print(mid, "qayta urinish:", repr(e)[:80]); time.sleep(40)
+                    print(mid, "qayta urinish:", repr(e)[:80]); time.sleep(15)
             print(mid, "+", im.size, pos, r); ok.append(mid)
             if n < len(posts) - 1:
                 time.sleep(gap)

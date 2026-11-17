@@ -2895,10 +2895,14 @@ async function ubRoute(env, req, url) {
     // html shu yerda tayyorlanadi va /ub/repimg ga qaytarib beriladi — post ikki marta uzatilmaydi (Telegram cheklovi) va bitta so'rovga yuk kamroq tushadi (2026-11-17)
     return J({ ok: true, f: ph.file_id, w: ph.width, h: ph.height, html: hashFix(CANON.reduce((a, [re, v]) => a.replace(re, v), entHtmlNoLogo(m.caption || "", m.caption_entities))) });
   }
+  if (url.pathname === "/ub/html2" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); return J({ ok: true, html2: newAlpha(addLogos(String(b0.html || ""))) }); }
   if (url.pathname === "/ub/repimg" && req.method === "POST") {
     const mid = +url.searchParams.get("id"); const buf = await req.arrayBuffer(); if (!mid || buf.byteLength < 5000) return J({ ok: false, why: "rasm yo'q" });
-    let html = ""; const hx = req.headers.get("x-html");
-    if (hx) { try { html = new TextDecoder().decode(Uint8Array.from(atob(hx), (c) => c.charCodeAt(0))); } catch (e) { html = ""; } }
+    // x-html2 — tayyor (logotipli, yangi alifbodagi) matn: og'ir ishlov alohida so'rovda (/ub/html2) bajariladi, shunda bu so'rov CPU chegarasidan oshmaydi (503 xatolari, 2026-11-17)
+    const b64 = (v) => { try { return new TextDecoder().decode(Uint8Array.from(atob(v), (c) => c.charCodeAt(0))); } catch (e) { return ""; } };
+    const hx2 = req.headers.get("x-html2"); const ready = hx2 ? b64(hx2) : "";
+    let html = ready; const hx = ready ? "" : req.headers.get("x-html");
+    if (hx) html = b64(hx);
     if (!html) {
       const fw = await tg(env, "forwardMessage", { chat_id: admin, from_chat_id: env.CHANNEL, message_id: mid, disable_notification: true }); const m = fw && fw.result;
       if (!m) return J({ ok: false, why: "post topilmadi" });
@@ -2907,7 +2911,7 @@ async function ubRoute(env, req, url) {
       html = hashFix(CANON.reduce((a, [re, v]) => a.replace(re, v), entHtmlNoLogo(m.caption || "", m.caption_entities)));
     }
     const id = "w" + Date.now().toString(36) + mid; await env.STATE.put("lgb:rc_" + id, buf, { expirationTtl: 3 * 86400 });
-    const html2 = newAlpha(addLogos(html)); const uid = "e" + Date.now().toString(36) + mid;
+    const html2 = ready || newAlpha(addLogos(html)); const uid = "e" + Date.now().toString(36) + mid;
     await kvPut(env, "ujob:" + uid, { html: html2, html2, edit: mid, editPhoto: WURL + "/lg/rc_" + id, photo: null, video: null, chat: null, raw: { text: html, img: null, url: null, video: null }, t: Date.now(), tries: 0, repId: id }, { expirationTtl: 86400 });
     const rw = (await kvGet(env, "repWait", [])).filter((x) => Date.now() - x.t0 < 6 * 3600e3); rw.push({ id, mid, st: "edit", uid, t: Date.now(), t0: Date.now(), n: 0 }); await kvPut(env, "repWait", rw.slice(-30));
     await ghDispatch(env, "ubpost.yml", { job: uid });
