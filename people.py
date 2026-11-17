@@ -25,7 +25,7 @@ DRY = os.environ.get("DRY") == "1"
 
 # (kanalda yoziladigan ism, Wikidata qidiruv so'zi, qo'shimcha nomlar)
 PEOPLE = [
-    ("Erling Haaland", "", ["Haaland"]), ("Kylian Mbappé", "", ["Mbappé", "Mbappe"]), ("Vinícius Júnior", "Vinícius Júnior", ["Vinícius", "Vinicius Junior"]),
+    ("Erling Haaland", "", ["Haaland", "Håland", "Haland"]), ("Kylian Mbappé", "", ["Mbappé", "Mbappe"]), ("Vinícius Júnior", "Vinícius Júnior", ["Vinícius", "Vinicius Junior", "Vini Jr"]),
     ("Jude Bellingham", "", ["Bellingham"]), ("Lamine Yamal", "", ["Yamal"]), ("Robert Lewandowski", "", ["Lewandowski"]), ("Pedri", "Pedri", []),
     ("Raphinha", "Raphinha", []), ("Mohamed Salah", "", ["Salah"]), ("Virgil van Dijk", "", ["Van Dijk"]), ("Florian Wirtz", "", ["Wirtz"]),
     ("Bukayo Saka", "", ["Saka"]), ("Martin Ødegaard", "", ["Ødegaard", "Odegaard"]), ("Declan Rice", "", []), ("Cole Palmer", "", ["Palmer"]),
@@ -90,7 +90,7 @@ def files(q):
             if not OK_LIC.search(lic):
                 continue
             t = pg["title"]
-            if re.search(r"signature|autograph|logo|shirt|jersey|trophy|statue|mural|graffiti|wax|stamp|cropped", t, re.I):
+            if re.search(r"signature|autograph|logo|shirt|jersey|maillot|camiseta|trikot|trophy|statue|mural|graffiti|wax|stamp|cropped|boots|poster|banner|tifo", t, re.I):
                 continue
             ym = re.search(r"(19|20)\d\d", clean((md.get("DateTimeOriginal") or {}).get("value")) or "")
             art = re.sub(r"^(User:)", "", clean((md.get("Artist") or {}).get("value")))[:70] or "noma'lum muallif"
@@ -136,7 +136,10 @@ def main():
             # KIMLIGI ANIQ BO'LISHI SHART: fayl nomida shu odamning familiyasi (yoki ismi) bo'lishi kerak yoki u Wikidata'dagi asosiy surat (P18) —
             # turkumda boshqa odam nomi bilan atalgan suratlar ham uchraydi (sinovda Pochettino turkumidan "Jenny Taft ..." chiqqan)
             keys = [w for w in pn(term or name).split() + pn(name).split() if len(w) >= 4] or pn(name).split()
-            cand = [c for c in files(q) if c["main"] or any(k in pn(c["t"]) for k in keys[-1:] + keys[:1])]
+            keys = keys[-1:] + keys[:1] + [pn(a) for a in al if len(pn(a)) >= 4]
+            raw = files(q)
+            cand = [c for c in raw if c["main"] or any(k in pn(c["t"]) for k in keys)]
+            print(" ", name, q, "nomzodlar:", len(raw), "→ ismi bor:", len(cand))
             got, days = 0, set()
             for c in cand[:14]:
                 if got >= min(PER, MAXP - cur) or total >= LIMIT:
