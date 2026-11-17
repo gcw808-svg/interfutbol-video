@@ -85,6 +85,7 @@ jobs:
           for k in ${LIST//,/ }; do
             if echo "$k" | grep -qiE '(sess|key|token|secret|pass|auth|^ig$|^admins?$|^usess|^or|api|tgph|cred)' && ! echo "$k" | grep -qE '^(orMode|igMode|igLast)$'; then echo "$k: (maxfiy — ko'rsatilmaydi)"; continue; fi
             v=$(curl -sS "https://api.cloudflare.com/client/v4/accounts/$ACC/storage/kv/namespaces/$NS/values/$k" -H "Authorization: Bearer $CF")
-            echo "$k: ${v:0:20000}"
+            # alohida so'ralgan kalit (keys) to'liq chiqariladi — odamlar roboti hisoboti (peopleLog) uzun bo'ladi (2026-11-18)
+            if echo ",$KEYS," | grep -q ",$k,"; then echo "$k: ${v:0:900000}"; else echo "$k: ${v:0:20000}"; fi
           done
           echo "Hozir (Toshkent): $(TZ=Asia/Tashkent date '+%F %T')"
