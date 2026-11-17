@@ -505,7 +505,13 @@ const hashFix = (t) => { const seen = new Set(); return HASHFIX.reduce((a, [re, 
 const COUNTRY = [["Uzbekistan|Özbekiston|O'zbekiston|Ozbekiston|Uzbekiston", "O'zbekiston"], ["Saudi Arabia|Saudiya Arabistoni", "Saudiya Arabistoni"], ["Italy", "Italiya"], ["Spain", "Ispaniya"], ["Germany", "Germaniya"], ["France", "Fransiya"], ["England", "Angliya"], ["Portugal", "Portugaliya"], ["Brazil", "Braziliya"], ["Netherlands|Holland", "Niderlandiya"], ["Belgium", "Belgiya"], ["Croatia", "Xorvatiya"], ["Japan", "Yaponiya"], ["South Korea|Korea Republic", "Janubiy Koreya"], ["Iran", "Eron"], ["Kazakhstan", "Qozog'iston"], ["Tajikistan", "Tojikiston"], ["Kyrgyzstan", "Qirg'iziston"], ["Turkmenistan", "Turkmaniston"], ["Turkey|Türkiye", "Turkiya"], ["Morocco", "Marokash"], ["Egypt", "Misr"], ["Australia", "Avstraliya"], ["United Arab Emirates", "Birlashgan Arab Amirliklari"], ["Jordan", "Iordaniya"], ["Iraq", "Iroq"], ["Colombia", "Kolumbiya"], ["Mexico", "Meksika"], ["Norway", "Norvegiya"], ["Poland", "Polsha"], ["Switzerland", "Shveytsariya"], ["Scotland", "Shotlandiya"], ["Denmark", "Daniya"], ["Sweden", "Shvetsiya"], ["Austria", "Avstriya"], ["Serbia", "Serbiya"], ["Ukraine", "Ukraina"], ["Russia", "Rossiya"], ["DR Congo|Congo DR", "Kongo DR"], ["Ivory Coast|Côte d'Ivoire", "Kot-d'Ivuar"], ["Senegal", "Senegal"], ["Nigeria", "Nigeriya"], ["Canada", "Kanada"]].map(([en, uz]) => [new RegExp("(?<![#\\p{L}'])(?<!de )⟦?(?:" + en + ")(?!\\s+Football)⟧?(?=(?:da|dagi|dan|ga|ning|ni|lik|liklar|cha)?(?![\\p{L}]))", "gu"), uz]);
 const BOOKIE_RE = /betboom|бетбум|fonbet|фонбет|winline|винлайн|liga stavok|лига ставок|1xbet|melbet|bet365|betcity|marathonbet|olimpbet|parimatch|leonbets?|bwin|betway/i;
 const BOOKIE_PFX = /(?<![#\p{L}])(?:BetBoom|Бетбум|Fonbet|Фонбет|Winline|Винлайн|Olimpbet|Melbet|1xBet|Betcity|Parimatch)\s+(?=\p{L})/giu;
-const canonFix = (t) => { let x = hashFix(t).replace(/(\d)\.(\d+)(?=\s?(?:foiz|%|milliard|million|mlrd|mln|ming|trillion))/g, "$1,$2") /* o'nli kasr vergul bilan: 64,76 foiz, 1,55 milliard (2026-11-12) */.replace(/⟧ (ga|ni|ning|dan|dagi|day)(?![\p{L}\p{N}])/gu, "⟧$1"); /* "⟦Jonas Urbig⟧ ga" → "⟦Jonas Urbig⟧ga" — qo'shimcha nomdan ajralmaydi */ for (const [re, v] of CANON) x = x.replace(re, v); for (const [re, v] of COUNTRY) x = x.replace(re, v); x = x.replace(BOOKIE_PFX, ""); /* 2026-11-12: 242-postda "BetBoom o'rtoqlik uchrashuvi" — bukmeker nomi kanalda bo'lmaydi */ if (!/To[sş]h?kent vaqti/i.test(x)) x = x.replace(/Moskva vaqti bilan(\s+soat)?\s+(\d{1,2}):(\d{2})(\s*da)?/g, (m, so, h, mi) => "Toshkent vaqti bilan" + (so || "") + " " + String((+h + 2) % 24).padStart(2, "0") + ":" + mi + " da (Moskva vaqti bilan " + h + ":" + mi + " da)"); /* turkcha nuqtasiz ı/İ o'zbek matnida bo'lmaydi — ⟦ ⟧ ichidagi rasmiy nomlardan tashqari */ return x.split(/(⟦[^⟧]*⟧|#[\p{L}\p{N}_]+)/u).map((p, i) => (i % 2 ? p : p.replace(/ı/g, "i").replace(/İ/g, "I"))).join(""); }; // heshteglar ham o'zgarmaydi (#İstanbulBaşakşehir)
+/* 2026-11-17: qo'shtirnoqdagi klub nomi: "Paxtakor" → Paxtakor; shahar nomi bilan bir xil klub ("Rostov"ga) → rasmiy nom (FC Rostov) — qo'shtirnoq klub ekanini bildiradi */
+let QCLUB = null;
+function quoteClub(t) {
+  if (!QCLUB) { QCLUB = new Map(); for (const [, , ns] of CLUB_EMOJI) { for (const n of ns) { const k = n.toLowerCase(); if (!QCLUB.has(k)) QCLUB.set(k, n); const m = k.match(/^(.+) (klubi|jamoasi)$/); if (m && !QCLUB.has(m[1])) QCLUB.set(m[1], ns[0]); } } }
+  return String(t).replace(/(=)?["«“„]([\p{L}][\p{L}\p{N} .'’‘ʻ-]{1,30}?)["»”“]/gu, (m, eq, inner) => { if (eq) return m; const v = QCLUB.get(inner.toLowerCase()); return v ? (v.toLowerCase() === inner.toLowerCase() ? inner : v) : m; });
+}
+const canonFix = (t) => { let x = hashFix(t).replace(/(\d)\.(\d+)(?=\s?(?:foiz|%|milliard|million|mlrd|mln|ming|trillion))/g, "$1,$2") /* o'nli kasr vergul bilan: 64,76 foiz, 1,55 milliard (2026-11-12) */.replace(/⟧ (ga|ni|ning|dan|dagi|day)(?![\p{L}\p{N}])/gu, "⟧$1"); /* "⟦Jonas Urbig⟧ ga" → "⟦Jonas Urbig⟧ga" — qo'shimcha nomdan ajralmaydi */ for (const [re, v] of CANON) x = x.replace(re, v); for (const [re, v] of COUNTRY) x = x.replace(re, v); x = x.replace(BOOKIE_PFX, ""); x = quoteClub(x).replace(/\b([Qq]ur)['’‘ʻ](?=[\s.,;:!?]|$)/g, "$1'a"); /* 2026-11-17: o'zbek manbalarida klub nomi qo'shtirnoqda ("Rostov"ga) — logotip qo'yilmay qolgan edi; "qur' tashlash" imlo xatosi (EURO 2028 posti) */  /* 2026-11-12: 242-postda "BetBoom o'rtoqlik uchrashuvi" — bukmeker nomi kanalda bo'lmaydi */ if (!/To[sş]h?kent vaqti/i.test(x)) x = x.replace(/Moskva vaqti bilan(\s+soat)?\s+(\d{1,2}):(\d{2})(\s*da)?/g, (m, so, h, mi) => "Toshkent vaqti bilan" + (so || "") + " " + String((+h + 2) % 24).padStart(2, "0") + ":" + mi + " da (Moskva vaqti bilan " + h + ":" + mi + " da)"); /* turkcha nuqtasiz ı/İ o'zbek matnida bo'lmaydi — ⟦ ⟧ ichidagi rasmiy nomlardan tashqari */ return x.split(/(⟦[^⟧]*⟧|#[\p{L}\p{N}_]+)/u).map((p, i) => (i % 2 ? p : p.replace(/ı/g, "i").replace(/İ/g, "I"))).join(""); }; // heshteglar ham o'zgarmaydi (#İstanbulBaşakşehir)
 const postClean = (text, video) => canonFix(fixBr(noLabel(noEmoji(cleanHtml((video ? text.replace(/🎬\s*/g, "").replace(/\bVIDEO\s*[|:—-]\s*/gi, "") : text).split("\n").filter((l) => !/🗓|🏟/.test(l)).join("\n").replace(/\n{3,}/g, "\n\n"))))));
 function badScores(item, text) { const ss = scoresIn([item.title, item.desc, item.text, String(item.link || "").replace(/[-_]/g, " ").replace(/(\d+) (\d+)/g, "$1-$2")].join("\n")); if (!ss.size) return []; return [...postScores(text)].filter((x) => !ss.has(x)); }
 // manbadagi xorijiy ismlar (ch/sh harfli) yangi alifboga o'girilib ketmasligi uchun ⟦ ⟧ ichiga olinadi
@@ -1085,6 +1091,24 @@ const natTeams = (s) => { const t = " " + natNorm(s).replace(/[^\p{L}' ]+/gu, " 
 const QUOTE_RE = /fikr|izoh|aytdi|gapirdi|ta'kidla|so'zlari|baho|intervyu|munosabat/i;
 const newsNames = (p) => [...new Set([...String(p).matchAll(/⟦([^⟧]+)⟧/g)].map((m) => m[1].toLowerCase()))];
 const newsHead = (p) => String(p).split("\n")[0].replace(/<[^>]+>/g, "").replace(/[⟦⟧]/g, "").trim();
+/* 2026-11-17: sarlavha butunlay KATTA harflarda chiqdi ("ELDOR SHOMURODOV "ROSTOV"GA QAYTISH...", o'zbek manbasidan) — oddiy yozuvga o'tkaziladi, xos nomlar matndagi yozuvidan tiklanadi */
+function capsHead(p) {
+  const L = String(p).split("\n"), plain = L[0].replace(/<[^>]+>|[⟦⟧]/g, "");
+  const lt = plain.match(/\p{L}/gu) || [], up = plain.match(/\p{Lu}/gu) || [];
+  if (lt.length < 12 || up.length / lt.length < 0.8) return p;
+  const M = new Map(), WR = /\p{L}[\p{L}'’‘ʻ-]*/gu;
+  for (const w of L.slice(1).join(" ").replace(/<[^>]+>|[⟦⟧]/g, "").match(WR) || []) if (/^\p{Lu}/u.test(w) && !M.has(w.toLowerCase())) M.set(w.toLowerCase(), w);
+  let first = true;
+  L[0] = L[0].replace(/(<[^>]+>)|(\p{L}[\p{L}'’‘ʻ-]*)/gu, (m, tag, w) => {
+    if (tag) return m;
+    const lw = w.toLowerCase(); let o = M.get(lw);
+    if (!o) for (const [k, v] of M) if (k.length >= 4 && lw.startsWith(k) && (!o || v.length > o.length - (lw.length - k.length))) o = v + lw.slice(k.length);
+    if (!o) o = lw;
+    if (first) { o = o.charAt(0).toUpperCase() + o.slice(1); first = false; }
+    return o;
+  });
+  return L.join("\n");
+}
 async function rememberNews(env, post) {
   const r = (await kvGet(env, "recentNews", [])).filter((x) => Date.now() - x.t < 48 * 3600e3);
   r.push({ t: Date.now(), n: newsNames(post), h: newsHead(post) });
@@ -1093,8 +1117,10 @@ async function rememberNews(env, post) {
 async function dupNews(env, post) {
   const names = newsNames(post), head = newsHead(post);
   const recent = (await kvGet(env, "recentNews", [])).filter((x) => Date.now() - x.t < 48 * 3600e3);
+  /* 2026-11-17: Shomurodov–Rostov xabari 09:11 va 15:31 da ikki marta chiqdi — ikkinchisida ism bo'lingan ("Eldor ⟦Shomurodov⟧") va klub qo'shtirnoqda edi, umumiy ⟦nom⟧ topilmadi. Endi eski postdagi nomlar yangi post sarlavhasi va boshida ham qidiriladi */
+  const lead = " " + norm(String(post).replace(/<[^>]+>/g, "").replace(/[⟦⟧"«»“”]/g, "").slice(0, 400)) + " ";
   for (const x of recent) {
-    const shared = names.filter((n) => x.n.includes(n));
+    const shared = (x.n || []).filter((n) => names.includes(n) || names.some((m) => m.length >= 5 && n.length >= 5 && (m.includes(n) || n.includes(m))) || (norm(n).length >= 4 && lead.includes(" " + norm(n))));
     if (!(shared.length >= 2 || (shared.length >= 1 && Math.min(names.length, x.n.length) <= 2))) continue;
     try {
       const a = await callGemini(env, "Quyidagi ikki futbol yangiligi AYNAN BITTA voqea yoki xabar haqidami (bir xil fakt, faqat boshqacha yozilgan)? Bir klub yoki futbolchi haqidagi ikki xil voqea bo'lsa — YO'Q. Faqat HA yoki YO'Q deb javob ber.\n1) " + x.h + "\n2) " + head + "\n" + String(post).replace(/<[^>]+>/g, "").slice(0, 600), 0, Date.now() + 15000, 20, false, true);
@@ -1130,7 +1156,7 @@ async function resultDup(env, post) { const first = head1(post); if (!RES_RE.tes
     try { fc = await factCheck(env, item, post, Date.now() + 45000); } catch (e) { Q.unshift(item); await kvPut(env, "st", st); return "busy"; }
     }
     if (fc.bad.length) { if (fc.rad) { const lgx = await kvGet(env, "autoLog", []); lgx.push({ t: Date.now(), title: item.title, skip: "asosiy fakt manbada yo'q: " + fc.rad }); await kvPut(env, "autoLog", lgx.slice(-40), { expirationTtl: 7 * 86400 }); } continue; }
-    const hs0 = headSig(post), hs1 = headSig(fc.text); if ((hs0 && hs1 && hs0 !== hs1) || (await resultDup(env, fc.text)) || ["bad", "women"].includes(await scoreGuard(fc.text).catch(() => "unknown"))) { const lgw = await kvGet(env, "autoLog", []); lgw.push({ t: Date.now(), title: item.title, skip: "hisob/g'olib o'zgardi yoki takror natija" }); await kvPut(env, "autoLog", lgw.slice(-40), { expirationTtl: 7 * 86400 }); continue; } post = fc.text;
+    const hs0 = headSig(post), hs1 = headSig(fc.text); if ((hs0 && hs1 && hs0 !== hs1) || (await resultDup(env, fc.text)) || ["bad", "women"].includes(await scoreGuard(fc.text).catch(() => "unknown"))) { const lgw = await kvGet(env, "autoLog", []); lgw.push({ t: Date.now(), title: item.title, skip: "hisob/g'olib o'zgardi yoki takror natija" }); await kvPut(env, "autoLog", lgw.slice(-40), { expirationTtl: 7 * 86400 }); continue; } post = capsHead(fc.text);
     // sana nazorati (2026-11-08): o'yin sanasi rasmiy jadval (ESPN) bilan solishtiriladi, yil xatosi manbaga qarab tuzatiladi
     try { const dc = await dateCheck(env, post, item); if (dc.fixes.length) { post = dc.text; const L0 = await kvGet(env, "dateFix", []); L0.push({ t: Date.now(), h: newsHead(post).slice(0, 80), f: dc.fixes }); await kvPut(env, "dateFix", L0.slice(-30), { expirationTtl: 30 * 86400 }); } } catch (e) {}
     // takror yangilik (boshqa manbadan kelgan xuddi shu voqea) chiqmasin
@@ -2499,7 +2525,7 @@ async function qcCheck(env, text, media) {
     if (!QC_ALIAS) QC_ALIAS = CLUB_EMOJI.flatMap(([, , ns]) => ns.map(qcNorm));
     const nt = " " + qcNorm(plain).replace(/[^\p{L}\p{N}'.&/-]+/gu, " ") + " ";
     const miss = new Set();
-    for (const n of await qcTeams(env)) { const k = qcNorm(n); if (k.length < 4) continue; let at = nt.indexOf(" " + k), hit = false; while (at >= 0 && !hit) { hit = /^(?:'?(?:ning|ni|ga|ka|qa|dagi|dan|da|tan|ta|lik|chilar|chi|lar))? /.test(nt.slice(at + 1 + k.length)); at = nt.indexOf(" " + k, at + 1); } if (!hit) continue; if (!/\s/.test(n.trim())) { const pl0 = plain.replace(/#[\p{L}\p{N}_]+/gu, " "); const occ = [...pl0.matchAll(new RegExp("(^|[^\\p{L}])" + n.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?=(?:'?(?:ning|ni|ga|ka|qa|dagi|dan|da|tan|ta|lik|chilar|chi|lar))?(?![\\p{L}]))", "giu"))]; if (occ.length && occ.every((m) => /⟦\p{Lu}[\p{Ll}'’-]+⟧\s+$/u.test(pl0.slice(Math.max(0, m.index - 40), m.index + m[1].length)))) continue; } /* 2026-11-16: "Charlie Austin" — futbolchi familiyasi klub (Austin FC) deb olinmasin, LOGO ROBOTI navbatiga tushmasin */ if (QC_ALIAS.some((a) => a === k || (a.length > k.length && a.includes(k) && nt.includes(" " + a + " ")) || (a.length >= 5 && k.includes(a) && nt.includes(" " + a)))) continue; miss.add(n); }
+    for (const n of await qcTeams(env)) { const k = qcNorm(n); if (k.length < 4) continue; let at = nt.indexOf(" " + k), hit = false; while (at >= 0 && !hit) { hit = /^(?:'?(?:ning|ni|ga|ka|qa|dagi|dan|da|tan|ta|lik|chilar|chi|lar))? /.test(nt.slice(at + 1 + k.length)); at = nt.indexOf(" " + k, at + 1); } if (!hit) continue; if (!/\s/.test(n.trim())) { const pl0 = plain.replace(/#[\p{L}\p{N}_]+/gu, " "); const occ = [...pl0.matchAll(new RegExp("(^|[^\\p{L}])" + n.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?=(?:'?(?:ning|ni|ga|ka|qa|dagi|dan|da|tan|ta|lik|chilar|chi|lar))?(?![\\p{L}]))", "giu"))]; if (occ.length && occ.every((m) => /⟦\p{Lu}[\p{Ll}'’-]+⟧\s+$/u.test(pl0.slice(Math.max(0, m.index - 40), m.index + m[1].length)))) continue; } /* 2026-11-16: "Charlie Austin" — futbolchi familiyasi klub (Austin FC) deb olinmasin, LOGO ROBOTI navbatiga tushmasin */ if (QC_ALIAS.some((a) => a === k || (a.length > k.length && a.includes(k) && nt.includes(" " + a)) || (a.length >= 5 && k.includes(a) && nt.includes(" " + a)))) continue; miss.add(n); }
     if (miss.size) warn.push("logotipsiz klub: " + [...miss].slice(0, 6).join(", "));
     // 2026-11-12: logotipsiz klub LOGO ROBOTI navbatiga ham tushadi (04:00 da emojiadd.yml to'plamga qo'shadi) — postda 1 ta, so'rovlarni tejash uchun
     const mlist = [...miss].filter((n) => ![...miss].some((o) => o !== n && o.length > n.length && qcNorm(o).includes(qcNorm(n))));
