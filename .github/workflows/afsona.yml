@@ -1,0 +1,29 @@
+name: afsona
+# Afsonalar turkumi: sinov postini adminga yuborish (name — afsona ismi, bo'sh bo'lsa tasodifiy); chan=1 — kanalga chiqarish
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        default: ""
+      chan:
+        default: ""
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          NAME: ${{ inputs.name }}
+          CHAN: ${{ inputs.chan }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, urllib.request
+          key = hashlib.sha256(("ub-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:40]
+          body = {"name": os.environ.get("NAME", "")}
+          if os.environ.get("CHAN") == "1": body["chan"] = 1
+          rq = urllib.request.Request("https://inter-futbol-bot.gcw808.workers.dev/ub/afsona", data=json.dumps(body).encode(), headers={"x-key": key, "content-type": "application/json", "user-agent": "InterFutbolAfsona"})
+          print(urllib.request.urlopen(rq, timeout=170).read().decode()[:300])
+          PY

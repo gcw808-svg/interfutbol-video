@@ -1,7 +1,7 @@
 # Inter Futbol: rasm topilmagan yangilik uchun mavzuga mos kartochka (1280x720)
 # Natija bo'lsa: shisha uslubi (jamoa ranglari, ikki panel, klub nomi ostida klub rangidagi chiziq)
 import glob, hashlib, io, json, os, time, urllib.error, urllib.parse, urllib.request
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
 
 BOT = os.environ.get("BOT_TOKEN", "")
 W = "https://inter-futbol-bot.gcw808.workers.dev"
@@ -1252,6 +1252,70 @@ def render_scorers_v(j):
     return im
 
 
+def render_afsona_v(j):
+    # AFSONALAR TURKUMI AFISHASI (Bahtiyor aka tasdiqlagan, 2026-11-18 — Steven Gerrard namunasi): butun kadr surat (asosiy odam atrofida),
+    # pastdan klub rangidagi yorqin gradient; sariq qatorda "KLUB · YILLAR"; juda yirik ISM (ikki qator); sariq chiziq; ostida 3 tagacha raqam
+    # ("710 öyin", "186 gol", "17 mavsum"); iF tepa o'ng burchakda. Rukn nomi yozilmaydi — turkum dizayni bilan taniladi.
+    Wd, Hd = 1080, 1350
+    L = j.get("legend") or {}
+    face = get_photo(j.get("face"))
+    if not face:
+        return render_news_v({**j, "legend": None})
+    im = _cover(face, Wd, Hd, 0.08)
+    im = ImageEnhance.Contrast(ImageEnhance.Color(im.convert("RGB")).enhance(1.22)).enhance(1.07).convert("RGBA")
+    col, dark = (200, 16, 46), (110, 0, 18)
+    lg = get_logo(j.get("leftLogo"), 300)
+    pal = club_palette(lg) if lg else None
+    if pal:
+        import colorsys
+        h_, l_, s_ = colorsys.rgb_to_hls(*(v / 255 for v in pal[1]))
+        col = tuple(int(v * 255) for v in colorsys.hls_to_rgb(h_, 0.40, min(1, max(s_, 0.75))))
+        dark = tuple(int(v * 255) for v in colorsys.hls_to_rgb(h_, 0.20, min(1, max(s_, 0.75))))
+    elif lg is not None or not j.get("leftLogo"):
+        col, dark = (20, 26, 40), (8, 10, 16)  # rangsiz gerb (Juventus, Real Madrid) — to'q fon
+    def vg(h, c, a0, a1, pw):
+        g = Image.new("L", (1, h)); g.putdata([int(a0 + (a1 - a0) * ((y / (h - 1)) ** pw)) for y in range(h)])
+        o = Image.new("RGBA", (Wd, h), c + (0,)); o.putalpha(g.resize((Wd, h))); return o
+    im.alpha_composite(vg(860, col, 0, 255, 1.35), (0, Hd - 860))
+    im.alpha_composite(vg(420, dark, 0, 215, 1.0), (0, Hd - 420))
+    d = ImageDraw.Draw(im)
+    acc = (255, 214, 10)
+    name = _no_emoji(L.get("name") or "").upper().split()
+    lines = [name[0], " ".join(name[1:])] if len(name) > 1 else [" ".join(name)]
+    if len(lines) == 2 and len(lines[0]) <= 4 and len(name) > 2:  # "DE BRUYNE" kabi qisqa birinchi so'z — ikkinchi qatorga qo'shilmaydi, tenglashtiriladi
+        lines = [" ".join(name[:2]), " ".join(name[2:])]
+    fs = 150
+    while fs > 70 and max(d.textlength(x, font=font("black", fs)) for x in lines) > Wd - 120:
+        fs -= 4
+    tiles = [(str(a), str(b)) for a, b in (L.get("tiles") or [])][:3]
+    y = Hd - 150 - (150 if tiles else 0) - int(fs * 0.92) * len(lines) - 56
+    sub = _no_emoji(L.get("sub") or "").upper()
+    if sub:
+        sf = 36
+        while sf > 24 and d.textlength(sub, font=font("bold", sf)) > Wd - 120:
+            sf -= 2
+        d.text((62, y), sub, font=font("bold", sf), fill=acc)
+    yy = y + 54
+    for ln in lines:
+        d.text((58, yy), ln, font=font("black", fs), fill=WHITE); yy += int(fs * 0.92)
+    yy += 26
+    d.rectangle([60, yy, 200, yy + 10], fill=acc)
+    if tiles:
+        nf, lf = 92, 34
+        tot = lambda: sum(d.textlength(a, font=font("black", nf)) + 12 + d.textlength(b, font=font("bold", lf)) for a, b in tiles) + 44 * (len(tiles) - 1)
+        while nf > 56 and tot() > Wd - 120:
+            nf -= 4; lf = max(24, lf - 1)
+        x = 60
+        for a, b in tiles:
+            d.text((x, yy + 30), a, font=font("black", nf), fill=WHITE)
+            wa = d.textlength(a, font=font("black", nf))
+            d.text((x + wa + 12, yy + 30 + int(nf * 0.52)), b, font=font("bold", lf), fill=(255, 236, 236))
+            x += wa + 12 + d.textlength(b, font=font("bold", lf)) + 44
+    im = im.convert("RGB")
+    paste_mark(im, "tr")
+    return im
+
+
 def render_photo_v(j):
     # QOIDA (Bahtiyor aka, 2026-11-12: "hamma rasmlar tagiga izoh yozaverma, rasm o'zi qolaversin"): SURATLI KARTADA SARLAVHA YOZILMAYDI —
     # surati bor har qanday yangilik/fakt kartasi shu ko'rinishda chiziladi (faqat surat va iF); sarlavha faqat suratsiz (gerbli) kartalarda.
@@ -1565,7 +1629,7 @@ def render(j):
         buf = io.BytesIO()
         im.save(buf, "PNG", optimize=True)
         return buf.getvalue()
-    im = render_scorers_v(j) if len((j.get("scorers") or {}).get("rows") or []) >= 3 else render_photo_v(j) if (j.get("face") and not (j.get("stat") or {}).get("tiles")) else render_legion_v(j) if (j.get("legion") or {}).get("rows") else (render_news(j) if j.get("hz") else render_news_v(j))  # 2026-11-09: yangilik kartochkalari tik (1080x1350)
+    im = render_afsona_v(j) if ((j.get("legend") or {}).get("name") and j.get("face")) else render_scorers_v(j) if len((j.get("scorers") or {}).get("rows") or []) >= 3 else render_photo_v(j) if (j.get("face") and not (j.get("stat") or {}).get("tiles")) else render_legion_v(j) if (j.get("legion") or {}).get("rows") else (render_news(j) if j.get("hz") else render_news_v(j))  # 2026-11-09: yangilik kartochkalari tik (1080x1350)
     buf = io.BytesIO()
     if j.get("face"):
         im.convert("RGB").save(buf, "JPEG", quality=92)  # suratli kartochka — hajm kichik bo'lsin
