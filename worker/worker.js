@@ -2916,14 +2916,16 @@ async function ubRoute(env, req, url) {
     const id = "w" + Date.now().toString(36) + mid; await env.STATE.put("lgb:rc_" + id, buf, { expirationTtl: 3 * 86400 });
     const html2 = ready || newAlpha(addLogos(html)); const uid = "e" + Date.now().toString(36) + mid;
     await kvPut(env, "ujob:" + uid, { html: html2, html2, edit: mid, editPhoto: WURL + "/lg/rc_" + id, photo: null, video: null, chat: null, raw: { text: html, img: null, url: null, video: null }, t: Date.now(), tries: 0, repId: id, ...(keep ? { keep: 1 } : {}) }, { expirationTtl: 86400 });
-    const rw = (await kvGet(env, "repWait", [])).filter((x) => Date.now() - x.t0 < 6 * 3600e3); rw.push({ id, mid, st: "edit", uid, t: Date.now(), t0: Date.now(), n: 0 }); await kvPut(env, "repWait", rw.slice(-30));
+    // keep rejimida repWait ga yozilmaydi: ketma-ket almashtirishlarda KV kechikib yangilangani uchun tugagan yozuvlar qaytib qolib, adminga soxta "almashtirilmadi" ogohlantirishi ketardi (2026-11-17); natija wmfix dan keyin kanaldan ko'rib tekshiriladi
+    if (!keep) { const rw = (await kvGet(env, "repWait", [])).filter((x) => Date.now() - x.t0 < 6 * 3600e3); rw.push({ id, mid, st: "edit", uid, t: Date.now(), t0: Date.now(), n: 0 }); await kvPut(env, "repWait", rw.slice(-30)); }
     await ghDispatch(env, "ubpost.yml", { job: uid });
     return J({ ok: true });
   }
   // wmQ — eski belgini almashtirish navbati (wmfix.yml kuniga ikki marta ?take=N bilan oladi): POST {items:[id..], clear} — yuklash
   if (url.pathname === "/ub/wmq") {
     let q = await kvGet(env, "wmQ", []);
-    if (req.method === "POST") { const b0 = await req.json().catch(() => ({})); if (b0.clear) q = []; for (const x of b0.items || []) if (+x > 0 && !q.includes(+x)) q.push(+x); await kvPut(env, "wmQ", q); return J({ ok: true, left: q.length }); }
+    if (req.method === "POST") { const b0 = await req.json().catch(() => ({})); if (b0.clear) q = [];
+      { const rw0 = await kvGet(env, "repWait", []); const rw1 = rw0.filter((x) => !/^w/.test(String(x.id))); if (rw1.length !== rw0.length) await kvPut(env, "repWait", rw1); } /* wmfix qoldiqlarini tozalash */ for (const x of b0.items || []) if (+x > 0 && !q.includes(+x)) q.push(+x); await kvPut(env, "wmQ", q); return J({ ok: true, left: q.length }); }
     const n = Math.min(60, Math.max(0, +url.searchParams.get("take") || 0)); const out = q.slice(0, n);
     if (out.length) { await kvPut(env, "wmQ", q.slice(n)); if (q.length <= n && admin) await tg(env, "sendMessage", { chat_id: admin, text: "✅ Eski iF belgisini almashtirish navbatining oxirgi qismi ishga tushdi (" + out.length + " ta post)." }); }
     return J({ ok: true, posts: out, left: Math.max(0, q.length - n) });
