@@ -50,6 +50,9 @@ PEOPLE = [
 ]
 
 
+pn = lambda x: re.sub(r"[^a-z0-9]+", " ", __import__("unicodedata").normalize("NFD", x.lower().replace("ş", "sh").replace("ç", "ch")).encode("ascii", "ignore").decode()).strip()
+
+
 def get(url, params, tries=3):
     for k in range(tries):
         try:
@@ -110,6 +113,19 @@ def files(q):
     return sorted(out.values(), key=lambda x: (not x["main"], -x["y"]))
 
 
+def other(title, keys):
+    # fayl nomida ikkinchi odam: "A and B", "A 10, B 11" yoki o'yin surati "Ism Familiya Boshqa Odam Davlat v Davlat"
+    t = re.sub(r"^File:|\.jpe?g$", "", title, flags=re.I)
+    if re.search(r"\b(and|und|et)\b|&|,", t):
+        return True
+    m = re.search(r"^(.*?)\s+\S+\s+vs?\.?\s+\S", t, re.I)
+    if not m:
+        return False
+    kw = set(w for k in keys for w in k.split())
+    rest = [w for w in pn(m.group(1)).split() if w not in kw and not w.isdigit()]
+    return len(rest) >= 2
+
+
 def gray(im):
     sm = im.resize((48, 48)).convert("RGB")
     return sum(max(p) - min(p) for p in sm.getdata()) / (48 * 48) < 9
@@ -127,7 +143,6 @@ def main():
     if os.environ.get("DEL"):
         return delete()
     have = requests.get(W + "/ub/faces", headers=H, timeout=30).json()
-    pn = lambda x: re.sub(r"[^a-z0-9]+", " ", __import__("unicodedata").normalize("NFD", x.lower().replace("ş", "sh").replace("ç", "ch")).encode("ascii", "ignore").decode()).strip()
     only = [x.strip().lower() for x in os.environ.get("ONLY", "").split(",") if x.strip()]
     extra = [(x.strip(), "", []) for x in os.environ.get("ADD", "").split(",") if x.strip()]
     items, total = [], 0
@@ -158,7 +173,7 @@ def main():
                     continue
                 if not c["main"] and 0 < c["y"] < 2016:
                     continue  # eskirgan surat (hozirgi murabbiy futbolchilik davrida va h.k.) — yangilikka mos emas
-                if re.search(r"\b(and|with|vs|und|et|y)\b|,| -\d", re.sub(r"\b(v|vs)\b[^-]*$", "", c["t"]).replace("File:", "")) and not c["main"] and len(re.findall(r"[A-ZÀ-Ý][a-zà-ÿ]+ [A-ZÀ-Ý][a-zà-ÿ]+", c["t"])) > 1 + sum(1 for k in keys if k in pn(c["t"])):
+                if not c["main"] and other(c["t"], keys):
                     continue  # fayl nomida boshqa odam ham bor (ikki futbolchi kurashi) — kim asosiy ekanini aniqlab bo'lmaydi
                 try:
                     im = Image.open(io.BytesIO(requests.get(c["url"], headers=UA, timeout=90).content)).convert("RGB")
