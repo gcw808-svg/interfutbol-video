@@ -1563,7 +1563,8 @@ async function healthCheck(env) { const now = Date.now(), d = tashDate(now), h =
   const clubLogos = extra.home ? [] : (await Promise.all((ci.clubs || []).map(async (n) => (await logoUrl(env, n, idx)) || crest(n)))).filter(Boolean).slice(0, 4);
   if ((extra.home && extra.away) && (!homeLogo || !awayLogo)) { try { const ad = (await getAdmins(env))[0]; if (ad) await tg(env, "sendMessage", { chat_id: ad, text: "⚠️ Nazorat: natija kartochkasida klub logotipi topilmadi — " + [!homeLogo && ci.home, !awayLogo && ci.away].filter(Boolean).join(", ") + ". Claude logotipni qo'shib, /kartaqayta bilan kartochkani yangilaydi." }); } catch (e) {} } leagueLogo = leagueLogo || espnLgLogo(extra.compName || lgName) || (await leagueLogoUrl(env, lgName, idx)) || "";
   await mergeCemoji(env); if (ci.home && homeLogo) await emojiNeed(env, ci.home, homeLogo); if (ci.away && awayLogo) await emojiNeed(env, ci.away, awayLogo); await natTeamNeeds(env, post);
-  await kvPut(env, "cjob:" + id, { ...ci, home: cardNm(ci.home), away: cardNm(ci.away), league: newAlpha(lgName || ""), homeLogo, awayLogo, leagueLogo, leftLogo: (extra.kind || "res") === "news" ? await leftCrest(env, post, ci, idx) : "", clubLogos, stat: (extra.kind || "res") === "news" && /#Raqamlarda/i.test(post) ? statFromPost(post) : null, face: (extra.kind || "res") === "news" ? await faceUrl(env, post) : "", legion: (extra.kind || "res") === "news" && /#Legionerlar\b/i.test(post) ? await legionFromPost(env, post, idx) : null, scorers: (extra.kind || "res") === "news" && /#Topurarlar\b/i.test(post) ? await scorersFromPost(env, post, idx) : null, ...(extra.goals || {}), chan: post, to: to || null, url: extra.url || null, kind: extra.kind || "res", story: (!to && (extra.kind || "res") === "res" && STORY_BIG.test(ci.home + " " + ci.away + " " + (lgName || ""))) ? await storyQuota(env) : 0 }, { expirationTtl: 7 * 3600 });
+  const face1 = (extra.kind || "res") === "news" ? await faceUrl(env, post) : ""; const chan1 = face1 ? withCredit(post, await faceCredit(env, face1)) : post;
+  await kvPut(env, "cjob:" + id, { ...ci, home: cardNm(ci.home), away: cardNm(ci.away), league: newAlpha(lgName || ""), homeLogo, awayLogo, leagueLogo, leftLogo: (extra.kind || "res") === "news" ? await leftCrest(env, post, ci, idx) : "", clubLogos, stat: (extra.kind || "res") === "news" && /#Raqamlarda/i.test(post) ? statFromPost(post) : null, face: face1, legion: (extra.kind || "res") === "news" && /#Legionerlar\b/i.test(post) ? await legionFromPost(env, post, idx) : null, scorers: (extra.kind || "res") === "news" && /#Topurarlar\b/i.test(post) ? await scorersFromPost(env, post, idx) : null, ...(extra.goals || {}), chan: chan1, to: to || null, url: extra.url || null, kind: extra.kind || "res", story: (!to && (extra.kind || "res") === "res" && STORY_BIG.test(ci.home + " " + ci.away + " " + (lgName || ""))) ? await storyQuota(env) : 0 }, { expirationTtl: 7 * 3600 });
   if (to) return ghDispatch(env, "card.yml", { job: id });
   const w = await kvGet(env, "resWait", []); w.push({ id, post, t: Date.now(), url: extra.url || null, kind: extra.kind || "res" }); await kvPut(env, "resWait", w.slice(-20));
   await ghDispatch(env, "card.yml", { job: id }).catch(() => {}); // chizilmasa resFallback qayta urinadi (2026-11-13: subrequest chegarasi xatosi autoNews hisoblagichini buzmasin)
@@ -1685,6 +1686,7 @@ async function rasmRedo(env, chat, mid, quiet, ov) {
       // MUALLIF YOZUVI RASMDA EMAS, POST MATNIDA (Bahtiyor aka, 2026-11-11: "rasmdagi Wikimedia yozuvini ko'rinmaydigan qil"): erkin litsenziya (CC BY / BY-SA)
       // muallifni ko'rsatishni talab qiladi — shuning uchun yozuv butunlay olib tashlanmaydi, heshteglardan oldin kichik kursiv qator bo'lib qo'shiladi
       let html1 = html;
+      if (!(ov && ov.credit) && face0) html1 = withCredit(html, await faceCredit(env, face0));
       if (ov && ov.credit && !/Wikimedia Commons/i.test(html)) { const cl = "<i>⟦" + ov.credit + "⟧</i>"; html1 = /\n\s*#[^\n]*\s*$/.test(html) ? html.replace(/\s*\n\s*(#[^\n]*\s*)$/, "\n\n" + cl + "\n\n$1") : html + "\n\n" + cl; }
       const id = "n" + Date.now().toString(36) + "r";
       await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", leftLogo: await leftCrest(env, html, ci, idx), clubLogos, stat: /#Raqamlarda/i.test(html) ? statFromPost(html) : null, face: face0, wm: (ov && ov.wm) || "", sr: ov && ov.sr ? 1 : 0, po: own ? own.po : 0, legion: /#Legionerlar\b/i.test(html) ? await legionFromPost(env, html, idx) : null, scorers: /#Topurarlar\b/i.test(html) ? await scorersFromPost(env, html, idx) : null, chan: keepLatin(html1), rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 }); await repWatch(env, id, mid);
@@ -1735,6 +1737,14 @@ async function faceUrl(env, post, pick) {
     return phUrl(p);
   } catch (e) { return ""; }
 }
+// ERKIN LITSENZIYALI SURAT MUALLIFI (2026-11-17, odamlar roboti — people.py): bazadagi suratda "c" (Foto: muallif, litsenziya) bo'lsa,
+// shu surat ishlatilgan post matniga heshteglardan oldin kichik kursiv qator bo'lib qo'shiladi (CC BY / BY-SA talabi; rasmga yozilmaydi)
+async function faceCredit(env, furl) {
+  try { const f = decodeURIComponent((String(furl || "").match(/\/ph\/([^?]+)/) || [])[1] || ""); if (!f) return "";
+    const F = await kvGet(env, "faces", {}); for (const P of Object.values(F)) for (const p of P.ph || []) if (p.f === f) return p.c ? p.c + ", Wikimedia Commons" : ""; } catch (e) {}
+  return "";
+}
+const withCredit = (html, credit) => { if (!credit || /Wikimedia Commons/i.test(html)) return html; const cl = "<i>⟦" + credit + "⟧</i>"; return /\n\s*#[^\n]*\s*$/.test(html) ? html.replace(/\s*\n\s*(#[^\n]*\s*)$/, "\n\n" + cl + "\n\n$1") : html + "\n\n" + cl; };
 const phUrl = (p) => WURL + "/ph/" + encodeURIComponent(p.f) + (p.b ? "?b=" + p.b.join(",") + (p.x && p.x.length ? "&x=" + p.x.map((e) => e.join(",")).join(";") : "") : "");
 // POSTNING O'Z SURATI (kanal postidan bazaga o'tkazilgan, src = post raqami): post qayta chizilganda avval shu surat ishlatiladi;
 // sarlavhada shu odamning ismi bo'lmasa — sarlavhasiz suratli karta (po), surat ustiga boshqa mavzudagi sarlavha yozilmaydi
@@ -2933,8 +2943,27 @@ async function ubRoute(env, req, url) {
     if (!key || !isFaceName(name) || !b0.f || !b0.uid) return J({ ok: false });
     const F = await kvGet(env, "faces", {}); const P = (F[key] = F[key] || { n: name, al: [], ph: [], u: 0 });
     P.al = [...new Set([...(P.al || []), name])].slice(0, 12);
-    if (!P.ph.some((p) => p.uid === b0.uid || (b0.src && p.src === b0.src))) P.ph.push({ f: b0.f, uid: b0.uid, w: b0.w || 0, h: b0.h || 0, m: b0.m, low: b0.w && Math.min(b0.w, b0.h) < 500 ? 1 : 0, t: Date.now(), sr: 1, ...(b0.b ? { b: b0.b, x: b0.x || [], d: 1 } : {}), ...(b0.src ? { src: b0.src } : {}) });
+    if (!P.ph.some((p) => p.uid === b0.uid || (b0.src && p.src === b0.src))) P.ph.push({ f: b0.f, uid: b0.uid, w: b0.w || 0, h: b0.h || 0, m: b0.m, low: b0.w && Math.min(b0.w, b0.h) < 500 ? 1 : 0, t: Date.now(), sr: 1, ...(b0.b ? { b: b0.b, x: b0.x || [], d: 1 } : {}), ...(b0.src ? { src: b0.src } : {}), ...(b0.c ? { c: String(b0.c).slice(0, 160) } : {}) });
+    if (Array.isArray(b0.al)) P.al = [...new Set([...P.al, ...b0.al.map((x) => String(x).trim()).filter(isFaceName)])].slice(0, 12);
     await kvPut(env, "faces", F); return J({ ok: true, n: P.ph.length });
+  }
+  // bir nechta suratni BITTA KV yozuvi bilan qo'shish (people.py — odamlar roboti): {items: [{name, al, f, uid, w, h, m, b, x, c}]}
+  if (url.pathname === "/ub/faceaddm" && req.method === "POST") {
+    const b1 = await req.json().catch(() => ({})); const F = await kvGet(env, "faces", {}); let n = 0;
+    for (const b0 of Array.isArray(b1.items) ? b1.items.slice(0, 200) : []) {
+      const name = String(b0.name || "").replace(/\s+/g, " ").trim(); const key = pnorm(name); if (!key || !isFaceName(name) || !b0.f || !b0.uid) continue;
+      const P = (F[key] = F[key] || { n: name, al: [], ph: [], u: 0 });
+      P.al = [...new Set([...(P.al || []), name, ...(Array.isArray(b0.al) ? b0.al.map((x) => String(x).trim()).filter(isFaceName) : [])])].slice(0, 12);
+      if (P.ph.some((p) => p.uid === b0.uid)) continue;
+      P.ph.push({ f: b0.f, uid: b0.uid, w: b0.w || 0, h: b0.h || 0, m: b0.m, low: 0, t: Date.now(), sr: 1, ...(b0.b ? { b: b0.b, x: b0.x || [], d: 1 } : {}), ...(b0.c ? { c: String(b0.c).slice(0, 160) } : {}), wc: 1 }); n++;
+    }
+    if (n) await kvPut(env, "faces", F); return J({ ok: true, n });
+  }
+  // bazadan bitta suratni olib tashlash (people.py tekshiruvidan o'tmagan surat): {name, uid}
+  if (url.pathname === "/ub/facedel" && req.method === "POST") {
+    const b0 = await req.json().catch(() => ({})); const F = await kvGet(env, "faces", {}); const key = pnorm(String(b0.name || "")); const P = F[key]; if (!P) return J({ ok: false });
+    const n0 = P.ph.length; P.ph = P.ph.filter((p) => p.uid !== b0.uid); if (!P.ph.length) delete F[key];
+    if (P.ph.length !== n0) await kvPut(env, "faces", F); return J({ ok: P.ph.length !== n0 });
   }
   // ESKI iF BELGISINI ALMASHTIRISH (wmfix.py, 2026-11-17): /ub/postimg — postning hozirgi rasmi (file_id); /ub/repimg — tayyor rasm bilan post rasmini almashtirish (matn, logotiplar va tugma saqlanadi)
   if (url.pathname === "/ub/postimg") {

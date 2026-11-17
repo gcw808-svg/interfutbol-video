@@ -1,0 +1,39 @@
+name: people
+# Odamlar roboti: futbolchi va murabbiylarning erkin litsenziyali suratlarini (Wikimedia Commons) rasmlar kanaliga va bot bazasiga qo'shadi (people.py)
+# only — faqat shu ismlar (vergul bilan); add — ro'yxatda yo'q yangi ismlar; per — bir odamga nechta; limit — jami; dry=1 — faqat hisobot
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        default: ""
+      add:
+        default: ""
+      per:
+        default: "2"
+      limit:
+        default: "40"
+      maxp:
+        default: "4"
+      dry:
+        default: "0"
+permissions:
+  contents: read
+concurrency:
+  group: sharp
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install -q requests pillow numpy onnxruntime
+      - env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          ONLY: ${{ inputs.only }}
+          ADD: ${{ inputs.add }}
+          PER: ${{ inputs.per }}
+          LIMIT: ${{ inputs.limit }}
+          MAXP: ${{ inputs.maxp }}
+          DRY: ${{ inputs.dry }}
+        run: python3 people.py
