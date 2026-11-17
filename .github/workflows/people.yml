@@ -22,6 +22,8 @@ on:
         default: ""
       reg:
         default: ""
+      maxsec:
+        default: "2700"
       gh:
         default: ""
 permissions:
@@ -43,13 +45,14 @@ jobs:
       DRY: ${{ inputs.dry }}
       DEL: ${{ inputs.del }}
       REG: ${{ inputs.reg }}
+      MAXSEC: ${{ inputs.maxsec }}
     steps:
       - if: ${{ inputs.gh != '1' }}
         run: |
           python3 - <<'PY'
           import hashlib, json, os, urllib.request
           key = hashlib.sha256(("ub-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:40]
-          job = {k: os.environ.get(k, "") for k in ("ONLY", "ADD", "PER", "LIMIT", "MAXP", "DRY", "DEL", "REG") if os.environ.get(k, "")}
+          job = {k: os.environ.get(k, "") for k in ("ONLY", "ADD", "PER", "LIMIT", "MAXP", "DRY", "DEL", "REG", "MAXSEC") if os.environ.get(k, "")}
           rq = urllib.request.Request("https://gcw808-svg--inter-jobs-dispatch.modal.run", data=json.dumps({"wf": "people.yml", "job": json.dumps(job, ensure_ascii=False)}).encode(), headers={"x-key": key, "content-type": "application/json"})
           print("modal:", urllib.request.urlopen(rq, timeout=60).read().decode()[:200])
           PY
