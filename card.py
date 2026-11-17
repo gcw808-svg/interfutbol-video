@@ -1180,6 +1180,17 @@ def render_scorers_v(j):
         # Ichida oq/boshqa rangli tasviri bor logo (Bundesliga: qizil to'rtburchak ichida oq futbolchi) siluetga aylantirilsa
         # yaxlit OQ TO'RTBURCHAK bo'lib qoladi (320-post xatosi, 2026-11-17) — bunday logo ASL RANGIDA, ortida yengil oq nur bilan qo'yiladi.
         solid = bool(pal) and blends(mark)
+        if not solid:
+            # logo ostidagi TO'Q YOZUV ("BUNDESLIGA") to'q fonda ko'rinmay qoladi: faqat to'q piksellardan iborat qatorlar oqartiriladi
+            # (oq plashka ustidagi to'q yozuvga — Serie A — tegilmaydi, chunki u qatorlarda och piksellar ham bor)
+            px = wm.load()
+            for yy in range(wm.height):
+                op = [px[xx, yy] for xx in range(wm.width) if px[xx, yy][3] > 60]
+                if len(op) >= 3 and sum(1 for p in op if max(p[:3]) < 90) >= len(op) * 0.9:
+                    for xx in range(wm.width):
+                        p = px[xx, yy]
+                        if p[3] and max(p[:3]) < 90:
+                            px[xx, yy] = (245, 247, 250, p[3])
         if solid:
             wm = Image.merge("RGBA", (*Image.new("RGB", wm.size, (255, 255, 255)).split(), wm.getchannel("A")))
         big = wm.resize((int(wm.width * 760 / max(wm.size)), int(wm.height * 760 / max(wm.size))), Image.LANCZOS)
