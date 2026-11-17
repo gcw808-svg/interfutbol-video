@@ -105,7 +105,7 @@ def files(q, names=()):
             if not OK_LIC.search(lic):
                 continue
             t = pg["title"]
-            if re.search(r"signature|autograph|logo|shirt|jersey|maillot|camiseta|trikot|trophy|statue|mural|graffiti|wax|tussaud|figure|escultura|sculpture|estatua|stamp|cropped|boots|predator|poster|banner|tifo|parade", t, re.I):
+            if re.search(r"signature|autograph|logo|shirt|jersey|maillot|camiseta|trikot|trophy|statue|mural|graffiti|wax|tussaud|figure|escultura|sculpture|estatua|eterno|painting|puppet|firma|\\bfils\\b|\\bjr\\b son|golf|stamp|cropped|boots|predator|poster|banner|tifo|parade", t, re.I):
                 continue
             ym = re.search(r"(19|20)\d\d", clean((md.get("DateTimeOriginal") or {}).get("value")) or "")
             art = re.sub(r"^(User:)", "", clean((md.get("Artist") or {}).get("value")))[:70] or "noma'lum muallif"
