@@ -138,6 +138,8 @@ const FEEDS = [
     if (!loc || !/\/news\//.test(loc)) continue;
     const title = decodeEntities((u.match(/<news:title>([\s\S]*?)<\/news:title>/) || [])[1]);
     if (!title) continue;
+    // Goal.com "qayerda ko'rish", chipta, xarid va stavka sahifalari yangilik emas — ular eng yangi 15 ta o'rinni band qilib, haqiqiy yangiliklarni siqib chiqarardi (2026-11-18)
+    if (/^watch\b.*\blive\b|live today|who is (broadcasting|showing)|where to watch|live stream|tv channel|how to (get|buy|watch)|tickets?\b|black friday|cyber monday|\b(football|sports?|fitness|tech|entertainment|boots) deals\b|promo code|betting|odds\b|best .* to buy|kits? .* buy/i.test(title)) continue;
     const date = Date.parse((u.match(/<news:publication_date>(.*?)</) || [])[1]) || Date.now();
     const img = (u.match(/<image:loc>(.*?)<\/image:loc>/) || [])[1];
     items.push({ title, link: unAmp(loc), desc: "", date, source, img: img ? unAmp(img) : null });
