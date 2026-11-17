@@ -1,6 +1,8 @@
 name: people
 # Odamlar roboti: futbolchi va murabbiylarning erkin litsenziyali suratlarini (Wikimedia Commons) rasmlar kanaliga va bot bazasiga qo'shadi (people.py)
-# only — faqat shu ismlar (vergul bilan); add — ro'yxatda yo'q yangi ismlar; per — bir odamga nechta; limit — jami; dry=1 — faqat hisobot
+# 2026-11-18: GitHub daqiqalarini tejash uchun ish MODAL'da bajariladi (bu workflow faqat ishga tushiradi, ~1 daqiqa); natija bot KV'siga (peopleLog) yoziladi —
+# o'qish: worker.yml action=holat keys=peopleLog. gh=1 — eski usul (shu yerda bajarish).
+# only — faqat shu ismlar (vergul bilan); add — ro'yxatda yo'q yangi ismlar; per — bir odamga nechta; limit — jami; dry=1 — faqat hisobot; del/reg — JSON
 on:
   workflow_dispatch:
     inputs:
@@ -20,6 +22,8 @@ on:
         default: ""
       reg:
         default: ""
+      gh:
+        default: ""
 permissions:
   contents: read
 concurrency:
@@ -29,17 +33,27 @@ jobs:
   run:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+      ONLY: ${{ inputs.only }}
+      ADD: ${{ inputs.add }}
+      PER: ${{ inputs.per }}
+      LIMIT: ${{ inputs.limit }}
+      MAXP: ${{ inputs.maxp }}
+      DRY: ${{ inputs.dry }}
+      DEL: ${{ inputs.del }}
+      REG: ${{ inputs.reg }}
     steps:
-      - uses: actions/checkout@v4
-      - run: pip install -q requests pillow numpy onnxruntime
-      - env:
-          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-          ONLY: ${{ inputs.only }}
-          ADD: ${{ inputs.add }}
-          PER: ${{ inputs.per }}
-          LIMIT: ${{ inputs.limit }}
-          MAXP: ${{ inputs.maxp }}
-          DRY: ${{ inputs.dry }}
-          DEL: ${{ inputs.del }}
-          REG: ${{ inputs.reg }}
-        run: python3 people.py
+      - if: ${{ inputs.gh != '1' }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, urllib.request
+          key = hashlib.sha256(("ub-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:40]
+          job = {k: os.environ.get(k, "") for k in ("ONLY", "ADD", "PER", "LIMIT", "MAXP", "DRY", "DEL", "REG") if os.environ.get(k, "")}
+          rq = urllib.request.Request("https://gcw808-svg--inter-jobs-dispatch.modal.run", data=json.dumps({"wf": "people.yml", "job": json.dumps(job, ensure_ascii=False)}).encode(), headers={"x-key": key, "content-type": "application/json"})
+          print("modal:", urllib.request.urlopen(rq, timeout=60).read().decode()[:200])
+          PY
+      - if: ${{ inputs.gh == '1' }}
+        uses: actions/checkout@v4
+      - if: ${{ inputs.gh == '1' }}
+        run: pip install -q requests pillow numpy onnxruntime && python3 people.py

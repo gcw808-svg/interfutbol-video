@@ -10,6 +10,13 @@ import requests
 from PIL import Image
 import persons
 
+_LOG = []
+_print = print
+
+
+def print(*a, **k):  # jurnal Modal'da ishlaganda /ub/plog ga yuboriladi
+    _LOG.append(" ".join(str(x) for x in a)); _print(*a, **k)
+
 BOT = os.environ["BOT_TOKEN"]
 W = "https://inter-futbol-bot.gcw808.workers.dev"
 KEY = hashlib.sha256(("ub-" + BOT).encode()).hexdigest()[:40]
@@ -54,6 +61,10 @@ pn = lambda x: re.sub(r"[^a-z0-9]+", " ", __import__("unicodedata").normalize("N
 
 # 2-bosqich (2026-11-17): bizning klublar tarkibidagi boshqa futbolchilar
 PEOPLE += [(n, "", [n.split()[-1]] if len(n.split()) > 1 and len(n.split()[-1]) >= 5 else []) for n in """Aurélien Tchouaméni|Eduardo Camavinga|Éder Militão|Antonio Rüdiger|Dani Carvajal|Arda Güler|Trent Alexander-Arnold|Dean Huijsen|Gavi|Frenkie de Jong|Jules Koundé|Pau Cubarsí|Alejandro Balde|Dani Olmo|Fermín López|Ferran Torres|Marcus Rashford|Bernardo Silva|Rúben Dias|Joško Gvardiol|Omar Marmoush|Jérémy Doku|Tijjani Reijnders|Rayan Cherki|Dominik Szoboszlai|Alexis Mac Allister|Cody Gakpo|Hugo Ekitike|Ibrahima Konaté|Jeremie Frimpong|William Saliba|Gabriel Magalhães|Kai Havertz|Gabriel Martinelli|Leandro Trossard|David Raya|Martín Zubimendi|Eberechi Eze|Enzo Fernández|Moisés Caicedo|Reece James|Marc Cucurella|Pedro Neto|Bryan Mbeumo|Matheus Cunha|Benjamin Šeško|Kobbie Mainoo|Harry Maguire|Matthijs de Ligt|Amad Diallo|Jan Oblak|Koke|Alexander Sørloth|Nicolò Barella|Alessandro Bastoni|Marcus Thuram|Hakan Çalhanoğlu|Federico Dimarco|Yann Sommer|Denzel Dumfries|Mike Maignan|Christian Pulisic|Adrien Rabiot|Fikayo Tomori|Dušan Vlahović|Gleison Bremer|Manuel Locatelli|Francisco Conceição|Jonathan David|Manuel Neuer|Joshua Kimmich|Alphonso Davies|Dayot Upamecano|Luis Díaz|Serge Gnabry|Leon Goretzka|Serhou Guirassy|Gregor Kobel|Karim Adeyemi|Julian Brandt|Nico Schlotterbeck|Vitinha|João Neves|Marquinhos|Désiré Doué|Bradley Barcola|Nuno Mendes|Warren Zaïre-Emery|Lucas Chevalier|Niclas Füllkrug|Patrik Schick|Senne Lammens|Sergio Busquets|Jordi Alba|Rodrigo De Paul|Sadio Mané|Marcelo Brozović|João Félix|Karim Benzema|Toni Kroos|Thomas Müller|Sergio Ramos|Zlatan Ibrahimović|Erik ten Hag|Xavi Hernández|Simone Inzaghi|Roberto Mancini|Unai Emery|Eddie Howe|Ange Postecoglou|Oliver Glasner|Andoni Iraola|Marcelo Bielsa|Lionel Scaloni|Roberto De Zerbi|Luciano Spalletti|Gennaro Gattuso|Roberto Martínez|Ronald Koeman|Luis de la Fuente|Srečko Katanec""".split("|")]
+# 3-bosqich (2026-11-18, Bahtiyor aka: "bazani yana to'ldir"): klublarning qolgan futbolchilari, terma jamoa yulduzlari, murabbiylar
+PEOPLE += [(n, "", [n.split()[-1]] if len(n.split()) > 1 and len(n.split()[-1]) >= 5 else []) for n in """Mason Mount|Luke Shaw|Lisandro Martínez|Leny Yoro|Diogo Dalot|Noussair Mazraoui|Casemiro|Manuel Ugarte|Joshua Zirkzee|Rasmus Højlund|André Onana|Alejandro Garnacho|Jadon Sancho|Mason Greenwood|Scott McTominay|Romelu Lukaku|Paul Pogba|David de Gea|Raphaël Varane|Jack Grealish|Ederson|John Stones|Kyle Walker|Nathan Aké|Mateo Kovačić|İlkay Gündoğan|Savinho|Andrew Robertson|Joe Gomez|Curtis Jones|Ryan Gravenberch|Wataru Endo|Harvey Elliott|Federico Chiesa|Darwin Núñez|Giorgi Mamardashvili|Milos Kerkez|Ben White|Jurriën Timber|Riccardo Calafiori|Thomas Partey|Jorginho|Gabriel Jesus|Mikel Merino|Noni Madueke|Ethan Nwaneri|Myles Lewis-Skelly|Levi Colwill|Wesley Fofana|Malo Gusto|Roméo Lavia|Nicolas Jackson|Christopher Nkunku|Liam Delap|Estêvão|Dani Ceballos|Brahim Díaz|Ferland Mendy|David Alaba|Lucas Vázquez|Andriy Lunin|Franco Mastantuono|Ronald Araújo|Andreas Christensen|Iñigo Martínez|Marc Casadó|Ansu Fati|Wojciech Szczęsny|José María Giménez|Marcos Llorente|Conor Gallagher|Álex Baena|Giuliano Simeone|Robin Le Normand|Nahuel Molina|Thiago Almada|Henrikh Mkhitaryan|Francesco Acerbi|Stefan de Vrij|Benjamin Pavard|Davide Frattesi|Piotr Zieliński|Mehdi Taremi|Theo Hernández|Ruben Loftus-Cheek|Santiago Giménez|Strahinja Pavlović|Alexis Saelemaekers|Andrea Cambiaso|Weston McKennie|Teun Koopmeiners|Federico Gatti|Khéphren Thuram|Loïs Openda|Kingsley Coman|Leroy Sané|Konrad Laimer|Aleksandar Pavlović|Jonathan Tah|Kim Min-jae|Raphaël Guerreiro|Emre Can|Marcel Sabitzer|Niklas Süle|Felix Nmecha|Pascal Groß|Jobe Bellingham|Maximilian Beier|Gonçalo Ramos|Lee Kang-in|Fabián Ruiz|Lucas Hernández|Willian Pacho|Illia Zabarnyi|Nico Williams|Mikel Oyarzabal|Álvaro Morata|Unai Simón|Granit Xhaka|Xavi Simons|Memphis Depay|Youri Tielemans|Christian Eriksen|Pierre-Emile Højbjerg|Takefusa Kubo|Kaoru Mitoma|Salem Al-Dawsari|Akram Afif|Mohammed Kudus|Riyad Mahrez|Yassine Bounou|Hakim Ziyech|Sofyan Amrabat|Victor Boniface|Ademola Lookman|Tyler Adams|Folarin Balogun|Giovanni Reyna|James Rodríguez|Emiliano Martínez|Ángel Di María|Paulo Dybala|Nicolás Otamendi|Cristian Romero|Bruno Guimarães|Lucas Paquetá|Richarlison|Antony|João Pedro|Javier Mascherano|Thomas Frank|Nuno Espírito Santo|David Moyes|Marco Silva|Fabian Hürzeler|Niko Kovač|Kasper Hjulmand|Sebastian Hoeneß|Cristian Chivu|Igor Tudor|Gian Piero Gasperini|Maurizio Sarri|Stefano Pioli|Vincenzo Italiano|Manuel Pellegrini|Ernesto Valverde|Sérgio Conceição|Jorge Jesus|Hervé Renard|Walid Regragui|Dorival Júnior|Jesse Marsch|Ralf Rangnick|Murat Yakin|Zlatko Dalić|Vincenzo Montella|Domenico Tedesco|Rudi Garcia|Michael Carrick|Rúben Amorim|Graham Potter|Gareth Southgate|Steven Gerrard|Frank Lampard|Wayne Rooney|Xavi|Thiago Motta|Roberto Mancini""".split("|") if n not in [p[0] for p in PEOPLE]]
+# o'zbek futbolchilari: (kanaldagi yozilishi, Wikidata qidiruv so'zi)
+PEOPLE += [(a, b, [a.split()[-1]]) for a, b in [("Husniddin Aliqulov", "Khusniddin Alikulov"), ("Dostonbek Hamdamov", "Dostonbek Khamdamov"), ("O'tkir Yusupov", "Utkir Yusupov"), ("Farrux Sayfiyev", "Farrukh Sayfiev"), ("Sherzod Nasrullayev", "Sherzod Nasrullaev"), ("Azizbek Turg'unboyev", "Azizbek Turgunboev"), ("Xojimat Erkinov", "Khojimat Erkinov"), ("Jamshid Iskandarov", "Jamshid Iskanderov"), ("Akmal Mozgovoy", "Akmal Mozgovoy"), ("Oston O'runov", "Oston Urunov"), ("Odiljon Hamrobekov", "Odiljon Hamrobekov"), ("Umarali Rahmonaliyev", "Umarali Rakhmonaliev"), ("Sherzod Esanov", "Sherzod Esanov"), ("Mirjalol Qosimov", "Mirjalol Qosimov"), ("Vitaliy Denisov", "Vitaliy Denisov"), ("Anzur Ismoilov", "Anzur Ismailov"), ("Abbos Fayzullayev", "Abbosbek Fayzullaev")][:16]]
 # afsonalar (tarixiy faktlar uchun) — eski suratlar ham olinadi
 LEGENDS = """Diego Maradona|Ronaldinho|Ronaldo Nazário|David Beckham|Thierry Henry|Andrés Iniesta|Gianluigi Buffon|Paolo Maldini|Francesco Totti|Andrea Pirlo|Kaká|Wayne Rooney|Steven Gerrard|Frank Lampard|Carles Puyol|Iker Casillas|Bastian Schweinsteiger|Arjen Robben|Franck Ribéry|Robin van Persie|Dennis Bergkamp|Eric Cantona|Ryan Giggs|Paul Scholes|Alex Ferguson|Arsène Wenger|Roberto Baggio|Alessandro Del Piero|Javier Zanetti|Raúl González|Luís Figo|Roberto Carlos|Cafu|Rivaldo|Samuel Eto'o|Didier Drogba|Fernando Torres|David Villa|Xabi Alonso|Philipp Lahm|Miroslav Klose|Oliver Kahn|Michael Ballack|Andriy Shevchenko|Pavel Nedvěd|Clarence Seedorf|Patrick Vieira|Petr Čech|John Terry|Rio Ferdinand|Michael Owen|Alan Shearer|Gary Lineker|Fabio Capello|Marcello Lippi|Vicente del Bosque|Louis van Gaal|Guus Hiddink|Rafael Benítez|Claudio Ranieri|Zinedine Zidane""".split("|")
 PEOPLE += [(n, "", [n.split()[-1]] if len(n.split()) > 1 and len(n.split()[-1]) >= 5 else []) for n in LEGENDS if n not in [p[0] for p in PEOPLE]]
@@ -168,18 +179,30 @@ def main():
     if os.environ.get("REG"):  # kanalga tushgan, lekin bazaga yozilmay qolgan suratlarni ro'yxatga olish: REG = JSON (faceaddm items)
         print("baza:", requests.post(W + "/ub/faceaddm", headers=H, data=json.dumps({"items": json.loads(os.environ["REG"])}), timeout=60).text[:120])
     if os.environ.get("DEL"):
-        return delete()
-    if os.environ.get("REG"):
-        return
+        delete()
+    if os.environ.get("REG") or os.environ.get("DEL"):
+        return report()
     have = requests.get(W + "/ub/faces", headers=H, timeout=30).json()
     seen = set(x.strip() for x in open("people_seen.txt", encoding="utf-8").read().split("\n") if x.strip()) if os.path.exists("people_seen.txt") else set()
     seen |= {p.get("wt") for P in have.values() for p in P.get("ph", []) if p.get("wt")}
+    try:
+        seen |= set(requests.get(W + "/ub/pseen", headers=H, timeout=30).json())
+    except Exception as e_:
+        print("pseen o'qilmadi", str(e_)[:80])
+    picked = []
     only = [x.strip().lower() for x in os.environ.get("ONLY", "").split(",") if x.strip()]
     extra = [(x.strip(), "", []) for x in os.environ.get("ADD", "").split(",") if x.strip()]
     items, total = [], 0
+    t0, st = time.time(), {"done": 0}
+    def flush(force=False):  # bazaga bo'lib-bo'lib yoziladi — ish vaqt chegarasida uzilsa ham kanalga tushgan suratlar bazasiz qolmaydi
+        if len(items) - st["done"] >= (1 if force else 40):
+            print("baza:", requests.post(W + "/ub/faceaddm", headers=H, data=json.dumps({"items": items[st["done"]:]}), timeout=60).text[:120]); st["done"] = len(items)
     for name, term, al in extra + PEOPLE:
         if total >= LIMIT:
             break
+        if time.time() - t0 > float(os.environ.get("MAXSEC", "2700")):
+            print("vaqt chegarasi — to'xtatildi:", name); break
+        flush()
         if only and name.lower() not in only:
             continue
         cur = len((have.get(pn(name)) or {}).get("ph", []))
@@ -217,7 +240,7 @@ def main():
                     continue
                 credit = f"Foto: {c['art']}, {c['lic']}"
                 print("+", name, "|", c["t"], c["y"], f"{im.width}x{im.height}", "|", credit)
-                got += 1; total += 1; days.add(c["d"])
+                got += 1; total += 1; days.add(c["d"]); picked.append(c["t"])
                 if DRY:
                     continue
                 buf = io.BytesIO(); im.save(buf, "JPEG", quality=93, subsampling=0)
@@ -233,10 +256,24 @@ def main():
         except Exception as ex_:
             print("-", name, "xato", str(ex_)[:120])
         time.sleep(0.4)
-    for k in range(0, len(items), 150):  # worker bir so'rovda 200 tagacha oladi
-        print("baza:", requests.post(W + "/ub/faceaddm", headers=H, data=json.dumps({"items": items[k:k + 150]}), timeout=60).text[:120])
+    flush(True)
     print("ITEMS", json.dumps([{k: it[k] for k in ("name", "f", "uid", "m", "wt")} for it in items]))
     print("qo'shildi:", len(items))
+    if not DRY:
+        try:  # ko'rilgan fayllar KV'da (olib tashlanganlari qayta kelmasin)
+            print("pseen:", requests.post(W + "/ub/pseen", headers=H, data=json.dumps({"add": sorted(seen | set(picked))}), timeout=60).text[:60])
+        except Exception as e_:
+            print("pseen yozilmadi", str(e_)[:80])
+    report(items)
+
+
+def report(items=None):
+    if os.environ.get("REPORT") != "1":
+        return
+    try:
+        _print("plog:", requests.post(W + "/ub/plog", headers=H, data=json.dumps({"t": time.strftime("%Y-%m-%d %H:%M:%S"), "items": items or [], "log": _LOG[-1500:]}, ensure_ascii=False).encode(), timeout=60).text[:60])
+    except Exception as e_:
+        _print("plog yozilmadi", str(e_)[:80])
 
 
 if __name__ == "__main__":

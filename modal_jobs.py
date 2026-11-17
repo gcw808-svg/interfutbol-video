@@ -11,7 +11,7 @@ app = modal.App("inter-jobs")
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("fonts-dejavu-core", "curl", "unzip")
-    .pip_install("pillow==10.4.0", "fastapi[standard]", "telethon", "cryptg", "numpy", "onnxruntime")
+    .pip_install("pillow==10.4.0", "fastapi[standard]", "telethon", "cryptg", "numpy", "onnxruntime", "requests")
     .run_commands(
         # GitHub'dagi bilan bir xil shriftlar: Inter 4.1 va Oswald (@fontsource 5.3.0)
         "curl -sSL --retry 3 -o /tmp/inter.zip https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip"
@@ -24,6 +24,11 @@ image = (
     .add_local_file("models/realesr-general-x4v3.onnx", "/root/models/realesr-general-x4v3.onnx")  # sifat oshiruvchi (card.py _sr)
     .add_local_file("card.py", "/root/card.py")
     .add_local_file("ub.py", "/root/ub.py")
+    # odamlar roboti (people.py) — GitHub daqiqalarini tejash uchun shu yerda ishlaydi (2026-11-18)
+    .add_local_file("models/yolox_tiny.onnx", "/root/models/yolox_tiny.onnx")
+    .add_local_file("persons.py", "/root/persons.py")
+    .add_local_file("people_seen.txt", "/root/people_seen.txt")
+    .add_local_file("people.py", "/root/people.py")
 )
 SECRETS = [modal.Secret.from_name("inter-jobs")]
 
@@ -49,6 +54,21 @@ def run_ub(job: str):
     asyncio.run(ub.post(job))
 
 
+@app.function(image=image, secrets=SECRETS, timeout=3600, cpu=2.0)
+def run_people(job: str):
+    # job — JSON: people.yml kirishlari (ONLY, ADD, PER, LIMIT, MAXP, DRY, DEL, REG); natija /ub/plog ga yoziladi
+    import json
+    import runpy
+    import sys
+
+    for k, v in json.loads(job).items():
+        os.environ[str(k).upper()] = str(v)
+    os.environ["REPORT"] = "1"
+    os.chdir("/root")
+    sys.path.insert(0, "/root")
+    runpy.run_path("/root/people.py", run_name="__main__")
+
+
 @app.function(image=image, secrets=SECRETS, timeout=60)
 @modal.fastapi_endpoint(method="POST")
 async def dispatch(request: Request):
@@ -62,6 +82,8 @@ async def dispatch(request: Request):
         await run_card.spawn.aio(job)
     elif wf == "ubpost.yml":
         await run_ub.spawn.aio(job)
+    elif wf == "people.yml":
+        await run_people.spawn.aio(job)
     else:
         return Response(status_code=400)
     return {"ok": True}
