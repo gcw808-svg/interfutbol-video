@@ -310,6 +310,67 @@ def place(sents, heard, durs):
     return out
 
 
+def reconcile(sub, heard):
+    # MATNNI OVOZGA MOSLAB TUZATISH (Bahtiyor aka, 2026-11-19: "sarlavha yoki boshqa so'zlar qolib ketgan yoki qo'shilgan bo'lishi mumkin — hammasini tahlil qilsin").
+    # Diktor matndan chetga chiqqan joylar aniqlanadi: o'qilmay tashlab ketilgan so'zlar matndan olinadi, qo'shib o'qilgan so'zlar matnga qo'shiladi.
+    # Imlo doim Word'dan olinadi; eshitilgan matn faqat QAYSI so'zlar aytilganini bildiradi. O'xshash so'zlar (eshitishdagi mayda xato) o'zgartirilmaydi.
+    import difflib
+    toks, sid = [], []
+    for si, t in enumerate(sub):
+        for o in t.split():
+            toks.append(o)
+            sid.append(si)
+    A, back = [], []
+    for ti, o in enumerate(toks):
+        for wd in nkey(o).split():
+            A.append(wd)
+            back.append(ti)
+    H = nkey(heard).split()
+    if len(H) < 4 or not A:
+        return list(sub), [], []
+    sm = difflib.SequenceMatcher(None, A, H, autojunk=False)
+    if sm.ratio() < 0.8:  # eshitish ishonchsiz — matnga tegilmaydi
+        return list(sub), [], []
+    drop_w = [False] * len(A)
+    ins = {}  # token index -> qo'shiladigan so'zlar (shu tokendan KEYIN); -1 — eng boshiga
+    dropped, added = [], []
+    for tag, i1, i2, j1, j2 in sm.get_opcodes():
+        if tag == "equal":
+            continue
+        a_, h_ = A[i1:i2], H[j1:j2]
+        if tag == "replace":
+            if difflib.SequenceMatcher(None, " ".join(a_), " ".join(h_), autojunk=False).ratio() >= 0.5:
+                continue  # bir xil so'zning boshqacha eshitilishi
+        if tag in ("delete", "replace") and len("".join(a_)) >= 3:
+            for q in range(i1, i2):
+                drop_w[q] = True
+        if tag in ("insert", "replace") and len("".join(h_)) >= 3:
+            at = back[i1 - 1] if i1 > 0 else -1
+            ins.setdefault(at, []).extend(h_)
+            added.append(" ".join(h_))
+    per = {}
+    for q, ti in enumerate(back):
+        per.setdefault(ti, []).append(drop_w[q])
+    gone = {ti for ti, fl in per.items() if all(fl)}
+    run = []
+    for ti in range(len(toks)):
+        if ti in gone:
+            run.append(toks[ti])
+        elif run:
+            dropped.append(" ".join(run)); run = []
+    if run:
+        dropped.append(" ".join(run))
+    out = [[] for _ in sub]
+    if -1 in ins and sub:
+        out[0].extend(ins[-1])
+    for ti, o in enumerate(toks):
+        if ti not in gone:
+            out[sid[ti]].append(o)
+        if ti in ins:
+            out[sid[ti]].extend(ins[ti])
+    return [" ".join(x) for x in out], dropped, added
+
+
 def silences(w):
     r = subprocess.run(["ffmpeg", "-hide_banner", "-i", w, "-af", "silencedetect=noise=-34dB:d=0.22", "-f", "null", "-"], capture_output=True, text=True).stderr
     st = [float(x) for x in re.findall(r"silence_start: ([0-9.]+)", r)]
@@ -357,8 +418,16 @@ def process_set(wavs, doc, out_dir, model_name="medium", lang="uz", device=None,
     os.makedirs(out_dir, exist_ok=True)
     rows, rep, n, used = [], [], 0, set()
     for k, (w, x) in enumerate(zip(wavs, pl), 1):
-        sub = sents[x["s"]:x["e"]]
+        sub0 = sents[x["s"]:x["e"]]
         used.update(range(x["s"], x["e"]))
+        sub, dr, ad = reconcile(sub0, x["heard"])
+        keep = [i4 for i4, t in enumerate(sub) if t.strip()]  # butunlay o'qilmagan gap bo'lakka kirmaydi
+        sub = [sub[i4] for i4 in keep]
+        if not sub:
+            sub, dr, ad = list(sub0), [], []
+        if dr or ad:
+            fixed.append(f"{k:03d}")
+            print(f"  tuzatildi {k}: tashlab ketilgan={dr} qo'shilgan={ad}", flush=True)
         print(f"fayl {k} ({durs[k-1]:.0f}s): gaplar {x['s']+1}-{x['e']} mos={x['fit']} oxsh={x['sim']} | {' '.join(sub)[:70]} || {x['heard'][:60]}", flush=True)
         for a, b, i0, i1 in split_file(w, sub, durs[k - 1]):
             n += 1
@@ -366,21 +435,21 @@ def process_set(wavs, doc, out_dir, model_name="medium", lang="uz", device=None,
             subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-ss", f"{a:.3f}", "-to", f"{b:.3f}", "-i", w, "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", os.path.join(out_dir, fn)], check=True)
             txt = " ".join(sub[i0:i1])
             rows.append([fn, txt, " ".join(spoken(t) for t in sub[i0:i1]), f"{k:03d}", f"{a:.2f}", f"{b:.2f}", f"{x['fit']:.2f}"])
-        rep.append([f"{k:03d}", f"{durs[k-1]:.1f}", f"{x['s'] + 1}-{x['e']}", f"{x['fit']:.2f}", "" if x["sim"] is None else f"{x['sim']:.2f}", " ".join(sub)[:400], x["heard"][:300]])
+        rep.append([f"{k:03d}", f"{durs[k-1]:.1f}", f"{x['s'] + 1}-{x['e']}", f"{x['fit']:.2f}", "" if x["sim"] is None else f"{x['sim']:.2f}", "; ".join(dr), "; ".join(ad), " ".join(sub)[:400], x["heard"][:300]])
     with open(os.path.join(out_dir, "metadata.csv"), "w", encoding="utf-8", newline="") as f:
         cw = csv.writer(f, delimiter="|")
         cw.writerow(["fayl", "matn", "oqilishi", "manba_ovoz", "boshi", "oxiri", "moslik"])
         cw.writerows(rows)
     with open(os.path.join(out_dir, "hisobot.csv"), "w", encoding="utf-8", newline="") as f:
         cw = csv.writer(f, delimiter="|")
-        cw.writerow(["ovoz_fayli", "soniya", "matndagi_gaplar", "moslik(1=aniq)", "oxshashlik", "matn", "eshitilgani"])
+        cw.writerow(["ovoz_fayli", "soniya", "matndagi_gaplar", "moslik(1=aniq)", "oxshashlik", "oqilmay_qolgan_sozlar", "qoshib_oqilgan_sozlar", "tuzatilgan_matn", "eshitilgani"])
         cw.writerows(rep)
     skipped = meta + [sents[i3] for i3 in range(len(sents)) if i3 not in used]
     with open(os.path.join(out_dir, "oqilmagan.txt"), "w", encoding="utf-8") as f:
         f.write("\n".join(skipped))
     dur = sum(float(r[5]) - float(r[4]) for r in rows)
     weak = [[r[0], r[3]] for r in rep if abs(float(r[3]) - 1) > 0.22 or (r[4] and float(r[4]) < 0.45)]
-    return {"n": len(rows), "sec": round(dur), "sents": len(sents), "files": len(wavs), "weak": weak, "miss": [], "skipped": len(skipped), "lown": len(weak), "lost": len(skipped)}
+    return {"fixed": fixed, "n": len(rows), "sec": round(dur), "sents": len(sents), "files": len(wavs), "weak": weak, "miss": [], "skipped": len(skipped), "lown": len(weak), "lost": len(skipped)}
 
 
 def is_audio(m):
@@ -469,9 +538,11 @@ async def run(job_id):
             cap += "\nEshitib tekshirish kerak (matn uzunligi ovozga unchalik mos emas): " + ", ".join(f"{a}-fayl" for a, b in r["weak"][:14]) + "."
         if r["skipped"]:
             cap += f"\nMatndagi {r['skipped']} ta qator o'qilmagan deb topildi (ro'yxati ZIP ichida: oqilmagan.txt)."
+        if r.get("fixed"):
+            cap += f"\nMatn ovozga moslab tuzatildi ({len(r['fixed'])} ta faylda so'z tashlab ketilgan yoki qo'shib o'qilgan): {', '.join(r['fixed'][:14])}-fayl. Tafsiloti hisobot.csv da."
         cap += "\nZIP ichida: bo'laklar, metadata.csv, hisobot.csv (qaysi ovoz qaysi matnga tushgani)."
         m = await c.send_file(ch, zp, caption=cap[:1000], reply_to=did, force_document=True)
-        wapi("/ub/dkres", {"id": job_id, "ok": 1, "zip": m.id, "first": min(x.id for x in auds), "last": max(x.id for x in auds), **{k: v for k, v in r.items() if k not in ("weak", "miss")}, "weak": len(r["weak"]), "miss": len(r["miss"])})
+        wapi("/ub/dkres", {"id": job_id, "ok": 1, "zip": m.id, "first": min(x.id for x in auds), "last": max(x.id for x in auds), **{k: v for k, v in r.items() if k not in ("weak", "miss", "fixed")}, "fixed": len(r.get("fixed") or []), "weak": len(r["weak"]), "miss": len(r["miss"])})
         await c.disconnect()
     except Exception as e:
         try:
