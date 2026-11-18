@@ -3133,6 +3133,16 @@ async function ubRoute(env, req, url) {
   // ODAMLAR ROBOTI MODAL'DA (2026-11-18): hisobot (jurnal + qo'shilgan suratlar) va ko'rilgan fayllar ro'yxati KV'da — GitHub jurnali o'rniga
   if (url.pathname === "/ub/plog" && req.method === "POST") { await env.STATE.put("peopleLog", (await req.text()).slice(0, 900000), { expirationTtl: 14 * 86400 }); return J({ ok: true }); }
   if (url.pathname === "/ub/pseen") { if (req.method === "POST") { const b0 = await req.json().catch(() => ({})); const cur = await kvGet(env, "peopleSeen", []); const all = [...new Set([...cur, ...(Array.isArray(b0.add) ? b0.add.map(String) : [])])].slice(-6000); await kvPut(env, "peopleSeen", all); return J({ ok: true, n: all.length }); } return J(await kvGet(env, "peopleSeen", [])); }
+  // sinov: ovoz + matn faylini diktor boti nomidan kanalga tashlab, moslashni ishga tushiradi (dktest.yml) — butun zanjirni tekshirish uchun
+  if (url.pathname === "/ub/dktest" && req.method === "POST") {
+    const b0 = await req.json().catch(() => ({})); const tok = await kvGet(env, "dkToken", ""); if (!tok || !b0.audio || !b0.doc) return J({ ok: false, why: "kalit yoki fayl yo'q" });
+    const bin = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+    const send = async (bytes, name, mime, cap) => { const fd = new FormData(); fd.append("chat_id", String(DK_CHAT)); fd.append("caption", cap); fd.append("disable_notification", "true"); fd.append("document", new Blob([bytes], { type: mime }), name); return (await fetch(`https://api.telegram.org/bot${tok}/sendDocument`, { method: "POST", body: fd })).json(); };
+    const ra = await send(bin(b0.audio), b0.an || "sinov.mp3", "audio/mpeg", "SINOV — tizimni tekshirish uchun (o'chirib tashlasa bo'ladi)"); const rd = await send(bin(b0.doc), b0.dn || "sinov.txt", "text/plain", "SINOV matni");
+    if (!ra.ok || !rd.ok) return J({ ok: false, why: (ra.description || "") + " " + (rd.description || "") });
+    const B = await kvGet(env, "dkBase", []); const a = ra.result.audio || ra.result.document || {}; const e = { m: ra.result.message_id, f: a.file_id, k: "file", d: a.duration || 0, sz: a.file_size || 0, t: "", at: Date.now(), test: 1 }; B.push(e);
+    await dkAlignStart(env, tok, B, e, rd.result.message_id); return J({ ok: true, a: e.m, d: rd.result.message_id, job: e.job });
+  }
   if (url.pathname === "/ub/dkjob") { const j = await kvGet(env, "dkj:" + url.searchParams.get("id"), null); return J(j ? { ...j, chat: DK_CHAT, session: await kvGet(env, "usess", null) } : {}); }
   if (url.pathname === "/ub/dkres" && req.method === "POST") {
     const b0 = await req.json().catch(() => ({})); const B = await kvGet(env, "dkBase", []); const e = B.find((x) => x.job === b0.id); const tok = await kvGet(env, "dkToken", "");

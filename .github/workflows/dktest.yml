@@ -1,0 +1,22 @@
+name: dktest
+# Inter Diktor: moslash zanjirini sinash — tests/dk dagi sinov ovozi va matnini kanalga tashlab, moslashni ishga tushiradi (natija kanalga ZIP bo'lib tushadi)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import base64, hashlib, json, os, urllib.request
+          key = hashlib.sha256(("ub-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:40]
+          body = {"audio": base64.b64encode(open("tests/dk/sinov.mp3", "rb").read()).decode(), "doc": base64.b64encode(open("tests/dk/sinov.txt", "rb").read()).decode()}
+          rq = urllib.request.Request("https://inter-futbol-bot.gcw808.workers.dev/ub/dktest", data=json.dumps(body).encode(), headers={"x-key": key, "content-type": "application/json", "user-agent": "InterDiktorTest"})
+          print(urllib.request.urlopen(rq, timeout=120).read().decode()[:300])
+          PY
