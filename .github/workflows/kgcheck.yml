@@ -1,0 +1,15 @@
+name: kgcheck
+# Kaggle ulanishi va bepul videokarta vaqtini tekshirish (kalit chiqarilmaydi)
+on:
+  workflow_dispatch:
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: pip install -q "kaggle>=1.8" six
+      - env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: |
+          kaggle kernels list --mine --page-size 10 2>&1 | cut -c1-160 | head -14 || true
+          kaggle kernels status baxtiyoraxrarov/notebookdb9f80e52d 2>&1 | cut -c1-200 | head -3 || true
