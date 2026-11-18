@@ -34,7 +34,9 @@ def docx_text(path):
                 print("P>", repr(ptext(p))[:150], "| uslub:", (p.style.name if p.style is not None else ""), flush=True)
             for p in d.paragraphs:
                 if "Edgar Davids" in p.text and "Birinchi" in p.text:
-                    print("XML>", re.sub(r"\s+", " ", p._p.xml)[:1600], flush=True)
+                    xx = re.sub(r"\s+", " ", p._p.xml)
+                    ii = xx.find("Edgar Davids")
+                    print("XML>", xx[max(0, ii - 300):ii + 700], flush=True)
                     break
         paras = []
         for p in d.paragraphs:
