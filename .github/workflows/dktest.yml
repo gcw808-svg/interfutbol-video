@@ -25,6 +25,13 @@ jobs:
           python3 - <<'PY'
           import base64, hashlib, json, os, urllib.request
           key = hashlib.sha256(("ub-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:40]
+          if os.environ.get("DOC", "").startswith("del:"):
+              ids = []
+              for part in os.environ["DOC"][4:].split(","):
+                  a, _, b = part.partition("-")
+                  ids += list(range(int(a), int(b or a) + 1))
+              rq = urllib.request.Request("https://inter-futbol-bot.gcw808.workers.dev/ub/dkdel", data=json.dumps({"ids": ids, "old": 1}).encode(), headers={"x-key": key, "content-type": "application/json", "user-agent": "dktest"})
+              print("tozalash:", urllib.request.urlopen(rq, timeout=60).read().decode()[:300]); raise SystemExit(0)
           if os.environ.get("DOC") == "ping":
               rq = urllib.request.Request("https://inter-futbol-bot.gcw808.workers.dev/ub/dkping", headers={"x-key": key, "user-agent": "dktest"})
               print("ping:", urllib.request.urlopen(rq, timeout=60).read().decode()[:400]); raise SystemExit(0)
