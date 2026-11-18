@@ -164,7 +164,7 @@ async def run(job_id):
         dp = await c.download_media(md, file="/tmp/dk/")
         if not str(dp).lower().endswith((".docx", ".txt")):
             raise Exception("matn fayli .docx yoki .txt bo'lishi kerak")
-        r = process(ap, dp, "/tmp/dk/seg")
+        r = process(ap, dp, "/tmp/dk/seg", os.environ.get("DK_MODEL", "medium"))
         zp = f"/tmp/dk/toplam_{j['a']}.zip"
         with zipfile.ZipFile(zp, "w", zipfile.ZIP_STORED) as z:
             for fn in sorted(os.listdir("/tmp/dk/seg")):

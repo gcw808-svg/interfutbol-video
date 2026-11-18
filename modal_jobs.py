@@ -63,7 +63,9 @@ def run_ub(job: str):
     asyncio.run(ub.post(job))
 
 
-@app.function(image=dk_image, secrets=SECRETS, timeout=3600, gpu="T4", volumes={"/root/.cache/whisper": dk_models})
+# Modal hisobida to'lov usuli yo'q — videokarta (GPU) berilmaydi, shuning uchun protsessorda ishlaydi (sekinroq: 10 daqiqalik yozuv ~10–20 daqiqa).
+# Karta ulansa: gpu="T4" qo'shib, DK_MODEL ni "large-v3" qilish mumkin.
+@app.function(image=dk_image, secrets=SECRETS, timeout=3600, cpu=8.0, memory=12288, volumes={"/root/.cache/whisper": dk_models})
 def run_dkalign(job: str):
     import asyncio
     import sys
