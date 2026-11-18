@@ -17,7 +17,22 @@ def docx_text(path):
     else:
         import docx
         d = docx.Document(path)
-        paras = [(p.text, (p.style.name if p.style is not None else "") or "") for p in d.paragraphs]
+        def ptext(p):  # satr uzilishi (Shift+Enter) bo'sh joysiz yopishib qolmasligi uchun: sarlavha va matn bitta xatboshida kelgan hujjatlar bor
+            o = []
+            for el in p._p.iter():
+                tg = el.tag.rsplit("}", 1)[-1]
+                if tg == "t":
+                    o.append(el.text or "")
+                elif tg in ("br", "cr"):
+                    o.append("\n")
+                elif tg == "tab":
+                    o.append(" ")
+            return "".join(o)
+        paras = []
+        for p in d.paragraphs:
+            stn = (p.style.name if p.style is not None else "") or ""
+            for ln in ptext(p).split("\n"):
+                paras.append((ln, stn))
     out = []
     for t, st in paras:
         t = (t or "").strip()
@@ -27,6 +42,9 @@ def docx_text(path):
         if re.match(r"\s*o['‘’ʻʼ`]?qima\b", t, re.I):
             continue
         t = re.sub(r"\s+", " ", t).strip()
+        # qisqa, oxirida tinish belgisi yo'q qator — bo'lim sarlavhasi ("Edgar Davids", "Petr Chex"): diktor uni o'qimaydi
+        if t and len(t.split()) <= 8 and not re.search(r"[.!?…:;,»”\"]$", t):
+            continue
         if t:
             out.append(t)
     return out
@@ -151,22 +169,34 @@ def nkey(t):
     return re.sub(r"[^a-z0-9]+", " ", t).strip()
 
 
-def hear(wavs, lang="uz"):
-    # har bir ovoz faylida nima deyilganini taxminan eshitish (matndagi joyini topish uchun; aniq matn Word'dan olinadi)
-    out = []
-    try:
-        from faster_whisper import WhisperModel
-        fw = WhisperModel(os.environ.get("DK_HEAR", "medium"), device="cpu", compute_type="int8", cpu_threads=8, download_root="/root/.cache/whisper/fw")
-        for w in wavs:
-            segs, _ = fw.transcribe(w, language=lang, beam_size=2, temperature=0.0, condition_on_previous_text=False, vad_filter=False, no_speech_threshold=None, log_prob_threshold=None, compression_ratio_threshold=None)
-            out.append(" ".join(x.text.strip() for x in segs))
-        del fw
-    except Exception as e:
-        print("faster-whisper ishlamadi:", str(e)[:200], flush=True)
-        import stable_whisper
-        m = stable_whisper.load_model(os.environ.get("DK_MODEL", "medium"))
-        out = [m.transcribe(w, language=lang, beam_size=1, condition_on_previous_text=False, verbose=None).text for w in wavs]
-    return out
+def hear(wavs, lang="uz", keys=None):
+    # har bir ovoz faylida nima deyilganini taxminan eshitish (matndagi joyini topish uchun; aniq matn Word'dan olinadi).
+    # Natija diskda saqlanadi (keys — faylning o'zgarmas belgisi): qayta moslashda 15 daqiqalik eshitish takrorlanmaydi.
+    cdir = "/root/.cache/whisper/heard"
+    os.makedirs(cdir, exist_ok=True)
+    out = [None] * len(wavs)
+    for i, k in enumerate(keys or []):
+        fp = os.path.join(cdir, k + ".txt")
+        if os.path.exists(fp):
+            out[i] = open(fp, encoding="utf-8").read()
+    todo = [i for i in range(len(wavs)) if out[i] is None]
+    if todo:
+        try:
+            from faster_whisper import WhisperModel
+            fw = WhisperModel(os.environ.get("DK_HEAR", "medium"), device="cpu", compute_type="int8", cpu_threads=8, download_root="/root/.cache/whisper/fw")
+            for i in todo:
+                segs, _ = fw.transcribe(wavs[i], language=lang, beam_size=2, temperature=0.0, condition_on_previous_text=False, vad_filter=False, no_speech_threshold=None, log_prob_threshold=None, compression_ratio_threshold=None)
+                out[i] = " ".join(x.text.strip() for x in segs)
+                print(f"eshitildi {i + 1}/{len(wavs)}", flush=True)
+            del fw
+        except Exception as e:
+            print("faster-whisper ishlamadi:", str(e)[:200], flush=True)
+            for i in todo:
+                out[i] = out[i] or ""
+        for i in todo:
+            if keys:
+                open(os.path.join(cdir, keys[i] + ".txt"), "w", encoding="utf-8").write(out[i] or "")
+    return [x or "" for x in out]
 
 
 def wav_dur(w):
@@ -278,14 +308,14 @@ def split_file(w, sub, dur, mx=16.0):
     return parts
 
 
-def process_set(wavs, doc, out_dir, model_name="medium", lang="uz", device=None):
+def process_set(wavs, doc, out_dir, model_name="medium", lang="uz", device=None, keys=None):
     # wavs — tartib bilan 24 kHz mono fayllar. Natija: bo'laklar, metadata.csv, hisobot.csv va oqilmagan.txt
     allsents = sentences(docx_text(doc))
     # "Mavzu: …", "YouTube uchun sarlavha: …", "Teglar: …" kabi yorliqli qatorlar o'qilmaydi — moslashga kiritilmaydi
     meta = [t for t in allsents if re.match(r"^[^.!?:]{1,45}:\s", t) and re.match(r"^(mavzu|youtube|sarlavha|tavsif|teg|heshteg|hashtag|davomiylig|format|manba|izoh|eslatma|kalit|thumbnail|muqova|video|ssenariy|reja|til|ovoz|uslub|maqsad)", t, re.I)]
     sents = [t for t in allsents if t not in meta]
     durs = [wav_dur(w) for w in wavs]
-    heard = hear(wavs, lang)
+    heard = hear(wavs, lang, keys)
     pl = place(sents, heard, durs)
     if pl is None:
         raise Exception("ovozlar matnga to'g'ri kelmadi: matn bu ovozlar uchun juda qisqa yoki boshqa matn")
@@ -385,13 +415,14 @@ async def run(job_id):
             raise Exception("bu matnning ovoz fayllari topilmadi — avval Word faylini, keyin shu matnning ovoz fayllarini tashlang")
         os.makedirs("/tmp/dk/in", exist_ok=True)
         dp = await c.download_media(md, file="/tmp/dk/")
-        parts = []
+        parts, hkeys = [], []
         for k, m in enumerate(sorted(auds, key=lambda x: x.id), 1):
+            hkeys.append(f"{abs(int(j['chat']))}_{m.id}_{(m.file.size if m.file else 0) or 0}")
             ap = await c.download_media(m, file=f"/tmp/dk/in/{k:03d}")
             wp = f"/tmp/dk/in/{k:03d}.wav"
             subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", ap, "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", wp], check=True)
             parts.append(wp)
-        r = process_set(parts, dp, "/tmp/dk/seg", os.environ.get("DK_MODEL", "medium"))
+        r = process_set(parts, dp, "/tmp/dk/seg", os.environ.get("DK_MODEL", "medium"), keys=hkeys)
         zp = f"/tmp/dk/toplam_{did}.zip"
         with zipfile.ZipFile(zp, "w", zipfile.ZIP_STORED) as z:
             for fn in sorted(os.listdir("/tmp/dk/seg")):
