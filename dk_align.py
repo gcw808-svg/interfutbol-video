@@ -186,12 +186,12 @@ def hear(wavs, lang="uz", keys=None):
     os.makedirs(cdir, exist_ok=True)
     out = [None] * len(wavs)
     for i, k in enumerate(keys or []):
-        fp = os.path.join(cdir, k + ("_" + re.sub(r"[^A-Za-z0-9]+", "_", os.environ.get("DK_HEAR_HF", "")) if os.environ.get("DK_HEAR_HF") else "") + ".txt")
+        fp = os.path.join(cdir, k + "_uz2.txt" if os.environ.get("DK_HEAR_HF") else k + ".txt")  # _uz2 — faqat o'zbekcha model HAQIQATAN ishlatilganda yoziladi
         if os.path.exists(fp):
             out[i] = open(fp, encoding="utf-8").read()
     todo = [i for i in range(len(wavs)) if not out[i]]
     if todo:
-        done = []
+        done, uzok = [], False
         try:
             import numpy as np
             from faster_whisper import WhisperModel
@@ -214,6 +214,7 @@ def hear(wavs, lang="uz", keys=None):
                                 except Exception:
                                     pass
                     name = ct
+                    uzok = True
                 except Exception as e:
                     print("o'zbek modeli tayyorlanmadi, oddiy model ishlatiladi:", str(e)[:200], flush=True)
             fw = WhisperModel(name, device="cpu", compute_type="int8", cpu_threads=os.cpu_count() or 4, download_root=os.path.join(root, "fw"))
@@ -229,7 +230,7 @@ def hear(wavs, lang="uz", keys=None):
             print("faster-whisper ishlamadi:", str(e)[:300], flush=True)
         for i in done:  # faqat haqiqatan eshitilganlari saqlanadi (xato bo'lganda bo'sh natija saqlanib qolmasin)
             if keys and out[i]:
-                open(os.path.join(cdir, keys[i] + ("_" + re.sub(r"[^A-Za-z0-9]+", "_", os.environ.get("DK_HEAR_HF", "")) if os.environ.get("DK_HEAR_HF") else "") + ".txt"), "w", encoding="utf-8").write(out[i])
+                open(os.path.join(cdir, keys[i] + ("_uz2.txt" if uzok else ".txt")), "w", encoding="utf-8").write(out[i])
     return [x or "" for x in out]
 
 
