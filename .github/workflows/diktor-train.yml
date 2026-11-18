@@ -11,8 +11,9 @@ on:
       prefer:
         description: "auto | kaggle | modal"
         default: auto
-  schedule:
-    - cron: "17 */4 * * *"  # 2026-11-08: har 4 soatda (o'qitish to'xtagan paytda GitHub daqiqalarini tejash; kerak bo'lsa qo'lda darhol ishga tushiriladi)
+  # 2026-11-18 (Bahtiyor aka: "diktorni to'xtat"): jadval o'chirildi — diktor alohida botga ko'chirilib, qaytadan quriladi; kerak bo'lsa qo'lda ishga tushiriladi
+  # schedule:
+  #   - cron: "17 */4 * * *"  # 2026-11-08: har 4 soatda (o'qitish to'xtagan paytda GitHub daqiqalarini tejash; kerak bo'lsa qo'lda darhol ishga tushiriladi)
 concurrency: diktor-train
 jobs:
   tick:
