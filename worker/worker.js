@@ -160,7 +160,8 @@ const FEEDS = [
 
     async function kvGet(env, key, def) {
     const v = await env.STATE.get(key);
-    return v ? JSON.parse(v) : def;
+    if (!v) return def;
+    try { return JSON.parse(v); } catch (e) { return v; }  // qo'lda/skriptdan JSON bo'lmagan oddiy matn yozilgan bo'lsa ham yiqilmaydi (2026-11-19: jobsUrl)
     }
     const kvPut = (env, key, val, opts) => env.STATE.put(key, JSON.stringify(val), opts);
 

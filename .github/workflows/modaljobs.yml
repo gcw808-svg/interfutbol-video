@@ -41,4 +41,4 @@ jobs:
           echo "kalit bilan noto'g'ri ish: $code2 (400 bo'lishi kerak)"
           [ "$code" = "403" ] && [ "$code2" = "400" ] || { echo "endpoint ishlamayapti — KV o'zgartirilmadi (bot GitHub'dan foydalanishda davom etadi)"; exit 1; }
           NS=$(curl -sS "https://api.cloudflare.com/client/v4/accounts/$ACC/workers/scripts/inter-futbol-bot/settings" -H "Authorization: Bearer $CF" | jq -r '.result.bindings[] | select(.type=="kv_namespace" and .name=="STATE") | .namespace_id')
-          curl -sS -X PUT "https://api.cloudflare.com/client/v4/accounts/$ACC/storage/kv/namespaces/$NS/values/jobsUrl" -H "Authorization: Bearer $CF" -F "value=\"$URL\"" -F "metadata={}" | jq -c '{success, errors}'
+          curl -sS -X PUT "https://api.cloudflare.com/client/v4/accounts/$ACC/storage/kv/namespaces/$NS/values/jobsUrl" -H "Authorization: Bearer $CF" -H "content-type: text/plain" --data-binary "\"$URL\"" | jq -c '{success, errors}'
