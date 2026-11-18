@@ -202,7 +202,17 @@ def hear(wavs, lang="uz", keys=None):
                 ct = os.path.join(root, "ct2_" + re.sub(r"[^A-Za-z0-9]+", "_", hf))
                 try:
                     if not os.path.exists(os.path.join(ct, "model.bin")):
-                        subprocess.run(["ct2-transformers-converter", "--model", hf, "--output_dir", ct, "--quantization", "int8", "--copy_files", "tokenizer.json", "preprocessor_config.json", "--force"], check=True, timeout=1500)
+                        subprocess.run(["ct2-transformers-converter", "--model", hf, "--output_dir", ct, "--quantization", "int8", "--force"], check=True, timeout=1500)
+                    from huggingface_hub import hf_hub_download
+                    import shutil
+                    for fn in ("tokenizer.json", "preprocessor_config.json", "vocab.json", "added_tokens.json", "special_tokens_map.json", "normalizer.json", "merges.txt", "tokenizer_config.json"):
+                        if not os.path.exists(os.path.join(ct, fn)):
+                            for repo in (hf, "openai/whisper-medium"):  # modelda bo'lmasa — asl Whisper medium'niki (tokenlar bir xil)
+                                try:
+                                    shutil.copy(hf_hub_download(repo, fn), os.path.join(ct, fn))
+                                    break
+                                except Exception:
+                                    pass
                     name = ct
                 except Exception as e:
                     print("o'zbek modeli tayyorlanmadi, oddiy model ishlatiladi:", str(e)[:200], flush=True)
