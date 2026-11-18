@@ -139,7 +139,7 @@ def process(audio, doc, out_dir, model_name="large-v3", lang="uz", device=None):
     return {"n": len(rows), "sec": round(dur), "sents": len(sents), "low": [[r[0], r[1][:80], r[5]] for r in low[:25]], "lown": len(low), "lost": max(0, lost)}
 
 
-CYR = {"а":"a","б":"b","в":"v","г":"g","д":"d","е":"e","ё":"yo","ж":"j","з":"z","и":"i","й":"y","к":"k","л":"l","м":"m","н":"n","о":"o","п":"p","р":"r","с":"s","т":"t","у":"u","ф":"f","х":"x","ц":"s","ч":"ch","ш":"sh","щ":"sh","ъ":"","ы":"i","ь":"","э":"e","ю":"yu","я":"ya","ў":"o","қ":"q","ғ":"g","ҳ":"h"}
+CYR = {"а":"a","б":"b","в":"v","г":"g","д":"d","е":"e","ё":"yo","ж":"j","з":"z","и":"i","й":"y","к":"k","л":"l","м":"m","н":"n","о":"o","п":"p","р":"r","с":"s","т":"t","у":"u","ф":"f","х":"x","ц":"s","ч":"ch","ш":"sh","щ":"sh","ъ":"","ы":"i","ь":"","э":"e","ю":"yu","я":"ya","ў":"o","қ":"q","ғ":"g","ҳ":"h","ұ":"u","ү":"u","ө":"o","ә":"a","і":"i","ң":"n","һ":"h"}
 
 
 def nkey(t):
@@ -158,7 +158,7 @@ def hear(wavs, lang="uz"):
         from faster_whisper import WhisperModel
         fw = WhisperModel(os.environ.get("DK_HEAR", "medium"), device="cpu", compute_type="int8", cpu_threads=8, download_root="/root/.cache/whisper/fw")
         for w in wavs:
-            segs, _ = fw.transcribe(w, language=lang, beam_size=1, condition_on_previous_text=False, vad_filter=False)
+            segs, _ = fw.transcribe(w, language=lang, beam_size=2, temperature=0.0, condition_on_previous_text=False, vad_filter=False, no_speech_threshold=None, log_prob_threshold=None, compression_ratio_threshold=None)
             out.append(" ".join(x.text.strip() for x in segs))
         del fw
     except Exception as e:
@@ -169,88 +169,153 @@ def hear(wavs, lang="uz"):
     return out
 
 
-def place(sents, heard):
-    # har bir ovoz fayli matndagi QAYSI gaplarga to'g'ri kelishini topish: fayllar matn tartibida, o'qilmagan qatorlar (mavzu, sarlavha, izoh) tashlab o'tiladi
+def wav_dur(w):
+    return float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", w], capture_output=True, text=True).stdout.strip() or 0)
+
+
+def place(sents, heard, durs):
+    # HAR BIR OVOZ FAYLI MATNDAGI QAYSI GAPLARGA TO'G'RI KELISHINI TOPISH (2026-11-19).
+    # Whisper o'zbekchani yomon eshitadi (ko'p faylda bo'sh yoki chalkash matn), shuning uchun ikki belgi birga ishlatiladi:
+    #   1) DAVOMIYLIK — matn uzunligi (o'qilishi bo'yicha belgilar) o'qish tezligiga ko'paytirilganda fayl davomiyligiga mos kelishi kerak;
+    #   2) O'XSHASHLIK — eshitilgan matn bor joyda u matn bo'lagiga o'xshashi kerak (langar vazifasini o'taydi).
+    # Fayllar matn tartibida; o'qilmagan qatorlar (mavzu, sarlavha, izoh) tashlab o'tilishi mumkin. Dinamik dasturlash bilan eng yaxshi umumiy taqsimot topiladi.
     import difflib
     keys = [nkey(x) for x in sents]
-    res, ptr = [], 0
-    for h in heard:
-        hk = nkey(h)
-        best = (0.0, None, None)
-        if len(hk) >= 8:
-            for s0 in range(ptr, min(len(sents), ptr + 14)):
-                acc = ""
-                for e0 in range(s0 + 1, len(sents) + 1):
-                    acc = (acc + " " + keys[e0 - 1]).strip()
-                    if len(acc) > 1.9 * len(hk) + 60:
-                        break
-                    if len(acc) < 0.45 * len(hk):
-                        continue
-                    r = difflib.SequenceMatcher(None, hk, acc, autojunk=False).ratio() - 0.004 * (s0 - ptr)
-                    if r > best[0]:
-                        best = (r, s0, e0)
-        if best[1] is None or best[0] < 0.35:
-            res.append({"s": None, "e": None, "score": round(max(best[0], 0), 2), "heard": h})
-        else:
-            res.append({"s": best[1], "e": best[2], "score": round(best[0], 2), "heard": h})
-            ptr = best[2]
-    return res
+    L = [max(1, len(k)) for k in keys]
+    cum = [0]
+    for x in L:
+        cum.append(cum[-1] + x)
+    hk = [nkey(h) for h in heard]
+    N, K = len(sents), len(durs)
+    rate = cum[-1] / max(1.0, sum(durs))  # belgi/soniya; birinchi taxmin (o'qilmagan qatorlar sabab biroz katta), keyin aniqlashtiriladi
+    simc = {}
+    def sim(k, s0, e0):
+        if len(hk[k]) < 25:
+            return None
+        key = (k, s0, e0)
+        if key not in simc:
+            simc[key] = difflib.SequenceMatcher(None, hk[k], " ".join(keys[s0:e0]), autojunk=False).ratio()
+        return simc[key]
+    best = None
+    for it in range(3):
+        INF = 1e18
+        D = [[INF] * (N + 1) for _ in range(K + 1)]
+        P = [[None] * (N + 1) for _ in range(K + 1)]
+        D[0][0] = 0.0
+        for k in range(K):
+            want = durs[k] * rate
+            for pe in range(N + 1):
+                if D[k][pe] >= INF:
+                    continue
+                for s0 in range(pe, min(N, pe + (16 if k == 0 else 5)) ):
+                    skip = (s0 - pe) * (0.05 if k == 0 else 0.35)
+                    for e0 in range(s0 + 1, N + 1):
+                        ch = cum[e0] - cum[s0]
+                        if ch > 2.2 * want + 80:
+                            break
+                        if ch < 0.4 * want:
+                            continue
+                        er = (ch - want) / want
+                        c = min(4.0, 6.0 * er * er)
+                        sm = sim(k, s0, e0)
+                        if sm is not None:
+                            c -= 2.5 * sm
+                        v = D[k][pe] + skip + c
+                        if v < D[k + 1][e0]:
+                            D[k + 1][e0] = v
+                            P[k + 1][e0] = (pe, s0)
+        e_end = min(range(N + 1), key=lambda e: D[K][e] + 0.02 * (N - e))
+        if D[K][e_end] >= INF:
+            return None
+        asg, e0 = [], e_end
+        for k in range(K, 0, -1):
+            pe, s0 = P[k][e0]
+            asg.append((s0, e0))
+            e0 = pe
+        asg.reverse()
+        best = asg
+        tot = sum(cum[e] - cum[s0] for s0, e in asg)
+        rate = tot / max(1.0, sum(durs))
+    out = []
+    for k, (s0, e0) in enumerate(best):
+        want = durs[k] * rate
+        fit = (cum[e0] - cum[s0]) / want
+        sm = sim(k, s0, e0)
+        out.append({"s": s0, "e": e0, "fit": round(fit, 2), "sim": None if sm is None else round(sm, 2), "heard": heard[k]})
+    return out
+
+
+def silences(w):
+    r = subprocess.run(["ffmpeg", "-hide_banner", "-i", w, "-af", "silencedetect=noise=-34dB:d=0.22", "-f", "null", "-"], capture_output=True, text=True).stderr
+    st = [float(x) for x in re.findall(r"silence_start: ([0-9.]+)", r)]
+    en = [float(x) for x in re.findall(r"silence_end: ([0-9.]+)", r)]
+    return [((a + b) / 2, b - a) for a, b in zip(st, en)]
+
+
+def split_file(w, sub, dur, mx=16.0):
+    # fayl ichida gaplar chegarasi: kutilgan vaqt (matn ulushi bo'yicha) atrofidagi eng uzun PAUZA; pauza topilmasa — bo'linmaydi (so'z o'rtasidan kesilmaydi)
+    if dur <= mx or len(sub) < 2:
+        return [(0.0, dur, 0, len(sub))]
+    L = [max(1, len(nkey(x))) for x in sub]
+    tot = float(sum(L))
+    sil = [x for x in silences(w) if 0.4 < x[0] < dur - 0.4]
+    cuts, acc = [], 0
+    for i2 in range(len(sub) - 1):
+        acc += L[i2]
+        t = dur * acc / tot
+        near = [x for x in sil if abs(x[0] - t) <= max(1.5, 0.12 * dur)]
+        if near:
+            m = max(near, key=lambda x: x[1] - 0.25 * abs(x[0] - t))
+            cuts.append((m[0], i2 + 1))
+    parts, a, ai = [], 0.0, 0
+    n_parts = max(2, int(dur // 11) + 1)
+    target = dur / n_parts
+    for t, idx in cuts:
+        if t - a >= 0.75 * target and dur - t >= 0.5 * target and idx > ai:
+            parts.append((a, t, ai, idx))
+            a, ai = t, idx
+    parts.append((a, dur, ai, len(sub)))
+    return parts
 
 
 def process_set(wavs, doc, out_dir, model_name="medium", lang="uz", device=None):
-    # wavs — tartib bilan 24 kHz mono fayllar. Natija: bo'laklar (har fayl ichida gaplarga bo'lingan), metadata.csv va hisobot.csv
-    import stable_whisper
-    sents = sentences(docx_text(doc))
+    # wavs — tartib bilan 24 kHz mono fayllar. Natija: bo'laklar, metadata.csv, hisobot.csv va oqilmagan.txt
+    allsents = sentences(docx_text(doc))
+    # "Mavzu: …", "YouTube uchun sarlavha: …", "Teglar: …" kabi yorliqli qatorlar o'qilmaydi — moslashga kiritilmaydi
+    meta = [t for t in allsents if re.match(r"^[^.!?:]{1,45}:\s", t) and re.match(r"^(mavzu|youtube|sarlavha|tavsif|teg|heshteg|hashtag|davomiylig|format|manba|izoh|eslatma|kalit|thumbnail|muqova|video|ssenariy|reja|til|ovoz|uslub|maqsad)", t, re.I)]
+    sents = [t for t in allsents if t not in meta]
+    durs = [wav_dur(w) for w in wavs]
     heard = hear(wavs, lang)
-    pl = place(sents, heard)
-    for k, x in enumerate(pl, 1):
-        print(f"fayl {k}: gaplar {x['s']}..{x['e']} o'xshashlik {x['score']} | {x['heard'][:90]}", flush=True)
-    model = stable_whisper.load_model(model_name, device=device)
+    pl = place(sents, heard, durs)
+    if pl is None:
+        raise Exception("ovozlar matnga to'g'ri kelmadi: matn bu ovozlar uchun juda qisqa yoki boshqa matn")
     os.makedirs(out_dir, exist_ok=True)
     rows, rep, n, used = [], [], 0, set()
     for k, (w, x) in enumerate(zip(wavs, pl), 1):
-        if x["s"] is None:
-            rep.append([f"{k:03d}", "", f"{x['score']:.2f}", "MATNDA TOPILMADI", x["heard"][:300]])
-            continue
         sub = sents[x["s"]:x["e"]]
         used.update(range(x["s"], x["e"]))
-        w16 = w[:-4] + "_16k.wav"
-        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", w, "-ac", "1", "-ar", "16000", w16], check=True)
-        try:
-            res = model.align(w16, " ".join(spoken(t) for t in sub), language=lang)
-            words = [(q.word.strip(), float(q.start), float(q.end), float(getattr(q, "probability", 0) or 0)) for sg in res.segments for q in sg.words if q.word.strip()]
-            segs = shape(group(sub, words))
-        except Exception as e:
-            print("moslash xatosi", k, str(e)[:200], flush=True)
-            segs = []
-        if not segs:  # so'zma-so'z moslab bo'lmadi — fayl butunligicha, matni bilan
-            dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", w], capture_output=True, text=True).stdout.strip() or 0)
-            segs = [{"text": " ".join(sub), "spoken": " ".join(spoken(t) for t in sub), "start": 0.0, "end": dur, "prob": 0.0}]
-        for i2, sg in enumerate(segs):
+        print(f"fayl {k} ({durs[k-1]:.0f}s): gaplar {x['s']+1}-{x['e']} mos={x['fit']} oxsh={x['sim']} | {' '.join(sub)[:70]} || {x['heard'][:60]}", flush=True)
+        for a, b, i0, i1 in split_file(w, sub, durs[k - 1]):
             n += 1
-            a = max(0.0, sg["start"] - 0.12)
-            b = sg["end"] + 0.12
-            if i2 + 1 < len(segs):
-                b = min(b, max(sg["end"], segs[i2 + 1]["start"] - 0.02))
             fn = f"{n:04d}.wav"
             subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-ss", f"{a:.3f}", "-to", f"{b:.3f}", "-i", w, "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", os.path.join(out_dir, fn)], check=True)
-            rows.append([fn, sg["text"], sg["spoken"], f"{k:03d}", f"{a:.2f}", f"{b:.2f}", f"{x['score']:.2f}"])
-        rep.append([f"{k:03d}", f"{x['s'] + 1}-{x['e']}", f"{x['score']:.2f}", " ".join(sub)[:300], x["heard"][:300]])
+            txt = " ".join(sub[i0:i1])
+            rows.append([fn, txt, " ".join(spoken(t) for t in sub[i0:i1]), f"{k:03d}", f"{a:.2f}", f"{b:.2f}", f"{x['fit']:.2f}"])
+        rep.append([f"{k:03d}", f"{durs[k-1]:.1f}", f"{x['s'] + 1}-{x['e']}", f"{x['fit']:.2f}", "" if x["sim"] is None else f"{x['sim']:.2f}", " ".join(sub)[:400], x["heard"][:300]])
     with open(os.path.join(out_dir, "metadata.csv"), "w", encoding="utf-8", newline="") as f:
         cw = csv.writer(f, delimiter="|")
-        cw.writerow(["fayl", "matn", "oqilishi", "manba_ovoz", "boshi", "oxiri", "oxshashlik"])
+        cw.writerow(["fayl", "matn", "oqilishi", "manba_ovoz", "boshi", "oxiri", "moslik"])
         cw.writerows(rows)
     with open(os.path.join(out_dir, "hisobot.csv"), "w", encoding="utf-8", newline="") as f:
         cw = csv.writer(f, delimiter="|")
-        cw.writerow(["ovoz_fayli", "matndagi_gaplar", "oxshashlik", "matn", "eshitilgani"])
+        cw.writerow(["ovoz_fayli", "soniya", "matndagi_gaplar", "moslik(1=aniq)", "oxshashlik", "matn", "eshitilgani"])
         cw.writerows(rep)
-    skipped = [sents[i3] for i3 in range(len(sents)) if i3 not in used]
+    skipped = meta + [sents[i3] for i3 in range(len(sents)) if i3 not in used]
     with open(os.path.join(out_dir, "oqilmagan.txt"), "w", encoding="utf-8") as f:
         f.write("\n".join(skipped))
     dur = sum(float(r[5]) - float(r[4]) for r in rows)
-    weak = [r for r in rep if r[1] and float(r[2]) < 0.6]
-    miss = [r for r in rep if not r[1]]
-    return {"n": len(rows), "sec": round(dur), "sents": len(sents), "files": len(wavs), "weak": [[r[0], r[2]] for r in weak], "miss": [r[0] for r in miss], "skipped": len(skipped), "lown": len(weak) + len(miss), "lost": len(skipped)}
+    weak = [[r[0], r[3]] for r in rep if abs(float(r[3]) - 1) > 0.22 or (r[4] and float(r[4]) < 0.45)]
+    return {"n": len(rows), "sec": round(dur), "sents": len(sents), "files": len(wavs), "weak": weak, "miss": [], "skipped": len(skipped), "lown": len(weak), "lost": len(skipped)}
 
 
 def is_audio(m):
@@ -329,7 +394,7 @@ async def run(job_id):
         if r["miss"]:
             cap += f"\n⚠️ Matnda joyi topilmagan ovozlar: {', '.join(r['miss'][:15])}-fayl."
         if r["weak"]:
-            cap += "\nTekshirish kerak (matnga o'xshashligi past): " + ", ".join(f"{a}-fayl ({b})" for a, b in r["weak"][:12]) + "."
+            cap += "\nEshitib tekshirish kerak (matn uzunligi ovozga unchalik mos emas): " + ", ".join(f"{a}-fayl" for a, b in r["weak"][:14]) + "."
         if r["skipped"]:
             cap += f"\nMatndagi {r['skipped']} ta qator o'qilmagan deb topildi (ro'yxati ZIP ichida: oqilmagan.txt)."
         cap += "\nZIP ichida: bo'laklar, metadata.csv, hisobot.csv (qaysi ovoz qaysi matnga tushgani)."
