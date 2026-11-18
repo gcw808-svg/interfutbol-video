@@ -15,7 +15,7 @@ permissions:
   contents: read
 jobs:
   run:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim  # arzon 1 vCPU ishchi: daqiqasi oddiysining uchdan biri (2026-11-18)
     timeout-minutes: 5
     steps:
       - name: yig'ish

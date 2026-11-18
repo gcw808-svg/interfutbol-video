@@ -33,7 +33,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   run:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.gh == '1' && 'ubuntu-latest' || 'ubuntu-slim' }}  # Modal'ga topshirish — arzon ishchi; gh=1 (og'ir ish) — oddiy ishchi
     timeout-minutes: 45
     env:
       BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
