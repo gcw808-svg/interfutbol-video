@@ -2186,7 +2186,8 @@ async function dkAlignStart(env, tok, B, e, docM) {
   const id = "a" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   e.doc = docM; e.st = "moslanmoqda"; e.job = id; await kvPut(env, "dkBase", B.slice(-3000));
   await kvPut(env, "dkj:" + id, { a: e.m, d: docM }, { expirationTtl: 3 * 86400 });
-  let ok = false; try { const ju = await kvGet(env, "jobsUrl", "https://gcw808-svg--inter-jobs-dispatch.modal.run"); const r = await fetch(ju, { method: "POST", headers: { "x-key": await ubKey(env), "content-type": "application/json" }, body: JSON.stringify({ wf: "dkalign.yml", job: id }), signal: AbortSignal.timeout(25000) }); ok = r.ok; } catch (x) {}
+  let ok = false; const ju = await kvGet(env, "jobsUrl", "https://gcw808-svg--inter-jobs-dispatch.modal.run"); const xk = await ubKey(env);
+  for (let i = 0; i < 3 && !ok; i++) { try { const r = await fetch(ju, { method: "POST", headers: { "x-key": xk, "content-type": "application/json" }, body: JSON.stringify({ wf: "dkalign.yml", job: id }), signal: AbortSignal.timeout(60000) }); ok = r.ok; } catch (x) {} }  // Modal "uyg'onishi" 30+ soniya olishi mumkin
   await dkTg(tok, "sendMessage", { chat_id: DK_CHAT, reply_to_message_id: e.m, text: ok ? "Ovoz va matn moslanmoqda: yozuv gaplarga bo'linadi, har bo'lakka o'z matni qo'yiladi. Tayyor bo'lgach to'plam (ZIP) shu yerga tushadi — odatda 3–10 daqiqa." : "⚠️ Moslash ishga tushmadi (server javob bermadi). Birozdan keyin matn faylini shu ovozga javob qilib qayta tashlang." });
 }
 async function dkUpdate(env, u, tok) {
@@ -4179,7 +4180,7 @@ if (!f.ok) return new Response("not found", { status: 404 });
 const ir = await fetch(`https://api.telegram.org/file/bot${env.BOT_TOKEN}/${f.result.file_path}`);
 return new Response(ir.body, { status: ir.status, headers: { "content-type": "image/jpeg", "cache-control": "public, max-age=604800" } });
 }
-if (url.pathname === "/dkhook" && req.method === "POST") { const tok = await kvGet(env, "dkToken", ""); if (!tok || req.headers.get("x-telegram-bot-api-secret-token") !== (await dkSecret(tok))) return new Response("forbidden", { status: 403 }); try { await dkUpdate(env, await req.json(), tok); } catch (e) { console.log("dk", e && e.message); } return new Response("ok"); }
+if (url.pathname === "/dkhook" && req.method === "POST") { const tok = await kvGet(env, "dkToken", ""); if (!tok || req.headers.get("x-telegram-bot-api-secret-token") !== (await dkSecret(tok))) return new Response("forbidden", { status: 403 }); const up = await req.json(); ctx.waitUntil(dkUpdate(env, up, tok).catch(e => console.log("dk", e && e.message))); return new Response("ok"); }
 if (url.pathname === "/hook" && req.method === "POST") {
     if (req.headers.get("x-telegram-bot-api-secret-token") !== secret) return new Response("forbidden", { status: 403 });
     const u = await req.json();
