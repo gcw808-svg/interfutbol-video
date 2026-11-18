@@ -344,7 +344,13 @@ async def run(job_id):
     key = hashlib.sha256(("ub-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:40]
     def wapi(path, body=None):
         rq = urllib.request.Request(W + path, data=json.dumps(body).encode() if body is not None else None, headers={"x-key": key, "content-type": "application/json", "user-agent": "InterDiktorAlign"}, method="POST" if body is not None else "GET")
-        return json.loads(urllib.request.urlopen(rq, timeout=60).read() or b"{}")
+        for t in range(6):  # Modal'da tarmoq ba'zan bir zum uzilib qoladi ("Network is unreachable") — qayta uriniladi
+            try:
+                return json.loads(urllib.request.urlopen(rq, timeout=60).read() or b"{}")
+            except Exception:
+                if t == 5:
+                    raise
+                time.sleep(4 + 4 * t)
     j = wapi("/ub/dkjob?id=" + job_id)
     if not j.get("d"):
         return
