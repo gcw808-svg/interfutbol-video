@@ -28,6 +28,14 @@ def docx_text(path):
                 elif tg == "tab":
                     o.append(" ")
             return "".join(o)
+        if os.environ.get("DK_DEBUG", "1") == "1":
+            print("xatboshilar:", len(d.paragraphs), flush=True)
+            for p in d.paragraphs[:14]:
+                print("P>", repr(ptext(p))[:150], "| uslub:", (p.style.name if p.style is not None else ""), flush=True)
+            for p in d.paragraphs:
+                if "Edgar Davids" in p.text and "Birinchi" in p.text:
+                    print("XML>", re.sub(r"\s+", " ", p._p.xml)[:1600], flush=True)
+                    break
         paras = []
         for p in d.paragraphs:
             stn = (p.style.name if p.style is not None else "") or ""
