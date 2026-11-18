@@ -1,0 +1,16 @@
+name: modallog
+# Modal'dagi ishlar jurnalining oxirgi qismini ko'rish (nosozlikni aniqlash uchun)
+on:
+  workflow_dispatch:
+jobs:
+  log:
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    steps:
+      - run: pip install -q modal 2>&1 | tail -1
+      - name: jurnal
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+        run: |
+          timeout 60 modal app logs inter-jobs 2>&1 | grep -v -iE 'session|token|secret' | tail -150 | cut -c1-400 || true
