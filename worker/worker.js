@@ -2165,6 +2165,49 @@ async function uzFactRun(env, to) {
   return "ok " + f.key;
 }
 
+// ---------------- INTER DIKTOR — ALOHIDA BOT (2026-11-18, Bahtiyor aka: "diktorni alohida botga o'tkazamiz, bazasi rasmlar bazasiga o'xshasin") ----------------
+// Bot: @InterDiktorBot; ovozlar bazasi: yopiq kanal "Inter Diktor — Ovozlar" (DK_CHAT), bot u yerda admin. Kalit kodda emas — KV dkTok da (admin BotFather xabarini
+// asosiy botga uzatadi). Hozircha 1-bosqich: ulanish, /start, bazaga tushgan ovoz + matn juftliklarini ro'yxatga olish (KV dkBase). Matnni ovozga aylantirish
+// (Modal'da) va o'qitish — keyingi bosqich.
+const DK_CHAT = -1004425577117;
+const dkSecret = async (tok) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode("dk-" + tok)))].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 32);
+async function dkTg(tok, method, body) { const r = await fetch(`https://api.telegram.org/bot${tok}/${method}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body || {}) }); return r.json().catch(() => ({ ok: false })); }
+async function dkConnect(env, chat, msg) {
+  const tok = (String(msg.text).match(/\d{6,}:[A-Za-z0-9_-]{30,}/) || [])[0];
+  await tg(env, "deleteMessage", { chat_id: chat, message_id: msg.message_id }).catch(() => null);
+  const me = await dkTg(tok, "getMe");
+  if (!me.ok || !/diktor/i.test(me.result.username || "")) { await tg(env, "sendMessage", { chat_id: chat, text: "Bu kalit Inter Diktor botiniki emas yoki ishlamayapti. Xabar o'chirildi." }); return; }
+  await kvPut(env, "dkToken", tok);
+  const wh = await dkTg(tok, "setWebhook", { url: WURL + "/dkhook", secret_token: await dkSecret(tok), allowed_updates: ["message", "channel_post", "edited_channel_post", "callback_query"] });
+  await dkTg(tok, "setMyCommands", { commands: [{ command: "start", description: "Bot haqida" }, { command: "baza", description: "Ovozlar bazasi holati" }] });
+  await tg(env, "sendMessage", { chat_id: chat, text: (wh.ok ? "✅ Inter Diktor boti ulandi: @" + me.result.username : "Kalit saqlandi, lekin ulanishda xato: " + (wh.description || "")) + "\nKalitli xabar o'chirildi." });
+}
+async function dkUpdate(env, u, tok) {
+  const admins = await getAdmins(env);
+  const cp = u.channel_post || u.edited_channel_post;
+  if (cp) {
+    if (!cp.chat || cp.chat.id !== DK_CHAT) return;
+    const a = cp.voice || cp.audio || (cp.document && /^audio\//.test(cp.document.mime_type || "") ? cp.document : null);
+    const B = await kvGet(env, "dkBase", []);
+    if (!a) { // matnli xabar: ovozga javob bo'lsa — o'sha yozuvning matni; "-" — yozuvni bazadan olib tashlash
+      const rt = cp.reply_to_message, t = (cp.text || "").trim(); if (!rt || !t) return; const e = B.find((x) => x.m === rt.message_id); if (!e) return;
+      if (t === "-") { await kvPut(env, "dkBase", B.filter((x) => x.m !== rt.message_id)); await dkTg(tok, "sendMessage", { chat_id: DK_CHAT, text: "Bazadan olib tashlandi.", reply_to_message_id: rt.message_id }); }
+      else { e.t = t.slice(0, 4000); await kvPut(env, "dkBase", B); await dkTg(tok, "sendMessage", { chat_id: DK_CHAT, text: "Matn saqlandi (" + e.t.length + " belgi).", reply_to_message_id: rt.message_id }); }
+      return;
+    }
+    const cap = (cp.caption || "").trim(); const i = B.findIndex((x) => x.m === cp.message_id);
+    const e = { m: cp.message_id, f: a.file_id, k: cp.voice ? "voice" : "file", d: a.duration || 0, sz: a.file_size || 0, t: cap.slice(0, 4000), at: Date.now() };
+    if (i >= 0) B[i] = { ...B[i], ...e }; else B.push(e);
+    await kvPut(env, "dkBase", B.slice(-3000));
+    if (i < 0) await dkTg(tok, "sendMessage", { chat_id: DK_CHAT, reply_to_message_id: cp.message_id, text: "Bazaga qo'shildi: " + (e.d ? e.d + " soniya" : "audio") + (cp.voice ? " (ovozli xabar — sifat uchun fayl qilib yuborgan ma'qul)" : "") + (cap ? ", matni bor (" + cap.length + " belgi)." : ". Matni yo'q — shu xabarga javob qilib o'qilgan matnni yozing.") + (a.file_size > 20 * 1024 * 1024 ? "\n⚠️ Fayl 20 MB dan katta — bot uni yuklab ololmaydi, bo'laklab yuboring." : "") });
+    return;
+  }
+  const msg = u.message; if (!msg) return; const chat = msg.chat.id, text = msg.text || "";
+  if (!admins.includes(chat)) { await dkTg(tok, "sendMessage", { chat_id: chat, text: "Bu bot yopiq." }); return; }
+  if (text === "/baza") { const B = await kvGet(env, "dkBase", []); const sec = B.reduce((s, x) => s + (x.d || 0), 0); await dkTg(tok, "sendMessage", { chat_id: chat, text: "Ovozlar bazasi: " + B.length + " ta yozuv, jami " + Math.floor(sec / 60) + " daqiqa " + (sec % 60) + " soniya.\nMatni bor: " + B.filter((x) => x.t).length + " ta, matnsiz: " + B.filter((x) => !x.t).length + " ta." }); return; }
+  await dkTg(tok, "sendMessage", { chat_id: chat, text: "Inter Diktor boti ulandi.\n\nOvozlar bazasi — «Inter Diktor — Ovozlar» kanali: u yerga ovoz yozuvini tashlang va izohiga o'qilgan matnni yozing (yoki keyin shu yozuvga javob qilib yozing). Yozuvga «-» deb javob bersangiz, bazadan olinadi.\n/baza — bazada nechta yozuv borligi.\n\nMatnni ovozga aylantirish keyingi bosqichda qo'shiladi; hozircha u asosiy botdagi /diktor buyrug'ida." });
+}
+
 // ---------------- AFSONALAR TURKUMI (Bahtiyor aka tasdiqlagan, 2026-11-18 — Steven Gerrard namunasi; g'oya Goal.com "Icons" turkumidan) ----------------
 // Har kuni 12:00 da bitta afsona haqida qisqa hikoya + yorqin afisha (card.py render_afsona_v): butun kadr surat, klub rangida gradient, yirik ism,
 // "Klub · yillar" va 3 tagacha raqam. Faqat RASMLAR BAZASIDA surati bor afsonalar (people.py qo'shgan); matn Vikipediyadan, nazoratchidan o'tadi;
@@ -3174,6 +3217,8 @@ async function onUpdate(env, u, ctx) {
 
     if (u.message) {
     const msg = u.message, chat = msg.chat.id, text = BTN[msg.text] || msg.text || "";
+    // INTER DIKTOR BOTI KALITI (2026-11-18): admin BotFather'ning kalitli xabarini shu botga UZATADI — kalit KV'ga yoziladi, xabar o'chiriladi, diktor boti ulanadi
+    if (admins.includes(chat) && /Use this token to access the HTTP API/i.test(msg.text || "") && /\d{6,}:[A-Za-z0-9_-]{30,}/.test(msg.text || "")) { await dkConnect(env, chat, msg); return; }
     if (text.startsWith("/start")) {
     if (!admins.length) {
     await kvPut(env, "admins", [chat]);
@@ -4098,6 +4143,7 @@ if (!f.ok) return new Response("not found", { status: 404 });
 const ir = await fetch(`https://api.telegram.org/file/bot${env.BOT_TOKEN}/${f.result.file_path}`);
 return new Response(ir.body, { status: ir.status, headers: { "content-type": "image/jpeg", "cache-control": "public, max-age=604800" } });
 }
+if (url.pathname === "/dkhook" && req.method === "POST") { const tok = await kvGet(env, "dkToken", ""); if (!tok || req.headers.get("x-telegram-bot-api-secret-token") !== (await dkSecret(tok))) return new Response("forbidden", { status: 403 }); try { await dkUpdate(env, await req.json(), tok); } catch (e) { console.log("dk", e && e.message); } return new Response("ok"); }
 if (url.pathname === "/hook" && req.method === "POST") {
     if (req.headers.get("x-telegram-bot-api-secret-token") !== secret) return new Response("forbidden", { status: 403 });
     const u = await req.json();
