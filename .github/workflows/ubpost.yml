@@ -6,7 +6,7 @@ on:
         required: true
 jobs:
   run:
-    runs-on: ubuntu-slim  # 1 vCPU ishchi — daqiqasi oddiysidan 3 baravar arzon (Modal o'chganda zaxira; 2026-11-19)
+    runs-on: ubuntu-latest  # ombor ochiq (2026-11-19) — daqiqalar bepul, to'liq server
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4

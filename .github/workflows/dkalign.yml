@@ -1,0 +1,31 @@
+name: dkalign
+# INTER DIKTOR — ovoz fayllarini Word matniga moslash (dk_align.py). Bot matn fayli kelganda ishga tushiradi (job = ish raqami).
+# 2026-11-19: Modal bepul limiti (oyiga 1 $) tugagani uchun GitHub'ga ko'chirildi — ombor ochiq, daqiqalar bepul.
+on:
+  workflow_dispatch:
+    inputs:
+      job:
+        required: true
+concurrency:
+  group: dkalign
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: .dkcache
+          key: dkcache-${{ github.run_id }}
+          restore-keys: dkcache-
+      - run: sudo apt-get update -qq > /dev/null 2>&1; sudo apt-get install -y -qq ffmpeg > /dev/null 2>&1; pip install -q faster-whisper python-docx telethon cryptg
+      - name: Moslash
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+          JOB: ${{ inputs.job }}
+          DK_CACHE: ${{ github.workspace }}/.dkcache
+        run: python3 -c "import asyncio, os, dk_align; asyncio.run(dk_align.run(os.environ['JOB']))"

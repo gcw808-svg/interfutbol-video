@@ -180,7 +180,7 @@ def nkey(t):
 def hear(wavs, lang="uz", keys=None):
     # har bir ovoz faylida nima deyilganini taxminan eshitish (matndagi joyini topish uchun; aniq matn Word'dan olinadi).
     # Natija diskda saqlanadi (keys — faylning o'zgarmas belgisi): qayta moslashda 15 daqiqalik eshitish takrorlanmaydi.
-    cdir = "/root/.cache/whisper/heard"
+    cdir = os.path.join(os.environ.get("DK_CACHE", "/root/.cache/whisper"), "heard")
     os.makedirs(cdir, exist_ok=True)
     out = [None] * len(wavs)
     for i, k in enumerate(keys or []):
@@ -191,7 +191,7 @@ def hear(wavs, lang="uz", keys=None):
     if todo:
         try:
             from faster_whisper import WhisperModel
-            fw = WhisperModel(os.environ.get("DK_HEAR", "medium"), device="cpu", compute_type="int8", cpu_threads=8, download_root="/root/.cache/whisper/fw")
+            fw = WhisperModel(os.environ.get("DK_HEAR", "medium"), device="cpu", compute_type="int8", cpu_threads=os.cpu_count() or 4, download_root=os.path.join(os.environ.get("DK_CACHE", "/root/.cache/whisper"), "fw"))
             for i in todo:
                 segs, _ = fw.transcribe(wavs[i], language=lang, beam_size=2, temperature=0.0, condition_on_previous_text=False, vad_filter=False, no_speech_threshold=None, log_prob_threshold=None, compression_ratio_threshold=None)
                 out[i] = " ".join(x.text.strip() for x in segs)

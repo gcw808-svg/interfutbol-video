@@ -2190,8 +2190,7 @@ async function dkSetStart(env, tok, docM, now) {
   const id = "a" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   await kvPut(env, "dkset:" + docM, { st: "moslanmoqda", job: id, at: Date.now() });
   await kvPut(env, "dkj:" + id, { d: docM, now: now ? 1 : 0 }, { expirationTtl: 3 * 86400 });
-  let ok = false; const ju = await kvGet(env, "jobsUrl", "https://gcw808-svg--inter-jobs-dispatch.modal.run"); const xk = await ubKey(env);
-  for (let i = 0; i < 3 && !ok; i++) { try { const r = await fetch(ju, { method: "POST", headers: { "x-key": xk, "content-type": "application/json" }, body: JSON.stringify({ wf: "dkalign.yml", job: id }), signal: AbortSignal.timeout(60000) }); ok = r.ok; } catch (x) {} }  // Modal "uyg'onishi" 30+ soniya olishi mumkin
+  let ok = false; for (let i = 0; i < 3 && !ok; i++) { try { ok = await ghDispatch(env, "dkalign.yml", { job: id }); } catch (x) {} }  // 2026-11-19: moslash GitHub'da (ochiq ombor — bepul, 4 yadro)
   if (!ok) await kvPut(env, "dkset:" + docM, { st: "xato", job: id, at: Date.now(), err: "server javob bermadi" });
   await dkTg(tok, "sendMessage", { chat_id: DK_CHAT, reply_to_message_id: docM, text: ok ? "Matn fayli qabul qilindi. Shu matnning ovoz fayllarini ketidan tashlang (bir nechta bo'lsa — tartib bilan). Oxirgi fayldan keyin 2 daqiqa kutib, hammasini o'zim ulayman, matnga moslayman va tayyor to'plamni (ZIP) shu yerga tashlayman." : "⚠️ Moslash ishga tushmadi (server javob bermadi). Birozdan keyin matn faylini qayta tashlang." });
   return id;
@@ -2714,7 +2713,7 @@ const ubKey = async (env) => (await sha("ub-" + env.BOT_TOKEN)).slice(0, 40);
 // daqiqalari (oyiga 2000) tejaladi; Modal javob bermasa yoki viaGh=true (qayta urinish) bo'lsa — GitHub (zaxira).
 // KV jobsMode = "gh" qilinsa hamma ish yana GitHub'da.
 async function ghDispatch(env, wf, inputs, viaGh) {
-  if (!viaGh && (wf === "card.yml" || wf === "ubpost.yml") && inputs && inputs.job && (await kvGet(env, "jobsMode", "modal")) !== "gh") {
+  if (!viaGh && (wf === "card.yml" || wf === "ubpost.yml") && inputs && inputs.job && (await kvGet(env, "jobsMode", "gh")) !== "gh"  /* 2026-11-19: ombor ochiq — GitHub daqiqalari cheksiz va bepul, endi asosiy; Modal faqat jobsMode="modal" qilinsa */) {
     const ju = await kvGet(env, "jobsUrl", "https://gcw808-svg--inter-jobs-dispatch.modal.run");
     if (ju) {
       try { const r = await fetch(ju, { method: "POST", headers: { "x-key": await ubKey(env), "content-type": "application/json" }, body: JSON.stringify({ wf, job: inputs.job }), signal: AbortSignal.timeout(25000) }); if (r.ok) return true; } catch (e) {}
