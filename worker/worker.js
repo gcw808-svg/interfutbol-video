@@ -2185,14 +2185,18 @@ async function dkConnect(env, chat, msg) {
 }
 // TO'PLAM (2026-11-19): bitta matn fayli (Word) + shu matn o'qilgan bir nechta ovoz fayli. Ish matn fayli bo'yicha boshlanadi (bitta hodisa — poyga yo'q);
 // ovozlar ro'yxatini Modal'dagi ish kanalning o'zidan o'qiydi (matndan keyin, keyingi matn fayligacha tashlanganlari) va ular tashlab bo'linishini kutadi.
-async function dkSetStart(env, tok, docM, now) {
+// OVOZ NOMI (Bahtiyor aka, 2026-11-19): har bir diktor ovozi o'z nomi bilan yuritiladi — hozirgi ovoz "Kozim Komilov"; yangi ovoz qo'shilsa unga alohida nom beriladi.
+// Matn fayli izohiga "ovoz: Ism Familiya" yozilsa — to'plam o'sha ovozga; yozilmasa — joriy ovozga (KV dkVoice; diktor botida "/ovoz Ism Familiya" bilan almashtiriladi).
+const DK_VOICE0 = "Kozim Komilov";
+async function dkSetStart(env, tok, docM, now, voice) {
   const cur = await kvGet(env, "dkset:" + docM, null); if (cur && cur.st === "moslanmoqda" && Date.now() - (cur.at || 0) < 40 * 60e3) return cur.job;
   const id = "a" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  await kvPut(env, "dkset:" + docM, { st: "moslanmoqda", job: id, at: Date.now() });
-  await kvPut(env, "dkj:" + id, { d: docM, now: now ? 1 : 0 }, { expirationTtl: 3 * 86400 });
+  const v = String(voice || (cur && cur.v) || (await kvGet(env, "dkVoice", DK_VOICE0))).slice(0, 60);
+  await kvPut(env, "dkset:" + docM, { st: "moslanmoqda", job: id, at: Date.now(), v });
+  await kvPut(env, "dkj:" + id, { d: docM, now: now ? 1 : 0, v }, { expirationTtl: 3 * 86400 });
   let ok = false; for (let i = 0; i < 3 && !ok; i++) { try { ok = await ghDispatch(env, "dkalign.yml", { job: id }); } catch (x) {} }  // 2026-11-19: moslash GitHub'da (ochiq ombor — bepul, 4 yadro)
   if (!ok) await kvPut(env, "dkset:" + docM, { st: "xato", job: id, at: Date.now(), err: "server javob bermadi" });
-  await dkTg(tok, "sendMessage", { chat_id: DK_CHAT, reply_to_message_id: docM, text: ok ? "Matn fayli qabul qilindi. Shu matnning ovoz fayllarini ketidan tashlang (bir nechta bo'lsa — tartib bilan). Oxirgi fayldan keyin 2 daqiqa kutib, hammasini o'zim ulayman, matnga moslayman va tayyor to'plamni (ZIP) shu yerga tashlayman." : "⚠️ Moslash ishga tushmadi (server javob bermadi). Birozdan keyin matn faylini qayta tashlang." });
+  await dkTg(tok, "sendMessage", { chat_id: DK_CHAT, reply_to_message_id: docM, text: ok ? "Matn fayli qabul qilindi (ovoz: " + v + "). Shu matnning ovoz fayllarini ketidan tashlang (bir nechta bo'lsa — tartib bilan). Oxirgi fayldan keyin 2 daqiqa kutib, hammasini o'zim ulayman, matnga moslayman va tayyor to'plamni (ZIP) shu yerga tashlayman." : "⚠️ Moslash ishga tushmadi (server javob bermadi). Birozdan keyin matn faylini qayta tashlang." });
   return id;
 }
 async function dkUpdate(env, u, tok) {
@@ -2206,7 +2210,7 @@ async function dkUpdate(env, u, tok) {
       if (u.edited_channel_post) return;
       if (/\.zip$/i.test(dn)) return; // moslash natijasi (to'plam) — o'zimizniki
       if (!/\.(docx|txt)$/i.test(dn)) { if (/\.(doc|rtf|pdf|odt)$/i.test(dn)) await dkTg(tok, "sendMessage", { chat_id: DK_CHAT, reply_to_message_id: cp.message_id, text: "Matn fayli .docx (Word) yoki .txt bo'lishi kerak. Word'da «Saqlash turi: Word hujjati (.docx)» qilib saqlab, qayta tashlang." }); return; }
-      await dkSetStart(env, tok, cp.message_id, false); return;
+      const vm = /(?:^|\n)\s*ovoz\s*[:\-—]\s*([^\n]{2,60})/i.exec(cp.caption || ""); await dkSetStart(env, tok, cp.message_id, false, vm ? vm[1].trim() : null); return;
     }
     if (!a) { // matnli xabar: ovozga javob bo'lsa — o'sha yozuvning matni; "-" — yozuvni bazadan olib tashlash; matn fayliga "qayta" — qayta moslash
       const rt = cp.reply_to_message, t = (cp.text || "").trim(); if (!rt || !t) return;
@@ -2228,8 +2232,9 @@ async function dkUpdate(env, u, tok) {
   if (!admins.includes(chat)) { await dkTg(tok, "sendMessage", { chat_id: chat, text: "Bu bot yopiq." }); return; }
   if (text === "/baza") {
     let n = 0, sec = 0, wt = 0, cur; do { const L = await env.STATE.list({ prefix: "dka:", cursor: cur }); for (const k of L.keys) { n++; sec += (k.metadata && k.metadata.d) || 0; if (k.metadata && k.metadata.t) wt++; } cur = L.list_complete ? null : L.cursor; } while (cur);
-    let sets = 0, segs = 0, ssec = 0; cur = undefined; do { const L = await env.STATE.list({ prefix: "dkset:", cursor: cur }); for (const k of L.keys) { const v = await kvGet(env, k.name, null); if (v && v.st === "tayyor") { sets++; segs += v.n || 0; ssec += v.sec || 0; } } cur = L.list_complete ? null : L.cursor; } while (cur);
-    await dkTg(tok, "sendMessage", { chat_id: chat, text: "Ovozlar bazasi: " + n + " ta yozuv, jami " + Math.floor(sec / 60) + " daqiqa " + (sec % 60) + " soniya.\nMatnga moslangan to'plamlar: " + sets + " ta — " + segs + " ta bo'lak, " + Math.floor(ssec / 60) + " daqiqa " + (ssec % 60) + " soniya.\nQisqa matni (izohi) bor yozuvlar: " + wt + " ta." }); return; }
+    let sets = 0, segs = 0, ssec = 0; const byV = {}; cur = undefined; do { const L = await env.STATE.list({ prefix: "dkset:", cursor: cur }); for (const k of L.keys) { const v = await kvGet(env, k.name, null); if (v && v.st === "tayyor") { sets++; segs += v.n || 0; ssec += v.sec || 0; const nm = v.v || DK_VOICE0; byV[nm] = byV[nm] || { n: 0, sec: 0 }; byV[nm].n += v.n || 0; byV[nm].sec += v.sec || 0; } } cur = L.list_complete ? null : L.cursor; } while (cur);
+    await dkTg(tok, "sendMessage", { chat_id: chat, text: "Ovozlar bazasi: " + n + " ta yozuv, jami " + Math.floor(sec / 60) + " daqiqa " + (sec % 60) + " soniya.\nMatnga moslangan to'plamlar: " + sets + " ta — " + segs + " ta bo'lak, " + Math.floor(ssec / 60) + " daqiqa " + (ssec % 60) + " soniya.\nQisqa matni (izohi) bor yozuvlar: " + wt + " ta.\n\nOvozlar bo'yicha:\n" + (Object.keys(byV).map((nm) => "• " + nm + " — " + byV[nm].n + " ta bo'lak, " + Math.floor(byV[nm].sec / 60) + " daqiqa " + (byV[nm].sec % 60) + " soniya").join("\n") || "hali yo'q") + "\nJoriy ovoz: " + (await kvGet(env, "dkVoice", DK_VOICE0)) }); return; }
+  if (/^\/ovoz(\s|$)/.test(text)) { const nm = text.replace(/^\/ovoz\s*/, "").trim().slice(0, 60); if (nm) await kvPut(env, "dkVoice", nm); await dkTg(tok, "sendMessage", { chat_id: chat, text: nm ? "Joriy ovoz: " + nm + ". Endi tashlanadigan matn va yozuvlar shu ovozga yoziladi." : "Joriy ovoz: " + (await kvGet(env, "dkVoice", DK_VOICE0)) + ".\nAlmashtirish: /ovoz Ism Familiya\nBitta to'plam uchun: Word fayli izohiga «ovoz: Ism Familiya» deb yozing." }); return; }
   await dkTg(tok, "sendMessage", { chat_id: chat, text: "Inter Diktor boti ulandi.\n\nOvozlar bazasi — «Inter Diktor — Ovozlar» kanali: u yerga ovoz yozuvini va uning matnini (Word .docx fayli) tashlang — bot ikkalasini moslab, yozuvni gaplarga bo'ladi va har bo'lakka o'z matnini qo'yadi. Qisqa yozuvda matnni izohga yozsa ham bo'ladi. Yozuvga «-» deb javob bersangiz, bazadan olinadi.\n/baza — bazada nechta yozuv borligi.\n\nMatnni ovozga aylantirish keyingi bosqichda qo'shiladi; hozircha u asosiy botdagi /diktor buyrug'ida." });
 }
 
@@ -3159,7 +3164,7 @@ async function ubRoute(env, req, url) {
   if (url.pathname === "/ub/dkjob") { const j = await kvGet(env, "dkj:" + url.searchParams.get("id"), null); return J(j ? { ...j, chat: DK_CHAT, session: await kvGet(env, "usess", null) } : {}); }
   if (url.pathname === "/ub/dkres" && req.method === "POST") {
     const b0 = await req.json().catch(() => ({})); const jb = await kvGet(env, "dkj:" + b0.id, null); const tok = await kvGet(env, "dkToken", ""); if (!jb) return J({ ok: false });
-    await kvPut(env, "dkset:" + jb.d, b0.ok ? { st: "tayyor", job: b0.id, at: Date.now(), zip: b0.zip, n: b0.n, sec: b0.sec, lown: b0.lown || 0, lost: b0.lost || 0, files: b0.files, first: b0.first, last: b0.last } : { st: "xato", job: b0.id, at: Date.now(), err: String(b0.err || "").slice(0, 200) });
+    await kvPut(env, "dkset:" + jb.d, b0.ok ? { st: "tayyor", v: jb.v || DK_VOICE0, job: b0.id, at: Date.now(), zip: b0.zip, n: b0.n, sec: b0.sec, lown: b0.lown || 0, lost: b0.lost || 0, files: b0.files, first: b0.first, last: b0.last } : { st: "xato", job: b0.id, at: Date.now(), err: String(b0.err || "").slice(0, 200) });
     if (!b0.ok && tok) await dkTg(tok, "sendMessage", { chat_id: DK_CHAT, reply_to_message_id: jb.d, text: "⚠️ Moslash bajarilmadi: " + String(b0.err || "noma'lum xato").slice(0, 300) + "\nTuzatgach, matn fayliga javob qilib «qayta» deb yozing." });
     return J({ ok: true });
   }

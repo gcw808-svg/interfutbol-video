@@ -462,7 +462,7 @@ async def run(job_id):
         with zipfile.ZipFile(zp, "w", zipfile.ZIP_STORED) as z:
             for fn in sorted(os.listdir("/tmp/dk/seg")):
                 z.write(os.path.join("/tmp/dk/seg", fn), fn)
-        cap = f"✅ Moslandi: {len(parts)} ta ovoz fayli → {r['n']} ta bo'lak, {r['sec'] // 60} daqiqa {r['sec'] % 60} soniya. Har bir ovoz matndagi o'z joyiga qo'yildi."
+        cap = f"✅ Moslandi ({j.get('v') or 'Kozim Komilov'}): {len(parts)} ta ovoz fayli → {r['n']} ta bo'lak, {r['sec'] // 60} daqiqa {r['sec'] % 60} soniya. Har bir ovoz matndagi o'z joyiga qo'yildi."
         if r["miss"]:
             cap += f"\n⚠️ Matnda joyi topilmagan ovozlar: {', '.join(r['miss'][:15])}-fayl."
         if r["weak"]:
