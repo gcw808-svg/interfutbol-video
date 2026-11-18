@@ -20,7 +20,7 @@ jobs:
           path: .dkcache
           key: dkcache-${{ github.run_id }}
           restore-keys: dkcache-
-      - run: sudo apt-get update -qq > /dev/null 2>&1; sudo apt-get install -y -qq ffmpeg > /dev/null 2>&1; pip install -q faster-whisper python-docx telethon cryptg
+      - run: sudo apt-get update -qq > /dev/null 2>&1; sudo apt-get install -y -qq ffmpeg > /dev/null 2>&1; pip install -q faster-whisper python-docx telethon cryptg numpy && pip install -q torch --index-url https://download.pytorch.org/whl/cpu && pip install -q transformers
       - name: Moslash
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
@@ -28,4 +28,5 @@ jobs:
           TG_API_HASH: ${{ secrets.TG_API_HASH }}
           JOB: ${{ inputs.job }}
           DK_CACHE: ${{ github.workspace }}/.dkcache
+          DK_HEAR_HF: islomov/rubaistt_v2_medium  # o'zbekchaga o'rgatilgan Whisper (Apache-2.0)
         run: python3 -c "import asyncio, os, dk_align; asyncio.run(dk_align.run(os.environ['JOB']))"

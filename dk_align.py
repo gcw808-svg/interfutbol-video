@@ -23,7 +23,7 @@ def docx_text(path):
                 tg = el.tag.rsplit("}", 1)[-1]
                 if tg == "t":
                     o.append(el.text or "")
-                elif tg in ("br", "cr"):
+                elif tg in ("br", "cr", "pict"):  # pict — gorizontal chiziq (veb/ChatGPT'dan ko'chirilgan matnda sarlavha bilan matn orasida turadi)
                     o.append("\n")
                 elif tg == "tab":
                     o.append(" ")
@@ -186,26 +186,40 @@ def hear(wavs, lang="uz", keys=None):
     os.makedirs(cdir, exist_ok=True)
     out = [None] * len(wavs)
     for i, k in enumerate(keys or []):
-        fp = os.path.join(cdir, k + ".txt")
+        fp = os.path.join(cdir, k + ("_" + re.sub(r"[^A-Za-z0-9]+", "_", os.environ.get("DK_HEAR_HF", "")) if os.environ.get("DK_HEAR_HF") else "") + ".txt")
         if os.path.exists(fp):
             out[i] = open(fp, encoding="utf-8").read()
-    todo = [i for i in range(len(wavs)) if out[i] is None]
+    todo = [i for i in range(len(wavs)) if not out[i]]
     if todo:
+        done = []
         try:
+            import numpy as np
             from faster_whisper import WhisperModel
-            fw = WhisperModel(os.environ.get("DK_HEAR", "medium"), device="cpu", compute_type="int8", cpu_threads=os.cpu_count() or 4, download_root=os.path.join(os.environ.get("DK_CACHE", "/root/.cache/whisper"), "fw"))
+            root = os.environ.get("DK_CACHE", "/root/.cache/whisper")
+            name = os.environ.get("DK_HEAR", "medium")
+            hf = os.environ.get("DK_HEAR_HF", "")  # o'zbek tiliga o'rgatilgan Whisper (masalan islomov/rubaistt_v2_medium) — CTranslate2 ko'rinishiga bir marta o'giriladi
+            if hf:
+                ct = os.path.join(root, "ct2_" + re.sub(r"[^A-Za-z0-9]+", "_", hf))
+                try:
+                    if not os.path.exists(os.path.join(ct, "model.bin")):
+                        subprocess.run(["ct2-transformers-converter", "--model", hf, "--output_dir", ct, "--quantization", "int8", "--copy_files", "tokenizer.json", "preprocessor_config.json", "--force"], check=True, timeout=1500)
+                    name = ct
+                except Exception as e:
+                    print("o'zbek modeli tayyorlanmadi, oddiy model ishlatiladi:", str(e)[:200], flush=True)
+            fw = WhisperModel(name, device="cpu", compute_type="int8", cpu_threads=os.cpu_count() or 4, download_root=os.path.join(root, "fw"))
+            print("eshitish modeli:", name, flush=True)
             for i in todo:
-                segs, _ = fw.transcribe(wavs[i], language=lang, beam_size=2, temperature=0.0, condition_on_previous_text=False, vad_filter=False, no_speech_threshold=None, log_prob_threshold=None, compression_ratio_threshold=None)
+                raw = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", wavs[i], "-ac", "1", "-ar", "16000", "-f", "f32le", "-"], capture_output=True, check=True).stdout
+                segs, _ = fw.transcribe(np.frombuffer(raw, dtype=np.float32), language=lang, beam_size=2, temperature=0.0, condition_on_previous_text=False, vad_filter=False, no_speech_threshold=None, log_prob_threshold=None, compression_ratio_threshold=None)
                 out[i] = " ".join(x.text.strip() for x in segs)
-                print(f"eshitildi {i + 1}/{len(wavs)}", flush=True)
+                done.append(i)
+                print(f"eshitildi {i + 1}/{len(wavs)}: {out[i][:80]}", flush=True)
             del fw
         except Exception as e:
-            print("faster-whisper ishlamadi:", str(e)[:200], flush=True)
-            for i in todo:
-                out[i] = out[i] or ""
-        for i in todo:
-            if keys:
-                open(os.path.join(cdir, keys[i] + ".txt"), "w", encoding="utf-8").write(out[i] or "")
+            print("faster-whisper ishlamadi:", str(e)[:300], flush=True)
+        for i in done:  # faqat haqiqatan eshitilganlari saqlanadi (xato bo'lganda bo'sh natija saqlanib qolmasin)
+            if keys and out[i]:
+                open(os.path.join(cdir, keys[i] + ("_" + re.sub(r"[^A-Za-z0-9]+", "_", os.environ.get("DK_HEAR_HF", "")) if os.environ.get("DK_HEAR_HF") else "") + ".txt"), "w", encoding="utf-8").write(out[i])
     return [x or "" for x in out]
 
 
