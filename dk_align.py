@@ -416,7 +416,7 @@ def process_set(wavs, doc, out_dir, model_name="medium", lang="uz", device=None,
     if pl is None:
         raise Exception("ovozlar matnga to'g'ri kelmadi: matn bu ovozlar uchun juda qisqa yoki boshqa matn")
     os.makedirs(out_dir, exist_ok=True)
-    rows, rep, n, used = [], [], 0, set()
+    rows, rep, n, used, fixed = [], [], 0, set(), []
     for k, (w, x) in enumerate(zip(wavs, pl), 1):
         sub0 = sents[x["s"]:x["e"]]
         used.update(range(x["s"], x["e"]))
