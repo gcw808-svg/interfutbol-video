@@ -6,13 +6,13 @@ on:
         required: true
 jobs:
   run:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim  # 1 vCPU ishchi — daqiqasi oddiysidan 3 baravar arzon (Modal o'chganda zaxira; 2026-11-19)
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - run: (sudo apt-get update -qq > /dev/null 2>&1; sudo apt-get install -y -qq fonts-inter > /dev/null 2>&1 || true) && pip install pillow && (pip install -q numpy onnxruntime || true)
+      - run: ($(command -v sudo) apt-get update -qq > /dev/null 2>&1; $(command -v sudo) apt-get install -y -qq fonts-inter > /dev/null 2>&1 || true) && pip install pillow && (pip install -q numpy onnxruntime || true)
       - name: Inter shrifti (apt ishlamasa zaxira yuklab olinadi)
-        run: find /usr/share/fonts -iname 'Inter*Black*' | grep -q . || (curl -sSL --retry 3 -o /tmp/inter.zip https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip && sudo mkdir -p /usr/share/fonts/truetype/inter-dl && sudo unzip -o -j -q /tmp/inter.zip extras/ttf/Inter-Black.ttf extras/ttf/Inter-ExtraBold.ttf extras/ttf/Inter-Bold.ttf extras/ttf/Inter-Medium.ttf extras/ttf/Inter-Regular.ttf -d /usr/share/fonts/truetype/inter-dl) || true
+        run: find /usr/share/fonts -iname 'Inter*Black*' | grep -q . || (curl -sSL --retry 3 -o /tmp/inter.zip https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip && $(command -v sudo) mkdir -p /usr/share/fonts/truetype/inter-dl && $(command -v sudo) unzip -o -j -q /tmp/inter.zip extras/ttf/Inter-Black.ttf extras/ttf/Inter-ExtraBold.ttf extras/ttf/Inter-Bold.ttf extras/ttf/Inter-Medium.ttf extras/ttf/Inter-Regular.ttf -d /usr/share/fonts/truetype/inter-dl) || true
       - run: mkdir -p fonts && cd fonts && npm pack -q @fontsource/oswald@5.3.0 && for f in *.tgz; do mkdir -p ${f%.tgz} && tar xzf $f -C ${f%.tgz}; done || true
       - name: Kartochka
         env:
