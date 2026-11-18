@@ -31,6 +31,15 @@ image = (
     .add_local_file("people.py", "/root/people.py")
 )
 SECRETS = [modal.Secret.from_name("inter-jobs")]
+# INTER DIKTOR: ovoz + matnni moslash (dk_align.py) — alohida obraz (kartochka obraziga tegmaydi); Whisper modeli doimiy diskda saqlanadi
+dk_image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .apt_install("ffmpeg")
+    .pip_install("stable-ts", "python-docx", "telethon", "cryptg")
+    .add_local_file("uznum.py", "/root/uznum.py")
+    .add_local_file("dk_align.py", "/root/dk_align.py")
+)
+dk_models = modal.Volume.from_name("inter-whisper", create_if_missing=True)
 
 
 @app.function(image=image, secrets=SECRETS, timeout=300, retries=1)
@@ -52,6 +61,21 @@ def run_ub(job: str):
     import ub
 
     asyncio.run(ub.post(job))
+
+
+@app.function(image=dk_image, secrets=SECRETS, timeout=3600, gpu="T4", volumes={"/root/.cache/whisper": dk_models})
+def run_dkalign(job: str):
+    import asyncio
+    import sys
+
+    sys.path.insert(0, "/root")
+    os.chdir("/root")
+    import dk_align
+
+    try:
+        asyncio.run(dk_align.run(job))
+    finally:
+        dk_models.commit()
 
 
 @app.function(image=image, secrets=SECRETS, timeout=3600, cpu=2.0)
@@ -84,6 +108,8 @@ async def dispatch(request: Request):
         await run_ub.spawn.aio(job)
     elif wf == "people.yml":
         await run_people.spawn.aio(job)
+    elif wf == "dkalign.yml":
+        await run_dkalign.spawn.aio(job)
     else:
         return Response(status_code=400)
     return {"ok": True}

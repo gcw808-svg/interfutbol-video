@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ["card.py", "ub.py", "modal_jobs.py"]
+    paths: ["card.py", "ub.py", "modal_jobs.py", "dk_align.py", "people.py"]
 concurrency:
   group: modaljobs
   cancel-in-progress: false
