@@ -139,9 +139,27 @@ def process(audio, doc, out_dir, model_name="large-v3", lang="uz", device=None):
     return {"n": len(rows), "sec": round(dur), "sents": len(sents), "low": [[r[0], r[1][:80], r[5]] for r in low[:25]], "lown": len(low), "lost": max(0, lost)}
 
 
+def is_audio(m):
+    if m is None or not m.media:
+        return False
+    if m.voice or m.audio:
+        return True
+    d = m.document
+    return bool(d and (d.mime_type or "").startswith("audio/"))
+
+
+def doc_name(m):
+    if m is None or not m.document or is_audio(m):
+        return ""
+    n = (m.file.name or "") if m.file else ""
+    return n if n.lower().endswith((".docx", ".txt")) else ""
+
+
 async def run(job_id):
-    # Modal: ish ma'lumoti (kanal, xabar raqamlari, hisob seansi) bot orqali olinadi; natija ZIP kanalga, hisobot botga
-    import urllib.request
+    # Modal: bitta MATN fayli (Word) + shu matn o'qilgan BIR NECHTA ovoz fayli (2026-11-19: Bahtiyor aka 1 ta Word va 27 ta qisqa yozuv tashladi).
+    # To'plam: matn faylidan KEYIN (keyingi matn fayligacha) tashlangan barcha ovozlar, tartib bilan; keyin ovoz bo'lmasa — matndan OLDIN tashlanganlar.
+    # Ovozlar ketma-ket ulanadi va butun matn shu umumiy yozuvga moslanadi. Fayllar hisob seansi orqali o'qiladi (KV'dagi ro'yxatga bog'liq emas).
+    import asyncio, time, urllib.request
     from telethon import TelegramClient
     from telethon.sessions import StringSession
     key = hashlib.sha256(("ub-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:40]
@@ -149,8 +167,9 @@ async def run(job_id):
         rq = urllib.request.Request(W + path, data=json.dumps(body).encode() if body is not None else None, headers={"x-key": key, "content-type": "application/json", "user-agent": "InterDiktorAlign"}, method="POST" if body is not None else "GET")
         return json.loads(urllib.request.urlopen(rq, timeout=60).read() or b"{}")
     j = wapi("/ub/dkjob?id=" + job_id)
-    if not j.get("a"):
+    if not j.get("d"):
         return
+    did = int(j["d"])
     try:
         c = TelegramClient(StringSession(j["session"]), int(os.environ["TG_API_ID"]), os.environ["TG_API_HASH"])
         await c.connect()
@@ -158,24 +177,51 @@ async def run(job_id):
             raise Exception("hisob ulanishi bekor qilingan (asosiy botda /ulanish kerak)")
         await c.get_dialogs(limit=200)  # yangi seansda kanal "tanish" bo'lishi uchun
         ch = await c.get_entity(int(j["chat"]))
-        ma, md = await c.get_messages(ch, ids=[int(j["a"]), int(j["d"])])
-        os.makedirs("/tmp/dk", exist_ok=True)
-        ap = await c.download_media(ma, file="/tmp/dk/audio")
-        dp = await c.download_media(md, file="/tmp/dk/")
-        if not str(dp).lower().endswith((".docx", ".txt")):
+        # ovozlar tashlab bo'linishini kutish: kanalda 100 soniya yangi fayl kelmasa — boshlanadi (ko'pi bilan 20 daqiqa)
+        t0 = time.time()
+        while time.time() - t0 < 1200 and not j.get("now"):
+            last = None
+            async for m in c.iter_messages(ch, limit=30):
+                if is_audio(m) or doc_name(m):
+                    last = m
+                    break
+            if last is None or time.time() - last.date.timestamp() > 100:
+                break
+            await asyncio.sleep(20)
+        lo = max(1, did - 400)
+        ms = [m for m in await c.get_messages(ch, ids=list(range(lo, did + 401))) if m is not None]
+        md = next((m for m in ms if m.id == did), None)
+        if not doc_name(md):
             raise Exception("matn fayli .docx yoki .txt bo'lishi kerak")
-        r = process(ap, dp, "/tmp/dk/seg", os.environ.get("DK_MODEL", "medium"))
-        zp = f"/tmp/dk/toplam_{j['a']}.zip"
+        prev = max([m.id for m in ms if m.id < did and doc_name(m)] or [0])
+        nxt = min([m.id for m in ms if m.id > did and doc_name(m)] or [10 ** 12])
+        auds = [m for m in ms if is_audio(m) and did < m.id < nxt] or [m for m in ms if is_audio(m) and prev < m.id < did]
+        if not auds:
+            raise Exception("bu matnning ovoz fayllari topilmadi — avval Word faylini, keyin shu matnning ovoz fayllarini tashlang")
+        os.makedirs("/tmp/dk/in", exist_ok=True)
+        dp = await c.download_media(md, file="/tmp/dk/")
+        parts = []
+        for k, m in enumerate(sorted(auds, key=lambda x: x.id), 1):
+            ap = await c.download_media(m, file=f"/tmp/dk/in/{k:03d}")
+            wp = f"/tmp/dk/in/{k:03d}.wav"
+            subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", ap, "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", wp], check=True)
+            parts.append(wp)
+        with open("/tmp/dk/list.txt", "w") as f:
+            f.write("".join(f"file '{p}'\n" for p in parts))
+        full = "/tmp/dk/full.wav"
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "concat", "-safe", "0", "-i", "/tmp/dk/list.txt", "-c", "copy", full], check=True)
+        r = process(full, dp, "/tmp/dk/seg", os.environ.get("DK_MODEL", "medium"))
+        zp = f"/tmp/dk/toplam_{did}.zip"
         with zipfile.ZipFile(zp, "w", zipfile.ZIP_STORED) as z:
             for fn in sorted(os.listdir("/tmp/dk/seg")):
                 z.write(os.path.join("/tmp/dk/seg", fn), fn)
-        cap = f"✅ Moslandi: {r['n']} ta bo'lak, {r['sec'] // 60} daqiqa {r['sec'] % 60} soniya ({r['sents']} gapdan)."
+        cap = f"✅ Moslandi: {len(parts)} ta ovoz fayli → {r['n']} ta bo'lak, {r['sec'] // 60} daqiqa {r['sec'] % 60} soniya (matnda {r['sents']} gap)."
         if r["lown"]:
-            cap += f"\nIshonchi past bo'laklar: {r['lown']} ta — eshitib tekshirish kerak:\n" + "\n".join(f"• {x[0]}: {x[1]}" for x in r["low"][:8])
+            cap += f"\nIshonchi past bo'laklar: {r['lown']} ta — eshitib tekshirish kerak:\n" + "\n".join(f"• {x[0]}: {x[1]}" for x in r["low"][:6])
         if r["lost"]:
             cap += f"\n⚠️ {r['lost']} ta gap ovozda topilmadi (matn ovozdan uzunroq bo'lishi mumkin)."
-        m = await c.send_file(ch, zp, caption=cap[:1000], reply_to=int(j["a"]), force_document=True)
-        wapi("/ub/dkres", {"id": job_id, "ok": 1, "zip": m.id, **r})
+        m = await c.send_file(ch, zp, caption=cap[:1000], reply_to=did, force_document=True)
+        wapi("/ub/dkres", {"id": job_id, "ok": 1, "zip": m.id, "files": len(parts), "first": min(x.id for x in auds), "last": max(x.id for x in auds), **r})
         await c.disconnect()
     except Exception as e:
         try:

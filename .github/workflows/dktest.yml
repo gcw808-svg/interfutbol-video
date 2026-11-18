@@ -3,6 +3,9 @@ name: dktest
 on:
   workflow_dispatch:
     inputs:
+      doc:
+        description: "matn fayli xabari raqami — shu to'plamni qayta moslash"
+        default: ""
       job:
         description: "bor ish raqami — faqat Modal'ni qayta chaqirish (fayl tashlanmaydi)"
         default: ""
@@ -17,10 +20,14 @@ jobs:
       - env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           JOB: ${{ inputs.job }}
+          DOC: ${{ inputs.doc }}
         run: |
           python3 - <<'PY'
           import base64, hashlib, json, os, urllib.request
           key = hashlib.sha256(("ub-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:40]
+          if os.environ.get("DOC"):
+              rq = urllib.request.Request("https://inter-futbol-bot.gcw808.workers.dev/ub/dkredo", data=json.dumps({"doc": int(os.environ["DOC"])}).encode(), headers={"x-key": key, "content-type": "application/json", "user-agent": "dktest"})
+              print("qayta:", urllib.request.urlopen(rq, timeout=240).read().decode()[:300]); raise SystemExit(0)
           if os.environ.get("JOB"):
               import urllib.error
               rq = urllib.request.Request("https://gcw808-svg--inter-jobs-dispatch.modal.run", data=json.dumps({"wf": "dkalign.yml", "job": os.environ["JOB"]}).encode(), headers={"x-key": key, "content-type": "application/json"})

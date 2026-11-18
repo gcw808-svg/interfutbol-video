@@ -2182,13 +2182,18 @@ async function dkConnect(env, chat, msg) {
   await dkTg(tok, "setMyCommands", { commands: [{ command: "start", description: "Bot haqida" }, { command: "baza", description: "Ovozlar bazasi holati" }] });
   await tg(env, "sendMessage", { chat_id: chat, text: (wh.ok ? "✅ Inter Diktor boti ulandi: @" + me.result.username : "Kalit saqlandi, lekin ulanishda xato: " + (wh.description || "")) + "\nKalitli xabar o'chirildi." });
 }
-async function dkAlignStart(env, tok, B, e, docM) {
+// TO'PLAM (2026-11-19): bitta matn fayli (Word) + shu matn o'qilgan bir nechta ovoz fayli. Ish matn fayli bo'yicha boshlanadi (bitta hodisa — poyga yo'q);
+// ovozlar ro'yxatini Modal'dagi ish kanalning o'zidan o'qiydi (matndan keyin, keyingi matn fayligacha tashlanganlari) va ular tashlab bo'linishini kutadi.
+async function dkSetStart(env, tok, docM, now) {
+  const cur = await kvGet(env, "dkset:" + docM, null); if (cur && cur.st === "moslanmoqda" && Date.now() - (cur.at || 0) < 40 * 60e3) return cur.job;
   const id = "a" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  e.doc = docM; e.st = "moslanmoqda"; e.job = id; await kvPut(env, "dkBase", B.slice(-3000));
-  await kvPut(env, "dkj:" + id, { a: e.m, d: docM }, { expirationTtl: 3 * 86400 });
+  await kvPut(env, "dkset:" + docM, { st: "moslanmoqda", job: id, at: Date.now() });
+  await kvPut(env, "dkj:" + id, { d: docM, now: now ? 1 : 0 }, { expirationTtl: 3 * 86400 });
   let ok = false; const ju = await kvGet(env, "jobsUrl", "https://gcw808-svg--inter-jobs-dispatch.modal.run"); const xk = await ubKey(env);
   for (let i = 0; i < 3 && !ok; i++) { try { const r = await fetch(ju, { method: "POST", headers: { "x-key": xk, "content-type": "application/json" }, body: JSON.stringify({ wf: "dkalign.yml", job: id }), signal: AbortSignal.timeout(60000) }); ok = r.ok; } catch (x) {} }  // Modal "uyg'onishi" 30+ soniya olishi mumkin
-  await dkTg(tok, "sendMessage", { chat_id: DK_CHAT, reply_to_message_id: e.m, text: ok ? "Ovoz va matn moslanmoqda: yozuv gaplarga bo'linadi, har bo'lakka o'z matni qo'yiladi. Tayyor bo'lgach to'plam (ZIP) shu yerga tushadi — odatda 3–10 daqiqa." : "⚠️ Moslash ishga tushmadi (server javob bermadi). Birozdan keyin matn faylini shu ovozga javob qilib qayta tashlang." });
+  if (!ok) await kvPut(env, "dkset:" + docM, { st: "xato", job: id, at: Date.now(), err: "server javob bermadi" });
+  await dkTg(tok, "sendMessage", { chat_id: DK_CHAT, reply_to_message_id: docM, text: ok ? "Matn fayli qabul qilindi. Shu matnning ovoz fayllarini ketidan tashlang (bir nechta bo'lsa — tartib bilan). Oxirgi fayldan keyin 2 daqiqa kutib, hammasini o'zim ulayman, matnga moslayman va tayyor to'plamni (ZIP) shu yerga tashlayman." : "⚠️ Moslash ishga tushmadi (server javob bermadi). Birozdan keyin matn faylini qayta tashlang." });
+  return id;
 }
 async function dkUpdate(env, u, tok) {
   const admins = await getAdmins(env);
@@ -2196,35 +2201,35 @@ async function dkUpdate(env, u, tok) {
   if (cp) {
     if (!cp.chat || cp.chat.id !== DK_CHAT) return;
     const a = cp.voice || cp.audio || (cp.document && /^audio\//.test(cp.document.mime_type || "") ? cp.document : null);
-    const B = await kvGet(env, "dkBase", []);
-    // MATN FAYLI (Word .docx yoki .txt) — ovoz bilan MOSLASH (2026-11-18, Bahtiyor aka: "ovoz va Word fayl tashlasam, solishtirib hamma so'zlarni o'z o'rniga qo'ysin"):
-    // fayl ovoz yozuviga javob bo'lsa — o'sha yozuv; bo'lmasa — oxirgi 12 soatdagi matn fayli hali biriktirilmagan eng so'nggi ovoz; ovoz hali kelmagan bo'lsa — kutadi.
     const dn = cp.document && !a ? String(cp.document.file_name || "") : "";
     if (dn) {
+      if (u.edited_channel_post) return;
       if (/\.zip$/i.test(dn)) return; // moslash natijasi (to'plam) — o'zimizniki
       if (!/\.(docx|txt)$/i.test(dn)) { if (/\.(doc|rtf|pdf|odt)$/i.test(dn)) await dkTg(tok, "sendMessage", { chat_id: DK_CHAT, reply_to_message_id: cp.message_id, text: "Matn fayli .docx (Word) yoki .txt bo'lishi kerak. Word'da «Saqlash turi: Word hujjati (.docx)» qilib saqlab, qayta tashlang." }); return; }
-      const rt = cp.reply_to_message; const e = (rt && B.find((x) => x.m === rt.message_id)) || [...B].reverse().find((x) => !x.doc && Date.now() - (x.at || 0) < 12 * 3600e3);
-      if (!e) { await kvPut(env, "dkDoc", { m: cp.message_id, n: dn, at: Date.now() }, { expirationTtl: 12 * 3600 }); await dkTg(tok, "sendMessage", { chat_id: DK_CHAT, reply_to_message_id: cp.message_id, text: "Matn fayli qabul qilindi. Endi shu matnning ovoz yozuvini tashlang — o'zim moslayman." }); return; }
-      await dkAlignStart(env, tok, B, e, cp.message_id); return;
+      await dkSetStart(env, tok, cp.message_id, false); return;
     }
-    if (!a) { // matnli xabar: ovozga javob bo'lsa — o'sha yozuvning matni; "-" — yozuvni bazadan olib tashlash
-      const rt = cp.reply_to_message, t = (cp.text || "").trim(); if (!rt || !t) return; const e = B.find((x) => x.m === rt.message_id); if (!e) return;
-      if (t === "-") { await kvPut(env, "dkBase", B.filter((x) => x.m !== rt.message_id)); await dkTg(tok, "sendMessage", { chat_id: DK_CHAT, text: "Bazadan olib tashlandi.", reply_to_message_id: rt.message_id }); }
-      else { e.t = t.slice(0, 4000); await kvPut(env, "dkBase", B); await dkTg(tok, "sendMessage", { chat_id: DK_CHAT, text: "Matn saqlandi (" + e.t.length + " belgi).", reply_to_message_id: rt.message_id }); }
+    if (!a) { // matnli xabar: ovozga javob bo'lsa — o'sha yozuvning matni; "-" — yozuvni bazadan olib tashlash; matn fayliga "qayta" — qayta moslash
+      const rt = cp.reply_to_message, t = (cp.text || "").trim(); if (!rt || !t) return;
+      if (/^qayta$/i.test(t) && rt.document && /\.(docx|txt)$/i.test(rt.document.file_name || "")) { await env.STATE.delete("dkset:" + rt.message_id); await dkSetStart(env, tok, rt.message_id, true); return; }
+      const e = await kvGet(env, "dka:" + rt.message_id, null); if (!e) return;
+      if (t === "-") { await env.STATE.delete("dka:" + rt.message_id); await dkTg(tok, "sendMessage", { chat_id: DK_CHAT, text: "Bazadan olib tashlandi.", reply_to_message_id: rt.message_id }); }
+      else { e.t = t.slice(0, 4000); await env.STATE.put("dka:" + rt.message_id, JSON.stringify(e), { metadata: { d: e.d || 0, t: 1 } }); await dkTg(tok, "sendMessage", { chat_id: DK_CHAT, text: "Matn saqlandi (" + e.t.length + " belgi).", reply_to_message_id: rt.message_id }); }
       return;
     }
-    const cap = (cp.caption || "").trim(); const i = B.findIndex((x) => x.m === cp.message_id);
+    // OVOZ: har yozuv O'Z kalitida saqlanadi (dka:<xabar>) — bir vaqtda 20–30 fayl tashlanganda umumiy ro'yxat ustiga yozilib, yozuvlar yo'qolmasligi uchun.
+    // Har faylga javob yozilmaydi (27 ta fayl — 27 ta xabar bo'lib ketgan edi); faqat ovozli xabar yoki 20 MB dan katta faylda ogohlantiriladi.
+    const cap = (cp.caption || "").trim();
     const e = { m: cp.message_id, f: a.file_id, k: cp.voice ? "voice" : "file", d: a.duration || 0, sz: a.file_size || 0, t: cap.slice(0, 4000), at: Date.now() };
-    if (i >= 0) B[i] = { ...B[i], ...e }; else B.push(e);
-    await kvPut(env, "dkBase", B.slice(-3000));
-    const pd = i < 0 && !cap ? await kvGet(env, "dkDoc", null) : null;
-    if (pd && Date.now() - pd.at < 12 * 3600e3) { await env.STATE.delete("dkDoc"); await dkAlignStart(env, tok, B, B.find((x) => x.m === cp.message_id), pd.m); return; }
-    if (i < 0) await dkTg(tok, "sendMessage", { chat_id: DK_CHAT, reply_to_message_id: cp.message_id, text: "Bazaga qo'shildi: " + (e.d ? e.d + " soniya" : "audio") + (cp.voice ? " (ovozli xabar — sifat uchun fayl qilib yuborgan ma'qul)" : "") + (cap ? ", matni bor (" + cap.length + " belgi)." : ". Matni yo'q — matnning Word (.docx) faylini tashlang (o'zim moslab, gaplarga bo'laman) yoki shu xabarga javob qilib matnni yozing.") + (a.file_size > 20 * 1024 * 1024 ? "\n⚠️ Fayl 20 MB dan katta — bot uni yuklab ololmaydi, bo'laklab yuboring." : "") });
+    await env.STATE.put("dka:" + cp.message_id, JSON.stringify(e), { metadata: { d: e.d, t: cap ? 1 : 0 } });
+    if (!u.edited_channel_post && (cp.voice || a.file_size > 20 * 1024 * 1024)) await dkTg(tok, "sendMessage", { chat_id: DK_CHAT, reply_to_message_id: cp.message_id, text: cp.voice ? "Ovozli xabar qabul qilindi, lekin sifat uchun yozuvni FAYL qilib yuborgan ma'qul." : "Katta fayl qabul qilindi (hisob orqali yuklab olinadi)." });
     return;
   }
   const msg = u.message; if (!msg) return; const chat = msg.chat.id, text = msg.text || "";
   if (!admins.includes(chat)) { await dkTg(tok, "sendMessage", { chat_id: chat, text: "Bu bot yopiq." }); return; }
-  if (text === "/baza") { const B = await kvGet(env, "dkBase", []); const sec = B.reduce((s, x) => s + (x.d || 0), 0); await dkTg(tok, "sendMessage", { chat_id: chat, text: "Ovozlar bazasi: " + B.length + " ta yozuv, jami " + Math.floor(sec / 60) + " daqiqa " + (sec % 60) + " soniya.\nMoslangan: " + B.filter((x) => x.st === "tayyor").length + " ta yozuv, " + B.reduce((s, x) => s + (x.n || 0), 0) + " ta bo'lak, " + Math.floor(B.reduce((s, x) => s + (x.sec || 0), 0) / 60) + " daqiqa.\nQisqa matni bor: " + B.filter((x) => x.t).length + " ta; matnsiz va moslanmagan: " + B.filter((x) => !x.t && !x.doc).length + " ta." }); return; }
+  if (text === "/baza") {
+    let n = 0, sec = 0, wt = 0, cur; do { const L = await env.STATE.list({ prefix: "dka:", cursor: cur }); for (const k of L.keys) { n++; sec += (k.metadata && k.metadata.d) || 0; if (k.metadata && k.metadata.t) wt++; } cur = L.list_complete ? null : L.cursor; } while (cur);
+    let sets = 0, segs = 0, ssec = 0; cur = undefined; do { const L = await env.STATE.list({ prefix: "dkset:", cursor: cur }); for (const k of L.keys) { const v = await kvGet(env, k.name, null); if (v && v.st === "tayyor") { sets++; segs += v.n || 0; ssec += v.sec || 0; } } cur = L.list_complete ? null : L.cursor; } while (cur);
+    await dkTg(tok, "sendMessage", { chat_id: chat, text: "Ovozlar bazasi: " + n + " ta yozuv, jami " + Math.floor(sec / 60) + " daqiqa " + (sec % 60) + " soniya.\nMatnga moslangan to'plamlar: " + sets + " ta — " + segs + " ta bo'lak, " + Math.floor(ssec / 60) + " daqiqa " + (ssec % 60) + " soniya.\nQisqa matni (izohi) bor yozuvlar: " + wt + " ta." }); return; }
   await dkTg(tok, "sendMessage", { chat_id: chat, text: "Inter Diktor boti ulandi.\n\nOvozlar bazasi — «Inter Diktor — Ovozlar» kanali: u yerga ovoz yozuvini va uning matnini (Word .docx fayli) tashlang — bot ikkalasini moslab, yozuvni gaplarga bo'ladi va har bo'lakka o'z matnini qo'yadi. Qisqa yozuvda matnni izohga yozsa ham bo'ladi. Yozuvga «-» deb javob bersangiz, bazadan olinadi.\n/baza — bazada nechta yozuv borligi.\n\nMatnni ovozga aylantirish keyingi bosqichda qo'shiladi; hozircha u asosiy botdagi /diktor buyrug'ida." });
 }
 
@@ -3141,14 +3146,15 @@ async function ubRoute(env, req, url) {
     const send = async (bytes, name, mime, cap) => { const fd = new FormData(); fd.append("chat_id", String(DK_CHAT)); fd.append("caption", cap); fd.append("disable_notification", "true"); fd.append("document", new Blob([bytes], { type: mime }), name); return (await fetch(`https://api.telegram.org/bot${tok}/sendDocument`, { method: "POST", body: fd })).json(); };
     const ra = await send(bin(b0.audio), b0.an || "sinov.mp3", "audio/mpeg", "SINOV — tizimni tekshirish uchun (o'chirib tashlasa bo'ladi)"); const rd = await send(bin(b0.doc), b0.dn || "sinov.txt", "text/plain", "SINOV matni");
     if (!ra.ok || !rd.ok) return J({ ok: false, why: (ra.description || "") + " " + (rd.description || "") });
-    const B = await kvGet(env, "dkBase", []); const a = ra.result.audio || ra.result.document || {}; const e = { m: ra.result.message_id, f: a.file_id, k: "file", d: a.duration || 0, sz: a.file_size || 0, t: "", at: Date.now(), test: 1 }; B.push(e);
-    await dkAlignStart(env, tok, B, e, rd.result.message_id); return J({ ok: true, a: e.m, d: rd.result.message_id, job: e.job });
+    const a = ra.result.audio || ra.result.document || {}; await env.STATE.put("dka:" + ra.result.message_id, JSON.stringify({ m: ra.result.message_id, f: a.file_id, k: "file", d: a.duration || 0, sz: a.file_size || 0, t: "", at: Date.now(), test: 1 }), { metadata: { d: a.duration || 0, t: 0 } });
+    await env.STATE.delete("dkset:" + rd.result.message_id); const job = await dkSetStart(env, tok, rd.result.message_id, true); return J({ ok: true, a: ra.result.message_id, d: rd.result.message_id, job });
   }
+  if (url.pathname === "/ub/dkredo" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); const tok = await kvGet(env, "dkToken", ""); if (!tok || !b0.doc) return J({ ok: false }); await env.STATE.delete("dkset:" + b0.doc); return J({ ok: true, job: await dkSetStart(env, tok, Number(b0.doc), true) }); }
   if (url.pathname === "/ub/dkjob") { const j = await kvGet(env, "dkj:" + url.searchParams.get("id"), null); return J(j ? { ...j, chat: DK_CHAT, session: await kvGet(env, "usess", null) } : {}); }
   if (url.pathname === "/ub/dkres" && req.method === "POST") {
-    const b0 = await req.json().catch(() => ({})); const B = await kvGet(env, "dkBase", []); const e = B.find((x) => x.job === b0.id); const tok = await kvGet(env, "dkToken", "");
-    if (e) { if (b0.ok) { e.st = "tayyor"; e.zip = b0.zip; e.n = b0.n; e.sec = b0.sec; e.lown = b0.lown || 0; } else { e.st = "xato"; e.err = String(b0.err || "").slice(0, 200); delete e.doc; } await kvPut(env, "dkBase", B); }
-    if (!b0.ok && tok && e) await dkTg(tok, "sendMessage", { chat_id: DK_CHAT, reply_to_message_id: e.m, text: "⚠️ Moslash bajarilmadi: " + String(b0.err || "noma'lum xato").slice(0, 300) });
+    const b0 = await req.json().catch(() => ({})); const jb = await kvGet(env, "dkj:" + b0.id, null); const tok = await kvGet(env, "dkToken", ""); if (!jb) return J({ ok: false });
+    await kvPut(env, "dkset:" + jb.d, b0.ok ? { st: "tayyor", job: b0.id, at: Date.now(), zip: b0.zip, n: b0.n, sec: b0.sec, lown: b0.lown || 0, lost: b0.lost || 0, files: b0.files, first: b0.first, last: b0.last } : { st: "xato", job: b0.id, at: Date.now(), err: String(b0.err || "").slice(0, 200) });
+    if (!b0.ok && tok) await dkTg(tok, "sendMessage", { chat_id: DK_CHAT, reply_to_message_id: jb.d, text: "⚠️ Moslash bajarilmadi: " + String(b0.err || "noma'lum xato").slice(0, 300) + "\nTuzatgach, matn fayliga javob qilib «qayta» deb yozing." });
     return J({ ok: true });
   }
   if (url.pathname === "/ub/afsona" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); let r; try { r = await afsonaRun(env, b0.chan ? null : admin, b0.name || ""); } catch (e) { r = "xato: " + e.message; } return J({ r: String(r) }); }
