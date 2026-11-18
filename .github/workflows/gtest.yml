@@ -1,0 +1,16 @@
+name: gtest
+# Gemini kaliti ishlayaptimi — faqat javob kodi chiqadi, kalit hech qachon chiqarilmaydi
+on:
+  workflow_dispatch:
+jobs:
+  run:
+    runs-on: ubuntu-slim
+    timeout-minutes: 3
+    steps:
+      - env:
+          K: ${{ secrets.GEMINI_KEY }}
+        run: |
+          for m in gemini-3.8-flash gemini-3.5-flash-lite; do
+            code=$(curl -s -o /tmp/o.json -w "%{http_code}" -X POST "https://generativelanguage.googleapis.com/v1beta/models/$m:generateContent" -H "x-goog-api-key: $K" -H "content-type: application/json" -d '{"contents":[{"parts":[{"text":"Salom de"}]}],"generationConfig":{"maxOutputTokens":20}}')
+            echo "$m: $code $(python3 -c "import json;j=json.load(open('/tmp/o.json'));print((j.get('error') or {}).get('status') or 'javob bor')")"
+          done
