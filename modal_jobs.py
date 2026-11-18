@@ -35,7 +35,7 @@ SECRETS = [modal.Secret.from_name("inter-jobs")]
 dk_image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("ffmpeg")
-    .pip_install("stable-ts", "python-docx", "telethon", "cryptg", "fastapi")
+    .pip_install("stable-ts", "python-docx", "telethon", "cryptg", "fastapi", "faster-whisper")
     .add_local_file("uznum.py", "/root/uznum.py")
     .add_local_file("dk_align.py", "/root/dk_align.py")
 )

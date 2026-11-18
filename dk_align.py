@@ -139,6 +139,120 @@ def process(audio, doc, out_dir, model_name="large-v3", lang="uz", device=None):
     return {"n": len(rows), "sec": round(dur), "sents": len(sents), "low": [[r[0], r[1][:80], r[5]] for r in low[:25]], "lown": len(low), "lost": max(0, lost)}
 
 
+CYR = {"а":"a","б":"b","в":"v","г":"g","д":"d","е":"e","ё":"yo","ж":"j","з":"z","и":"i","й":"y","к":"k","л":"l","м":"m","н":"n","о":"o","п":"p","р":"r","с":"s","т":"t","у":"u","ф":"f","х":"x","ц":"s","ч":"ch","ш":"sh","щ":"sh","ъ":"","ы":"i","ь":"","э":"e","ю":"yu","я":"ya","ў":"o","қ":"q","ғ":"g","ҳ":"h"}
+
+
+def nkey(t):
+    # solishtirish uchun yagona ko'rinish: kichik harf, kirill → lotin, o'/g' belgisiz, faqat harf-raqam (Whisper o'zbekchani ba'zan kirillda yozadi)
+    t = spoken(t).lower()
+    t = "".join(CYR.get(ch, ch) for ch in t)
+    t = t.replace("ö", "o").replace("ğ", "g").replace("ş", "sh").replace("ç", "ch")
+    t = re.sub(r"[‘’ʻʼ`']", "", t)
+    return re.sub(r"[^a-z0-9]+", " ", t).strip()
+
+
+def hear(wavs, lang="uz"):
+    # har bir ovoz faylida nima deyilganini taxminan eshitish (matndagi joyini topish uchun; aniq matn Word'dan olinadi)
+    out = []
+    try:
+        from faster_whisper import WhisperModel
+        fw = WhisperModel(os.environ.get("DK_HEAR", "medium"), device="cpu", compute_type="int8", cpu_threads=8, download_root="/root/.cache/whisper/fw")
+        for w in wavs:
+            segs, _ = fw.transcribe(w, language=lang, beam_size=1, condition_on_previous_text=False, vad_filter=False)
+            out.append(" ".join(x.text.strip() for x in segs))
+        del fw
+    except Exception as e:
+        print("faster-whisper ishlamadi:", str(e)[:200], flush=True)
+        import stable_whisper
+        m = stable_whisper.load_model(os.environ.get("DK_MODEL", "medium"))
+        out = [m.transcribe(w, language=lang, beam_size=1, condition_on_previous_text=False, verbose=None).text for w in wavs]
+    return out
+
+
+def place(sents, heard):
+    # har bir ovoz fayli matndagi QAYSI gaplarga to'g'ri kelishini topish: fayllar matn tartibida, o'qilmagan qatorlar (mavzu, sarlavha, izoh) tashlab o'tiladi
+    import difflib
+    keys = [nkey(x) for x in sents]
+    res, ptr = [], 0
+    for h in heard:
+        hk = nkey(h)
+        best = (0.0, None, None)
+        if len(hk) >= 8:
+            for s0 in range(ptr, min(len(sents), ptr + 14)):
+                acc = ""
+                for e0 in range(s0 + 1, len(sents) + 1):
+                    acc = (acc + " " + keys[e0 - 1]).strip()
+                    if len(acc) > 1.9 * len(hk) + 60:
+                        break
+                    if len(acc) < 0.45 * len(hk):
+                        continue
+                    r = difflib.SequenceMatcher(None, hk, acc, autojunk=False).ratio() - 0.004 * (s0 - ptr)
+                    if r > best[0]:
+                        best = (r, s0, e0)
+        if best[1] is None or best[0] < 0.35:
+            res.append({"s": None, "e": None, "score": round(max(best[0], 0), 2), "heard": h})
+        else:
+            res.append({"s": best[1], "e": best[2], "score": round(best[0], 2), "heard": h})
+            ptr = best[2]
+    return res
+
+
+def process_set(wavs, doc, out_dir, model_name="medium", lang="uz", device=None):
+    # wavs — tartib bilan 24 kHz mono fayllar. Natija: bo'laklar (har fayl ichida gaplarga bo'lingan), metadata.csv va hisobot.csv
+    import stable_whisper
+    sents = sentences(docx_text(doc))
+    heard = hear(wavs, lang)
+    pl = place(sents, heard)
+    for k, x in enumerate(pl, 1):
+        print(f"fayl {k}: gaplar {x['s']}..{x['e']} o'xshashlik {x['score']} | {x['heard'][:90]}", flush=True)
+    model = stable_whisper.load_model(model_name, device=device)
+    os.makedirs(out_dir, exist_ok=True)
+    rows, rep, n, used = [], [], 0, set()
+    for k, (w, x) in enumerate(zip(wavs, pl), 1):
+        if x["s"] is None:
+            rep.append([f"{k:03d}", "", f"{x['score']:.2f}", "MATNDA TOPILMADI", x["heard"][:300]])
+            continue
+        sub = sents[x["s"]:x["e"]]
+        used.update(range(x["s"], x["e"]))
+        w16 = w[:-4] + "_16k.wav"
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", w, "-ac", "1", "-ar", "16000", w16], check=True)
+        try:
+            res = model.align(w16, " ".join(spoken(t) for t in sub), language=lang)
+            words = [(q.word.strip(), float(q.start), float(q.end), float(getattr(q, "probability", 0) or 0)) for sg in res.segments for q in sg.words if q.word.strip()]
+            segs = shape(group(sub, words))
+        except Exception as e:
+            print("moslash xatosi", k, str(e)[:200], flush=True)
+            segs = []
+        if not segs:  # so'zma-so'z moslab bo'lmadi — fayl butunligicha, matni bilan
+            dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", w], capture_output=True, text=True).stdout.strip() or 0)
+            segs = [{"text": " ".join(sub), "spoken": " ".join(spoken(t) for t in sub), "start": 0.0, "end": dur, "prob": 0.0}]
+        for i2, sg in enumerate(segs):
+            n += 1
+            a = max(0.0, sg["start"] - 0.12)
+            b = sg["end"] + 0.12
+            if i2 + 1 < len(segs):
+                b = min(b, max(sg["end"], segs[i2 + 1]["start"] - 0.02))
+            fn = f"{n:04d}.wav"
+            subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-ss", f"{a:.3f}", "-to", f"{b:.3f}", "-i", w, "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", os.path.join(out_dir, fn)], check=True)
+            rows.append([fn, sg["text"], sg["spoken"], f"{k:03d}", f"{a:.2f}", f"{b:.2f}", f"{x['score']:.2f}"])
+        rep.append([f"{k:03d}", f"{x['s'] + 1}-{x['e']}", f"{x['score']:.2f}", " ".join(sub)[:300], x["heard"][:300]])
+    with open(os.path.join(out_dir, "metadata.csv"), "w", encoding="utf-8", newline="") as f:
+        cw = csv.writer(f, delimiter="|")
+        cw.writerow(["fayl", "matn", "oqilishi", "manba_ovoz", "boshi", "oxiri", "oxshashlik"])
+        cw.writerows(rows)
+    with open(os.path.join(out_dir, "hisobot.csv"), "w", encoding="utf-8", newline="") as f:
+        cw = csv.writer(f, delimiter="|")
+        cw.writerow(["ovoz_fayli", "matndagi_gaplar", "oxshashlik", "matn", "eshitilgani"])
+        cw.writerows(rep)
+    skipped = [sents[i3] for i3 in range(len(sents)) if i3 not in used]
+    with open(os.path.join(out_dir, "oqilmagan.txt"), "w", encoding="utf-8") as f:
+        f.write("\n".join(skipped))
+    dur = sum(float(r[5]) - float(r[4]) for r in rows)
+    weak = [r for r in rep if r[1] and float(r[2]) < 0.6]
+    miss = [r for r in rep if not r[1]]
+    return {"n": len(rows), "sec": round(dur), "sents": len(sents), "files": len(wavs), "weak": [[r[0], r[2]] for r in weak], "miss": [r[0] for r in miss], "skipped": len(skipped), "lown": len(weak) + len(miss), "lost": len(skipped)}
+
+
 def is_audio(m):
     if m is None or not m.media:
         return False
@@ -206,22 +320,21 @@ async def run(job_id):
             wp = f"/tmp/dk/in/{k:03d}.wav"
             subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", ap, "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", wp], check=True)
             parts.append(wp)
-        with open("/tmp/dk/list.txt", "w") as f:
-            f.write("".join(f"file '{p}'\n" for p in parts))
-        full = "/tmp/dk/full.wav"
-        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "concat", "-safe", "0", "-i", "/tmp/dk/list.txt", "-c", "copy", full], check=True)
-        r = process(full, dp, "/tmp/dk/seg", os.environ.get("DK_MODEL", "medium"))
+        r = process_set(parts, dp, "/tmp/dk/seg", os.environ.get("DK_MODEL", "medium"))
         zp = f"/tmp/dk/toplam_{did}.zip"
         with zipfile.ZipFile(zp, "w", zipfile.ZIP_STORED) as z:
             for fn in sorted(os.listdir("/tmp/dk/seg")):
                 z.write(os.path.join("/tmp/dk/seg", fn), fn)
-        cap = f"✅ Moslandi: {len(parts)} ta ovoz fayli → {r['n']} ta bo'lak, {r['sec'] // 60} daqiqa {r['sec'] % 60} soniya (matnda {r['sents']} gap)."
-        if r["lown"]:
-            cap += f"\nIshonchi past bo'laklar: {r['lown']} ta — eshitib tekshirish kerak:\n" + "\n".join(f"• {x[0]}: {x[1]}" for x in r["low"][:6])
-        if r["lost"]:
-            cap += f"\n⚠️ {r['lost']} ta gap ovozda topilmadi (matn ovozdan uzunroq bo'lishi mumkin)."
+        cap = f"✅ Moslandi: {len(parts)} ta ovoz fayli → {r['n']} ta bo'lak, {r['sec'] // 60} daqiqa {r['sec'] % 60} soniya. Har bir ovoz matndagi o'z joyiga qo'yildi."
+        if r["miss"]:
+            cap += f"\n⚠️ Matnda joyi topilmagan ovozlar: {', '.join(r['miss'][:15])}-fayl."
+        if r["weak"]:
+            cap += "\nTekshirish kerak (matnga o'xshashligi past): " + ", ".join(f"{a}-fayl ({b})" for a, b in r["weak"][:12]) + "."
+        if r["skipped"]:
+            cap += f"\nMatndagi {r['skipped']} ta qator o'qilmagan deb topildi (ro'yxati ZIP ichida: oqilmagan.txt)."
+        cap += "\nZIP ichida: bo'laklar, metadata.csv, hisobot.csv (qaysi ovoz qaysi matnga tushgani)."
         m = await c.send_file(ch, zp, caption=cap[:1000], reply_to=did, force_document=True)
-        wapi("/ub/dkres", {"id": job_id, "ok": 1, "zip": m.id, "files": len(parts), "first": min(x.id for x in auds), "last": max(x.id for x in auds), **r})
+        wapi("/ub/dkres", {"id": job_id, "ok": 1, "zip": m.id, "first": min(x.id for x in auds), "last": max(x.id for x in auds), **{k: v for k, v in r.items() if k not in ("weak", "miss")}, "weak": len(r["weak"]), "miss": len(r["miss"])})
         await c.disconnect()
     except Exception as e:
         try:
