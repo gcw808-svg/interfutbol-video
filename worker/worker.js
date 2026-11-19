@@ -1133,7 +1133,7 @@ async function dupNews(env, post) {
     const shared = (x.n || []).filter((n) => names.includes(n) || names.some((m) => m.length >= 5 && n.length >= 5 && (m.includes(n) || n.includes(m))) || (norm(n).length >= 4 && lead.includes(" " + norm(n))));
     if (!(shared.length >= 2 || (shared.length >= 1 && Math.min(names.length, x.n.length) <= 2))) continue;
     try {
-      const a = await callGemini(env, "Quyidagi ikki futbol yangiligi AYNAN BITTA voqea yoki xabar haqidami (bir xil fakt, faqat boshqacha yozilgan)? Bir klub yoki futbolchi haqidagi ikki xil voqea bo'lsa — YO'Q. Faqat HA yoki YO'Q deb javob ber.\n1) " + x.h + "\n2) " + head + "\n" + String(post).replace(/<[^>]+>/g, "").slice(0, 600), 0, Date.now() + 15000, 20, false, true);
+      const a = await callGemini(env, "Quyidagi ikki futbol yangiligi AYNAN BITTA voqea yoki xabar haqidami (bir xil fakt, faqat boshqacha yozilgan)? Bir futbolchining bir klubga o'tishi haqidagi transfer mish-mishi (klub qiziqmoqda, futbolchi o'tishga tayyor, muzokara boshlandi) yangi aniq fakt (rasmiy kelishuv, summa, imzo) bo'lmasa — HA, bu bitta xabar. Bir klub yoki futbolchi haqidagi ikki xil voqea bo'lsa — YO'Q. Faqat HA yoki YO'Q deb javob ber.\n1) " + x.h + "\n2) " + head + "\n" + String(post).replace(/<[^>]+>/g, "").slice(0, 600), 0, Date.now() + 15000, 20, false, true);
       if (/^\s*HA\b/i.test(a)) return true;
     } catch (e) { if (shared.length >= 3) return true; }
   }
@@ -3157,7 +3157,8 @@ async function limitsReport(env, b, admin) {
   // "bugun" ko'rsatkichlari UTC kun boshidan — kun oxirigacha taxmin (pp) ham hisoblanadi va qaror shunga qarab qilinadi
   const hrs = Math.max(1, +b.hrs || 24);
   const add = (name, u, l, note) => { if (u == null || !l) return; const day = /bugun/.test(name); const pp = day && hrs >= 12 ? Math.round((100 * u * 24) / hrs / l) : Math.round((100 * u) / l); /* kun yarmidan oldin taxmin ishonchsiz — faqat haqiqiy sarf */ rows.push({ name, u, l, p: Math.max(Math.round((100 * u) / l), Math.min(pp, 999)), note: (note || "") + (day && hrs < 23 ? (note ? "; " : "") + "kun oxirigacha taxmin: " + Math.round((u * 24) / hrs) : "") }); };
-  if (b.gh) add("GitHub daqiqalari (oy boshidan)", b.gh.minutes, 2000, "oy oxirigacha taxmin: " + b.gh.proj);
+  /* 2026-11-20: ombor ochiq — GitHub daqiqalari cheksiz va bepul; 2000 lik chegara bilan solishtirilmaydi (19-noyabr hisobotida soxta "1401%" chiqdi) */
+  const ghInfo = b.gh && b.gh.minutes != null ? "ℹ️ GitHub daqiqalari (oy boshidan): " + b.gh.minutes + " — ombor ochiq, cheklov yo'q." : "";
   const cf = b.cf || {};
   add("Bot so'rovlari (bugun)", cf.requests, 100000);
   add("Xotiraga yozish (bugun)", cf.kvWrite, 1000, b.cfY && b.cfY.kvWrite != null ? "kecha butun kun: " + b.cfY.kvWrite : "");
@@ -3167,7 +3168,7 @@ async function limitsReport(env, b, admin) {
   try { const k = await kvGet(env, "afKey", ""); if (k) { const j = await (await fetch("https://v3.football.api-sports.io/status", { headers: { "x-apisports-key": k } })).json(); const q = j?.response?.requests; if (q && q.limit_day) add("API-Football (bugun)", q.current, q.limit_day); } } catch (e) {}
   const crit = rows.filter((r) => !/^GitHub/.test(r.name));
   const max = Math.max(0, ...rows.map((r) => r.p)), cmax = Math.max(0, ...crit.map((r) => r.p));
-  const ghWarn = b.gh && b.gh.proj > 2000;
+  const ghWarn = false;
   const was = await kvGet(env, "ecoMode", 0);
   const eco = cmax >= 85 ? 1 : cmax < 60 ? 0 : was;
   if (eco !== was) await kvPut(env, "ecoMode", eco);
@@ -3177,6 +3178,7 @@ async function limitsReport(env, b, admin) {
   const bar = (p) => "▰".repeat(Math.min(10, Math.round(p / 10))) + "▱".repeat(Math.max(0, 10 - Math.round(p / 10)));
   const ic = (p) => (p >= 85 ? "🔴" : p >= 70 ? "🟡" : "🟢");
   let t = "📊 Bepul limitlar hisoboti\n\n" + rows.map((r) => ic(r.p) + " " + r.name + ": " + r.u + " / " + r.l + " (" + r.p + "%)\n" + bar(r.p) + (r.note ? "\n   " + r.note : "")).join("\n\n");
+  if (ghInfo) t += "\n\n" + ghInfo;
   if (cf.err) t += "\n\n⚠️ Cloudflare statistikasi olinmadi: " + String(cf.err).slice(0, 120);
   if (ghWarn) t += "\n\n⚠️ GitHub daqiqalari oy oxirigacha yetmasligi mumkin — kartochka va postlar Modal'da ishlayapti, GitHub faqat zaxira.";
   if (eco !== was) t += eco ? "\n\n🟠 Tejash rejimi YOQILDI: limit 85% dan oshdi — kuniga " + ECO_DAY_LIMIT + " ta yangilik (natijalar to'liq chiqadi)." : "\n\n🟢 Tejash rejimi o'chirildi — hammasi me'yorda.";
