@@ -333,7 +333,7 @@ def reconcile(sub, heard):
         return list(sub), [], []
     drop_w = [False] * len(A)
     ins = {}  # token index -> qo'shiladigan so'zlar (shu tokendan KEYIN); -1 — eng boshiga
-    dropped, added = [], []
+    dropped, added, doubt = [], [], []
     for tag, i1, i2, j1, j2 in sm.get_opcodes():
         if tag == "equal":
             continue
@@ -341,13 +341,24 @@ def reconcile(sub, heard):
         if tag == "replace":
             if difflib.SequenceMatcher(None, " ".join(a_), " ".join(h_), autojunk=False).ratio() >= 0.5:
                 continue  # bir xil so'zning boshqacha eshitilishi
-        if tag in ("delete", "replace") and len("".join(a_)) >= 3:
-            for q in range(i1, i2):
-                drop_w[q] = True
-        if tag in ("insert", "replace") and len("".join(h_)) >= 3:
-            at = back[i1 - 1] if i1 > 0 else -1
-            ins.setdefault(at, []).extend(h_)
-            added.append(" ".join(h_))
+        # EHTIYOT: eshitish modeli ham adashadi — bitta so'zlik farq va yozuv oxiridagi "musiqa", "the result" kabi uydirmalar
+        # (Whisper jimlikda shunday yozadi) matnga KIRITILMAYDI, faqat hisobotda "tekshirish kerak" deb ko'rsatiladi.
+        # Faqat 2 va undan ortiq so'zdan iborat aniq farq qo'llanadi (o'qilmay qolgan ibora/gap, qo'shib o'qilgan sarlavha).
+        if tag in ("delete", "replace") and a_:
+            if len(a_) >= 2:
+                for q in range(i1, i2):
+                    drop_w[q] = True
+            else:
+                doubt.append("o'qilmagan bo'lishi mumkin: " + " ".join(a_))
+        if tag in ("insert", "replace") and h_:
+            junk = all(x in ("musiqa", "the", "result", "subtitr", "subtitrlar", "rahmat", "obuna", "boling", "you", "thank") for x in h_)
+            tail = j2 == len(H) and len(h_) <= 3
+            if len(h_) >= 2 and not junk and not tail:
+                at = back[i1 - 1] if i1 > 0 else -1
+                ins.setdefault(at, []).extend(h_)
+                added.append(" ".join(h_))
+            elif not junk:
+                doubt.append("qo'shib o'qilgan bo'lishi mumkin: " + " ".join(h_))
     per = {}
     for q, ti in enumerate(back):
         per.setdefault(ti, []).append(drop_w[q])
@@ -368,7 +379,7 @@ def reconcile(sub, heard):
             out[sid[ti]].append(o)
         if ti in ins:
             out[sid[ti]].extend(ins[ti])
-    return [" ".join(x) for x in out], dropped, added
+    return [" ".join(x) for x in out], dropped, added + ["? " + d for d in doubt]
 
 
 def silences(w):
@@ -425,8 +436,9 @@ def process_set(wavs, doc, out_dir, model_name="medium", lang="uz", device=None,
         sub = [sub[i4] for i4 in keep]
         if not sub:
             sub, dr, ad = list(sub0), [], []
-        if dr or ad:
+        if dr or [q for q in ad if not q.startswith("? ")]:
             fixed.append(f"{k:03d}")
+        if dr or ad:
             print(f"  tuzatildi {k}: tashlab ketilgan={dr} qo'shilgan={ad}", flush=True)
         print(f"fayl {k} ({durs[k-1]:.0f}s): gaplar {x['s']+1}-{x['e']} mos={x['fit']} oxsh={x['sim']} | {' '.join(sub)[:70]} || {x['heard'][:60]}", flush=True)
         for a, b, i0, i1 in split_file(w, sub, durs[k - 1]):
