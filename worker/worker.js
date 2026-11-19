@@ -3169,6 +3169,10 @@ async function ubRoute(env, req, url) {
     const sets = []; let cur; do { const L = await env.STATE.list({ prefix: "dkset:", cursor: cur }); for (const q of L.keys) { const v = await kvGet(env, q.name, null); if (v && v.st === "tayyor") sets.push({ doc: Number(q.name.slice(6)), zip: v.zip, v: v.v || DK_VOICE0, first: v.first, last: v.last, n: v.n, sec: v.sec }); } cur = L.list_complete ? null : L.cursor; } while (cur);
     return J({ k, sets });
   }
+  if (url.pathname === "/ub/dksweep") { // nazoratchi uchun: barcha to'plamlar holati + kanalni o'qish uchun seans
+    const sets = {}; let cur; do { const L = await env.STATE.list({ prefix: "dkset:", cursor: cur }); for (const q of L.keys) { const v = await kvGet(env, q.name, null); if (v) sets[q.name.slice(6)] = { st: v.st, at: v.at, files: v.files || 0, last: v.last || 0 }; } cur = L.list_complete ? null : L.cursor; } while (cur);
+    return J({ chat: DK_CHAT, session: await kvGet(env, "usess", null), sets });
+  }
   if (url.pathname === "/ub/dkping") { const ju = await kvGet(env, "jobsUrl", "https://gcw808-svg--inter-jobs-dispatch.modal.run"); const t0 = Date.now(); try { const r = await fetch(ju, { method: "POST", headers: { "x-key": await ubKey(env), "content-type": "application/json" }, body: JSON.stringify({ wf: "x", job: "y" }), signal: AbortSignal.timeout(20000) }); return J({ ju, st: r.status, ms: Date.now() - t0, body: (await r.text()).slice(0, 200) }); } catch (e) { return J({ ju, err: String(e && e.message), ms: Date.now() - t0 }); } }
   if (url.pathname === "/ub/dkredo" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); const tok = await kvGet(env, "dkToken", ""); if (!tok || !b0.doc) return J({ ok: false }); await env.STATE.delete("dkset:" + b0.doc); return J({ ok: true, job: await dkSetStart(env, tok, Number(b0.doc), true) }); }
   if (url.pathname === "/ub/dkjob") { const j = await kvGet(env, "dkj:" + url.searchParams.get("id"), null); const ds = j ? await kvGet(env, "dkset:" + j.d, null) : null; return J(j ? { ...j, live: !ds || ds.job === url.searchParams.get("id") ? 1 : 0, chat: DK_CHAT, session: await kvGet(env, "usess", null) } : {}); }

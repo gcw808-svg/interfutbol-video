@@ -568,5 +568,52 @@ async def run(job_id):
         raise
 
 
+async def sweep():
+    # NAZORATCHI (2026-11-19, Bahtiyor aka: "Word va audiolarni ketma-ket tashlayveraman, kanal o'zi bir chetdan o'qiyverishi kerak, qolib ketgani bo'lmasin"):
+    # kanaldagi HAMMA matn fayllari ko'rib chiqiladi; to'plami yo'q, xato bilan tugagan yoki ovozlari keyin qo'shilgan matn qayta moslashga yuboriladi.
+    import time, urllib.request
+    from telethon import TelegramClient
+    from telethon.sessions import StringSession
+    key = hashlib.sha256(("ub-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:40]
+    def wapi(path, body=None):
+        rq = urllib.request.Request(W + path, data=json.dumps(body).encode() if body is not None else None, headers={"x-key": key, "content-type": "application/json", "user-agent": "InterDiktorSweep"}, method="POST" if body is not None else "GET")
+        return json.loads(urllib.request.urlopen(rq, timeout=240).read() or b"{}")
+    j = wapi("/ub/dksweep")
+    c = TelegramClient(StringSession(j["session"]), int(os.environ["TG_API_ID"]), os.environ["TG_API_HASH"])
+    await c.connect()
+    await c.get_dialogs(limit=200)
+    ch = await c.get_entity(int(j["chat"]))
+    ms = [m async for m in c.iter_messages(ch, limit=3000)]
+    await c.disconnect()
+    ms.sort(key=lambda m: m.id)
+    fresh = [m for m in ms if is_audio(m) or doc_name(m)]
+    if fresh and time.time() - fresh[-1].date.timestamp() < 180:
+        print("hali tashlanmoqda — keyingi safar", flush=True)
+        return
+    docs = [m.id for m in ms if doc_name(m)]
+    todo = []
+    for n, d in enumerate(docs):
+        prev = docs[n - 1] if n else 0
+        nxt = docs[n + 1] if n + 1 < len(docs) else 10 ** 12
+        auds = [m.id for m in ms if is_audio(m) and d < m.id < nxt] or [m.id for m in ms if is_audio(m) and prev < m.id < d]
+        st = j["sets"].get(str(d))
+        why = ""
+        if not auds:
+            why = ""
+        elif not st:
+            why = "to'plam yo'q"
+        elif st["st"] == "xato":
+            why = "xato bilan tugagan"
+        elif st["st"] == "moslanmoqda" and time.time() - (st.get("at") or 0) / 1000 > 45 * 60:
+            why = "osilib qolgan"
+        elif st["st"] == "tayyor" and (st.get("files") != len(auds) or st.get("last") != max(auds)):
+            why = f"ovozlar soni o'zgargan ({st.get('files')} → {len(auds)})"
+        print(f"matn {d}: {len(auds)} ta ovoz, holat {st and st['st']} {('— ' + why) if why else ''}", flush=True)
+        if why:
+            todo.append(d)
+    for d in todo[:4]:
+        print("qayta moslashga:", d, wapi("/ub/dkredo", {"doc": d}), flush=True)
+
+
 if __name__ == "__main__":
     print(json.dumps(process(sys.argv[1], sys.argv[2], sys.argv[3], *(sys.argv[4:6])), ensure_ascii=False, indent=1))

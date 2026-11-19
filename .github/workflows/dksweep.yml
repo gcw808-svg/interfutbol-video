@@ -1,0 +1,25 @@
+name: dksweep
+# INTER DIKTOR NAZORATCHISI: ovozlar kanalidagi hamma matn fayllarini ko'rib chiqadi; to'plami yo'q, xato bilan tugagan yoki ovozlari
+# keyin qo'shilgan matnni qayta moslashga yuboradi. Har 20 daqiqada va har moslashdan keyin ishlaydi (ombor ochiq — bepul).
+on:
+  schedule:
+    - cron: "7,27,47 * * * *"
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["dkalign"]
+    types: [completed]
+concurrency:
+  group: dksweep
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install -q telethon cryptg python-docx
+      - env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+        run: python3 -c "import asyncio, dk_align; asyncio.run(dk_align.sweep())"
