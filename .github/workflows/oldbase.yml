@@ -1,0 +1,31 @@
+name: oldbase
+# Eski diktor (muharrir ichidagi) modeli va o'qitish bazasi qayerda turganini ko'rish (kalitlar chiqarilmaydi)
+on:
+  workflow_dispatch:
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - run: pip install -q huggingface_hub "kaggle>=1.8" six
+      - env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import os, json
+          from huggingface_hub import HfApi
+          api = HfApi(token=os.environ["HF_TOKEN"]); me = api.whoami()["name"]; print("HF hisob:", me)
+          for kind in ("model", "dataset"):
+              lst = list(api.list_models(author=me)) if kind == "model" else list(api.list_datasets(author=me))
+              for r in lst:
+                  fs = api.list_repo_files(r.id, repo_type=kind)
+                  print(f"[{kind}] {r.id}: {len(fs)} fayl |", ", ".join(fs[:40]))
+          try:
+              from huggingface_hub import hf_hub_download
+              print("control:", open(hf_hub_download(me + "/inter-diktor", "control.json", token=os.environ["HF_TOKEN"])).read()[:600])
+          except Exception as e:
+              print("control yo'q:", str(e)[:120])
+          PY
+          kaggle datasets list --mine 2>&1 | cut -c1-170 | head -12 || true
+          mkdir -p kk && (kaggle kernels pull baxtiyoraxrarov/notebookdb9f80e52d -p kk -m > /dev/null 2>&1 || true); cat kk/kernel-metadata.json 2>/dev/null | head -30; ls -la kk | head; for f in kk/*.py kk/*.ipynb; do [ -f "$f" ] && (grep -oE "(dataset|/kaggle/input/)[A-Za-z0-9_./-]{3,80}|metadata\.csv|wavs?/|hf_hub_download\([^)]{0,90}\)|snapshot_download\([^)]{0,90}\)" "$f" | sort | uniq -c | sort -rn | head -25); done
