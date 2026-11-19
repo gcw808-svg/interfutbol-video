@@ -1,0 +1,29 @@
+name: dkold
+# Eski diktor yozuvlarini shaxsiy suhbatlardan OVOZ bo'yicha topib, ovozlar kanaliga va o'qitish bazasiga qo'shish (Bahtiyor aka ruxsati, 2026-11-19).
+# Jurnalga ism va matn chiqarilmaydi.
+on:
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: "1 — faqat sanash (ko'chirmaydi)"
+        default: ""
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: .dkcache
+          key: dkcache-old-${{ github.run_id }}
+          restore-keys: dkcache-
+      - run: sudo apt-get update -qq > /dev/null 2>&1; sudo apt-get install -y -qq ffmpeg > /dev/null 2>&1; pip install -q torch --index-url https://download.pytorch.org/whl/cpu && pip install -q telethon cryptg resemblyzer numpy faster-whisper python-docx transformers huggingface_hub
+      - env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          DK_CACHE: ${{ github.workspace }}/.dkcache
+          DRY: ${{ inputs.dry }}
+        run: python3 dk_old.py

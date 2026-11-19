@@ -2208,6 +2208,7 @@ async function dkUpdate(env, u, tok) {
     if (!cp.chat || cp.chat.id !== DK_CHAT) return;
     let a = cp.voice || cp.audio || (cp.document && /^audio\//.test(cp.document.mime_type || "") ? cp.document : null);
     if (a && /^(namuna_|asl_ovoz)/i.test(a.file_name || "")) return;  // diktor namunalari — baza yozuvi emas
+    if (a && /^\s*#matnsiz/i.test(cp.caption || "")) return;  // matnsiz eski yozuvlar — to'plamga qo'shilmaydi, alohida ishlanadi
     const dn = cp.document && !a ? String(cp.document.file_name || "") : "";
     if (dn) {
       if (u.edited_channel_post) return;

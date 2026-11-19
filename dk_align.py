@@ -476,6 +476,8 @@ def is_audio(m):
         return False
     if re.match(r"(namuna_|asl_ovoz)", ((m.file.name or "") if m.file else ""), re.I):
         return False  # diktor namunalari — baza yozuvi emas
+    if (m.message or "").lstrip().lower().startswith("#matnsiz"):
+        return False  # matnsiz (eski) yozuvlar — Word to'plamiga kirmaydi, alohida ishlanadi (dk_old.py)
     if m.voice or m.audio:
         return True
     d = m.document
