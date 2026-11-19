@@ -3274,6 +3274,11 @@ async function ubRoute(env, req, url) {
   if (url.pathname === "/ub/redoq" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); const Q = (await kvGet(env, "redoQ", null)) || { q: [], n: 0, day: "", log: [] }; if (b0.clear) Q.q = []; const have = new Set(Q.q.map((x) => x.id)); for (const x of b0.items || []) if (+x.id > 0 && !have.has(+x.id)) Q.q.push({ id: +x.id, c: x.c === "k" ? "k" : "r", ...(x.nf ? { nf: 1 } : {}), ...(x.wm === "tr" ? { wm: "tr" } : {}) }); if (b0.max) Q.max = Math.min(60, Math.max(1, +b0.max)); await kvPut(env, "redoQ", Q); return J({ ok: true, left: Q.q.length, done: (Q.log || []).length }); }
   // ODAMLAR ROBOTI MODAL'DA (2026-11-18): hisobot (jurnal + qo'shilgan suratlar) va ko'rilgan fayllar ro'yxati KV'da — GitHub jurnali o'rniga
   // ADMINGA XABAR (2026-11-19): robotlar (genscout va h.k.) muhim yangilikni adminga yozadi — faqat oddiy matn, 1500 belgigacha
+  // D1 zaxira sinovi: bazaga ulanganmi, zaxirada nechta qiymat; test=1 — sinov kalitini D1 orqali yozib, o'qib, o'chirib ko'radi (KV'ga tegmaydi)
+  if (url.pathname === "/ub/d1test") { if (!env.DB || !env.__ov) return J({ db: false }); const o = { db: true };
+    try { o.rows = ((await env.DB.prepare("SELECT count(*) AS n FROM kvo").first()) || {}).n; } catch (e) { o.err = String(e && e.message).slice(0, 120); await env.__ov.load(); }
+    if (url.searchParams.get("test") === "1") { try { const v = JSON.stringify({ t: Date.now() }); await env.__ov.put("ovTest", v, { expirationTtl: 600 }, false); o.read = (await env.STATE.get("ovTest")) === v; await env.DB.prepare("DELETE FROM kvo WHERE k='ovTest'").run(); o.clean = true; } catch (e) { o.terr = String(e && e.message).slice(0, 160); } }
+    return J(o); }
   if (url.pathname === "/ub/note" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); const t = String(b0.text || "").slice(0, 1500); if (!t || !admin) return J({ ok: false }); const r = await tg(env, "sendMessage", { chat_id: admin, text: t, disable_web_page_preview: true }); return J({ ok: !!(r && r.ok) }); }
   if (url.pathname === "/ub/plog" && req.method === "POST") { await env.STATE.put("peopleLog", (await req.text()).slice(0, 900000), { expirationTtl: 14 * 86400 }); return J({ ok: true }); }
   if (url.pathname === "/ub/pseen") { if (req.method === "POST") { const b0 = await req.json().catch(() => ({})); const cur = await kvGet(env, "peopleSeen", []); const all = [...new Set([...cur, ...(Array.isArray(b0.add) ? b0.add.map(String) : [])])].slice(-150000); await kvPut(env, "peopleSeen", all); return J({ ok: true, n: all.length }); } return J(await kvGet(env, "peopleSeen", [])); }
@@ -4321,12 +4326,61 @@ const TBL_KB = { inline_keyboard: [
 
 // KV yozuvlarini kuzatish (2026-11-08): har yozish/o'chirish jurnalga (console) kalit turi bilan yoziladi —
 // wrangler tail orqali qaysi kalit eng ko'p yozilishini aniqlash uchun (bepul limit: kuniga 1000 yozish)
+// D1 ZAXIRA (2026-11-19, Bahtiyor aka: "D1 zaxira sifatida ulash kerak, limit tugab qolmasligi uchun"): KV bepul tarifida kuniga 1000 ta yozish bor
+// (17-noyabrda 1151 ga chiqib, yozuvlar yo'qolgan). Endi KV yozish/o'chirish XATO bersa (limit tugasa) — qiymat Cloudflare D1 bazasiga (env.DB, jadval kvo)
+// yoziladi (D1 bepul: kuniga 100 ming yozuv). O'qishda: kalit D1 zaxirasida bo'lsa — eng yangi qiymat o'sha yerdan. Limit yangilangach (05:00 Toshkent) ovSync
+// zaxiradagi qiymatlarni KV'ga qaytarib, D1 dan o'chiradi. env.DB ulanmagan bo'lsa yoki D1 ishlamasa — hammasi avvalgidek (faqat KV). Faqat matnli qiymatlar
+// (1,9 MB gacha); rasm kabi ikkilik qiymatlar zaxiraga tushmaydi. Har chaqiruvda D1 ga 1 ta qisqa so'rov (zaxiradagi kalitlar ro'yxati).
 function kvSpy(env) {
   if (!env || !env.STATE || env.__spy) return env;
-  const S = env.STATE;
+  const S = env.STATE, DB = env.DB;
   const tag = (k) => String(k).split(/[:_]/)[0].slice(0, 24);
-  const st = { put: (k, ...a) => { console.log("KVW " + tag(k)); return S.put(k, ...a); }, delete: (k) => { console.log("KVD " + tag(k)); return S.delete(k); }, get: (...a) => S.get(...a), list: (...a) => S.list(...a), getWithMetadata: (...a) => S.getWithMetadata(...a) };
-  const e = Object.create(env); Object.defineProperty(e, "STATE", { value: st }); Object.defineProperty(e, "__spy", { value: 1 }); return e;
+  let ov = null;
+  const ovLoad = async () => {
+    if (ov) return ov; ov = new Set(); if (!DB) return ov;
+    try { const r = await DB.prepare("SELECT k FROM kvo").all(); for (const x of r.results || []) ov.add(x.k); }
+    catch (e) { if (/no such table/i.test(String(e && e.message))) { try { await DB.prepare("CREATE TABLE IF NOT EXISTS kvo (k TEXT PRIMARY KEY, v TEXT, exp INTEGER, del INTEGER DEFAULT 0, t INTEGER)").run(); } catch (e2) {} } }
+    return ov;
+  };
+  const ovPut = async (k, v, o, del) => {
+    const exp = o && o.expirationTtl ? Date.now() + o.expirationTtl * 1000 : o && o.expiration ? o.expiration * 1000 : null;
+    await DB.prepare("INSERT INTO kvo (k,v,exp,del,t) VALUES (?1,?2,?3,?4,?5) ON CONFLICT(k) DO UPDATE SET v=?2, exp=?3, del=?4, t=?5").bind(String(k), del ? null : v, exp, del ? 1 : 0, Date.now()).run();
+    (await ovLoad()).add(String(k)); console.log("D1W " + tag(k));
+  };
+  const okVal = (v) => typeof v === "string" && v.length < 1900000;
+  const put = async (k, v, o) => {
+    console.log("KVW " + tag(k));
+    if (DB && okVal(v) && (await ovLoad()).has(String(k))) { try { await ovPut(k, v, o, false); return; } catch (e) {} }  // kalit allaqachon zaxirada — eng yangi qiymat bir joyda tursin
+    try { return await S.put(k, v, o); } catch (e) { if (!DB || !okVal(v)) throw e; try { await ovPut(k, v, o, false); } catch (e2) { throw e; } }
+  };
+  const del = async (k) => {
+    console.log("KVD " + tag(k));
+    try { await S.delete(k); if (DB && ov && ov.has(String(k))) { try { await DB.prepare("DELETE FROM kvo WHERE k=?1").bind(String(k)).run(); ov.delete(String(k)); } catch (e2) {} } }
+    catch (e) { if (!DB) throw e; try { await ovPut(k, null, null, true); } catch (e2) { throw e; } }
+  };
+  const get = async (k, ...a) => {
+    if (DB && (await ovLoad()).has(String(k))) {
+      try { const r = await DB.prepare("SELECT v,exp,del FROM kvo WHERE k=?1").bind(String(k)).first();
+        if (r) { const t = a[0] && (a[0].type || a[0]); if (r.del || (r.exp && r.exp < Date.now())) return null; if (t === "json") { try { return JSON.parse(r.v); } catch (e) { return null; } } if (!t || t === "text") return r.v; } } catch (e) {}
+    }
+    return S.get(k, ...a);
+  };
+  const st = { put, delete: del, get, list: (...a) => S.list(...a), getWithMetadata: (...a) => S.getWithMetadata(...a) };
+  const e = Object.create(env); Object.defineProperty(e, "STATE", { value: st }); Object.defineProperty(e, "__spy", { value: 1 }); Object.defineProperty(e, "__ov", { value: { raw: S, put: ovPut, load: ovLoad } }); return e;
+}
+// zaxiradagi qiymatlarni KV'ga qaytarish (har cron ishida 15 tagacha; KV hali yozdirmasa — birinchi xatoda to'xtaydi). Kuniga bir marta adminga xabar.
+async function ovSync(env) {
+  const DB = env.DB; if (!DB || !env.__ov) return;
+  try {
+    const rows = (await DB.prepare("SELECT k,v,exp,del,t FROM kvo ORDER BY t LIMIT 15").all()).results || []; if (!rows.length) return;
+    const RAW = env.__ov.raw; let n = 0;
+    for (const x of rows) {
+      try { if (x.del) await RAW.delete(x.k); else if (!(x.exp && x.exp < Date.now() + 60000)) await RAW.put(x.k, x.v, x.exp ? { expirationTtl: Math.max(60, Math.round((x.exp - Date.now()) / 1000)) } : undefined);
+        await DB.prepare("DELETE FROM kvo WHERE k=?1 AND t=?2").bind(x.k, x.t).run(); n++; } catch (e) { break; }
+    }
+    console.log("D1 sync " + n + "/" + rows.length);
+    if (!n) { const d = new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10); if ((await kvGet(env, "ovDay", "")) !== d) { await kvPut(env, "ovDay", d); const adm = (await getAdmins(env))[0]; if (adm) await tg(env, "sendMessage", { chat_id: adm, text: "ℹ️ Xotiraga yozish kunlik limiti (1000) tugadi — bot zaxira bazaga (D1) o'tdi va to'xtamasdan ishlayapti. Limit 05:00 da yangilangach ma'lumotlar o'zi qaytariladi." }); } }
+  } catch (e) { console.log("ovSync", e && e.message); }
 }
 export default {
     async fetch(req, env, ctx) {
@@ -4406,6 +4460,7 @@ if (url.pathname === "/hook" && req.method === "POST") {
 
     async scheduled(event, env, ctx) {
     env = kvSpy(env);
+    ctx.waitUntil(ovSync(env));
     await mergeCemoji(env);
     ctx.waitUntil((async () => {
     const err = async (k, e) => { try { const v = { k, t: Date.now(), e: String((e && (e.stack || e.message)) || e).slice(0, 300) }; const L = await kvGet(env, "cronLog", []); const p = L.filter((x) => x.k === k).pop(); if (p && v.t - p.t < 1800e3) return; L.push(v); await kvPut(env, "cronLog", L.slice(-40), { expirationTtl: 3 * 86400 }); await kvPut(env, "cronErr", v, { expirationTtl: 3 * 86400 }); } catch (x) {} }; const G = ({ "*/10 * * * *": "A", "2-59/10 * * * *": "B", "5-59/10 * * * *": "C" })[event.cron] || "all"; const on = (g) => G === "all" || G === g;
