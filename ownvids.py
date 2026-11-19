@@ -27,7 +27,8 @@ def main():
     while added < LIMIT and pages < 40:
         r = requests.get(W + "/ub/igmedia", params={"limit": 50, **({"after": after} if after else {})}, headers=H, timeout=60).json()
         if not r.get("ok"):
-            print("::error::O'z videolar roboti: Instagram javob bermadi — %s" % r.get("err")); sys.exit(1)
+            # Meta ishlab chiquvchi hisobi to'xtatilgan bo'lsa ("API access blocked") — bu kod xatosi emas: ogohlantirib, xatosiz tugaydi (har 3 soatda qizil ish bo'lmasin)
+            print("::warning::O'z videolar roboti: Instagram javob bermadi — %s" % r.get("err")); sys.exit(0 if "blocked" in str(r.get("err")).lower() else 1)
         pages += 1
         for it in r.get("data") or []:
             if it.get("media_type") != "VIDEO":
