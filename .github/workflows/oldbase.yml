@@ -1,31 +1,48 @@
 name: oldbase
-# Eski diktor (muharrir ichidagi) modeli va o'qitish bazasi qayerda turganini ko'rish (kalitlar chiqarilmaydi)
+# Eski diktor o'qitilgan audiolar qayerdadir saqlanib qolganmi — Kaggle natijalari va muharrir boti chatini ko'rib chiqish (kalitlar chiqarilmaydi)
 on:
   workflow_dispatch:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     steps:
-      - run: pip install -q huggingface_hub "kaggle>=1.8" six
+      - uses: actions/checkout@v4
+      - run: pip install -q "kaggle>=1.8" six telethon cryptg
       - env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
           KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
         run: |
+          for k in baxtiyoraxrarov/notebookdb9f80e52d baxtiyoraxrarov/notebook47e2ba20cc; do echo "== $k"; (kaggle kernels files "$k" --page-size 200 2>&1 || true) | cut -c1-120 | head -40; done
           python3 - <<'PY'
-          import os, json
-          from huggingface_hub import HfApi
-          api = HfApi(token=os.environ["HF_TOKEN"]); me = api.whoami()["name"]; print("HF hisob:", me)
-          for kind in ("model", "dataset"):
-              lst = list(api.list_models(author=me)) if kind == "model" else list(api.list_datasets(author=me))
-              for r in lst:
-                  fs = api.list_repo_files(r.id, repo_type=kind)
-                  print(f"[{kind}] {r.id}: {len(fs)} fayl |", ", ".join(fs[:40]))
-          try:
-              from huggingface_hub import hf_hub_download
-              print("control:", open(hf_hub_download(me + "/inter-diktor", "control.json", token=os.environ["HF_TOKEN"])).read()[:600])
-          except Exception as e:
-              print("control yo'q:", str(e)[:120])
+          import asyncio, hashlib, json, os, urllib.request
+          from telethon import TelegramClient
+          from telethon.sessions import StringSession
+          key = hashlib.sha256(("ub-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:40]
+          j = json.loads(urllib.request.urlopen(urllib.request.Request("https://inter-futbol-bot.gcw808.workers.dev/ub/dksweep", headers={"x-key": key, "user-agent": "oldbase"}), timeout=120).read())
+          async def main():
+              c = TelegramClient(StringSession(j["session"]), int(os.environ["TG_API_ID"]), os.environ["TG_API_HASH"])
+              await c.connect()
+              found = {}
+              async for d in c.iter_dialogs(limit=300):
+                  n = a = 0; sec = 0; first = last = None; docs = 0
+                  if not (d.is_user or (d.is_channel and getattr(d.entity, "creator", False))):
+                      continue
+                  async for m in c.iter_messages(d.entity, limit=1500):
+                      f = m.file
+                      if not f:
+                          continue
+                      mt = (f.mime_type or "")
+                      if mt.startswith("audio/") or m.voice:
+                          a += 1; sec += (f.duration or 0); last = last or m.date; first = m.date
+                      elif (f.name or "").lower().endswith((".docx", ".txt")):
+                          docs += 1
+                  if a >= 5:
+                      kind = "bot" if (d.is_user and getattr(d.entity, "bot", False)) else ("o'zim" if d.is_user and getattr(d.entity, "is_self", False) else ("kanal" if d.is_channel else "shaxs"))
+                      title = d.name if kind in ("bot", "kanal", "o'zim") else "(shaxsiy suhbat)"
+                      print(f"SUHBAT [{kind}] {title} (id {d.id}): {a} ta audio, {sec/60:.0f} daqiqa, {docs} ta matn fayli, {str(first)[:10]} … {str(last)[:10]}")
+              await c.disconnect()
+          asyncio.run(main())
           PY
-          kaggle datasets list --mine 2>&1 | cut -c1-170 | head -12 || true
-          mkdir -p kk && (kaggle kernels pull baxtiyoraxrarov/notebookdb9f80e52d -p kk -m > /dev/null 2>&1 || true); cat kk/kernel-metadata.json 2>/dev/null | head -30; ls -la kk | head; for f in kk/*.py kk/*.ipynb; do [ -f "$f" ] && (grep -oE "(dataset|/kaggle/input/)[A-Za-z0-9_./-]{3,80}|metadata\.csv|wavs?/|hf_hub_download\([^)]{0,90}\)|snapshot_download\([^)]{0,90}\)" "$f" | sort | uniq -c | sort -rn | head -25); done
