@@ -2177,11 +2177,28 @@ async function dkConnect(env, chat, msg) {
   const tok = (String(msg.text).match(/\d{6,}:[A-Za-z0-9_-]{30,}/) || [])[0];
   await tg(env, "deleteMessage", { chat_id: chat, message_id: msg.message_id }).catch(() => null);
   const me = await dkTg(tok, "getMe");
+  if (me.ok && /video/i.test(me.result.username || "")) { await vdConnect(env, chat, tok, me.result); return; }
   if (!me.ok || !/diktor/i.test(me.result.username || "")) { await tg(env, "sendMessage", { chat_id: chat, text: "Bu kalit Inter Diktor botiniki emas yoki ishlamayapti. Xabar o'chirildi." }); return; }
   await kvPut(env, "dkToken", tok);
   const wh = await dkTg(tok, "setWebhook", { url: WURL + "/dkhook", secret_token: await dkSecret(tok), allowed_updates: ["message", "channel_post", "edited_channel_post", "callback_query"] });
   await dkTg(tok, "setMyCommands", { commands: [{ command: "start", description: "Bot haqida" }, { command: "baza", description: "Ovozlar bazasi holati" }] });
   await tg(env, "sendMessage", { chat_id: chat, text: (wh.ok ? "✅ Inter Diktor boti ulandi: @" + me.result.username : "Kalit saqlandi, lekin ulanishda xato: " + (wh.description || "")) + "\nKalitli xabar o'chirildi." });
+}
+// ---------------- INTER FUTBOL VIDEO ARXIV — ALOHIDA BOT (2026-11-19, Bahtiyor aka: "video arxiv uchun diktorniki kabi alohida bot, shunda chalkash bo'lmaydi";
+// nomi @InterFutbolVideoArxivBot — "Futbol" so'zi bilan, chunki Inter MMA ham bor) ----------------
+// Video arxiv: yopiq kanal "Inter Futbol — Video Arxiv" (VD_CHAT) — videolardan lavhalar va o'z videolarimiz. Kalit kodda emas — KV vdToken da (admin BotFather
+// xabarini asosiy botga uzatadi). Hozircha 1-bosqich: ulanish va /start. Bot faqat BOSHQARUVCHI: 20 MB dan katta faylni yuklab ololmaydi, 50 MB dan kattasini
+// yubora olmaydi — og'ir ish (videoni olish, lavhalarga kesish) hisob seansi va GitHub'da bajariladi. KV'ga har xabarda yozilmaydi (kunlik yozish limiti umumiy).
+const VD_CHAT = -1004385358467;
+async function vdConnect(env, chat, tok, me) {
+  await kvPut(env, "vdToken", tok);
+  const wh = await dkTg(tok, "setWebhook", { url: WURL + "/vdhook", secret_token: await dkSecret(tok), allowed_updates: ["message", "channel_post", "callback_query"] });
+  await dkTg(tok, "setMyCommands", { commands: [{ command: "start", description: "Bot haqida" }] });
+  await tg(env, "sendMessage", { chat_id: chat, text: (wh.ok ? "✅ Inter Futbol Video Arxiv boti ulandi: @" + me.username : "Kalit saqlandi, lekin ulanishda xato: " + (wh.description || "")) + "\nKalitli xabar o'chirildi." });
+}
+async function vdUpdate(env, up, tok) {
+  const m = up.message; if (!m || !m.chat || m.chat.type !== "private") return;
+  if (/^\/start/.test(m.text || "")) await dkTg(tok, "sendMessage", { chat_id: m.chat.id, text: "Inter Futbol Video Arxiv boti.\n\nVideo arxiv (videolardan lavhalar va o'z videolarimiz) shu bot orqali boshqariladi. Hozircha tayyorlanmoqda." });
 }
 // TO'PLAM (2026-11-19): bitta matn fayli (Word) + shu matn o'qilgan bir nechta ovoz fayli. Ish matn fayli bo'yicha boshlanadi (bitta hodisa — poyga yo'q);
 // ovozlar ro'yxatini Modal'dagi ish kanalning o'zidan o'qiydi (matndan keyin, keyingi matn fayligacha tashlanganlari) va ular tashlab bo'linishini kutadi.
@@ -4239,6 +4256,7 @@ if (url.pathname.startsWith("/dkx/")) { // vaqtinchalik kalit bilan: /dkx/file?k
       if (url.pathname === "/dkx/say" && req.method === "POST") { const b = await req.json().catch(() => ({})); const r = await dkTg(tok, "sendMessage", { chat_id: b.dst === "admin" ? ((await getAdmins(env))[0] || DK_CHAT) : DK_CHAT, text: String(b.text || "").slice(0, 3500) }); return new Response(JSON.stringify({ ok: !!r.ok }), { headers: { "content-type": "application/json" } }); }
       return new Response("not found", { status: 404 });
     }
+    if (url.pathname === "/vdhook" && req.method === "POST") { const tok = await kvGet(env, "vdToken", ""); if (!tok || req.headers.get("x-telegram-bot-api-secret-token") !== (await dkSecret(tok))) return new Response("forbidden", { status: 403 }); const up = await req.json(); ctx.waitUntil(vdUpdate(env, up, tok).catch(e => console.log("vd", e && e.message))); return new Response("ok"); }
     if (url.pathname === "/dkhook" && req.method === "POST") { const tok = await kvGet(env, "dkToken", ""); if (!tok || req.headers.get("x-telegram-bot-api-secret-token") !== (await dkSecret(tok))) return new Response("forbidden", { status: 403 }); const up = await req.json(); ctx.waitUntil(dkUpdate(env, up, tok).catch(e => console.log("dk", e && e.message))); return new Response("ok"); }
 if (url.pathname === "/hook" && req.method === "POST") {
     if (req.headers.get("x-telegram-bot-api-secret-token") !== secret) return new Response("forbidden", { status: 403 });
