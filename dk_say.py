@@ -16,10 +16,27 @@ TEXTS = json.loads(os.environ.get("TEXTS") or "[]") or [
 LABEL = os.environ.get("LABEL", "C")
 MOOD = os.environ.get("MOOD", "oddiy")
 RUN = os.environ.get("RUN", "")
+TID = os.environ.get("TID", "")  # diktor botida yozilgan matn (KV'da; jurnalga chiqmaydi)
 
 
 def main():
     k = requests.post(W + "/ub/dkkey", headers=H, json={}, timeout=120).json()["k"]
+    job = {}
+    if TID:
+        job = requests.get(W + "/ub/dktext", params={"id": TID}, headers=H, timeout=60).json() or {}
+        if not job.get("t"):
+            print("matn topilmadi (eskirgan)", flush=True)
+            return
+        TEXTS[:] = [x.strip() for x in re.split(r"\n+", job["t"]) if x.strip()]
+    try:
+        _say(k, job)
+    except Exception as e:
+        if job.get("chat"):
+            requests.post(W + "/dkx/say?k=" + k, json={"to": job["chat"], "text": "⚠️ O'qishda xato chiqdi: " + type(e).__name__ + ". Matnni qayta yuboring."}, headers={"user-agent": "dksay"}, timeout=60)
+        raise
+
+
+def _say(k, job):
     ref = requests.get(W + "/ub/ttsref", params={"m": MOOD}, headers=H, timeout=60)
     ref.raise_for_status()
     open("ref.wav", "wb").write(ref.content)
@@ -49,6 +66,11 @@ def main():
             print(f"tayyor: [{len(c)} belgi] ({time.time() - t0:.0f}s)", flush=True)
     sf.write("o.wav", np.concatenate(audio), sr)
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", "o.wav", "-af", "loudnorm=I=-16:TP=-1.5", "-c:a", "libmp3lame", "-b:a", "160k", "o.mp3"], check=True)
+    if job.get("chat"):
+        cap = f"🎙 {job.get('v') or 'Kozim Komilov'} · model {fs[-1].split('/')[0]} · {len(job['t'])} belgi"
+        r = requests.post(W + "/dkx/send?k=" + k + "&to=" + str(job["chat"]) + (f"&reply={job['m']}" if job.get("m") else "") + "&name=" + urllib.parse.quote("diktor_" + time.strftime("%H%M%S") + ".mp3") + "&cap=" + urllib.parse.quote(cap), data=open("o.mp3", "rb").read(), headers={"user-agent": "dksay"}, timeout=180)
+        print("yuborildi:", r.text[:120], flush=True)
+        return
     cap = os.environ.get("CAP") or f"Namuna {LABEL} — avvalgi diktor (sizning ovozingizga o'rgatilgan model, {fs[-1].split('/')[0]})"
     r = requests.post(W + "/dkx/send?k=" + k + "&name=" + urllib.parse.quote(f"namuna_{LABEL}.mp3") + "&cap=" + urllib.parse.quote(cap), data=open("o.mp3", "rb").read(), headers={"user-agent": "dksay"}, timeout=180)
     print("yuborildi:", r.text[:200], flush=True)
