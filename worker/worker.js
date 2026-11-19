@@ -2206,7 +2206,8 @@ async function dkUpdate(env, u, tok) {
   const cp = u.channel_post || u.edited_channel_post;
   if (cp) {
     if (!cp.chat || cp.chat.id !== DK_CHAT) return;
-    const a = cp.voice || cp.audio || (cp.document && /^audio\//.test(cp.document.mime_type || "") ? cp.document : null);
+    let a = cp.voice || cp.audio || (cp.document && /^audio\//.test(cp.document.mime_type || "") ? cp.document : null);
+    if (a && /^(namuna_|asl_ovoz)/i.test(a.file_name || "")) return;  // diktor namunalari — baza yozuvi emas
     const dn = cp.document && !a ? String(cp.document.file_name || "") : "";
     if (dn) {
       if (u.edited_channel_post) return;
@@ -4224,11 +4225,12 @@ if (url.pathname.startsWith("/dkx/")) { // vaqtinchalik kalit bilan: /dkx/file?k
         const fr = await fetch(`https://api.telegram.org/file/bot${tok}/${gf.result.file_path}`); return new Response(fr.body, { status: fr.status, headers: { "content-type": "application/octet-stream" } });
       }
       if (url.pathname === "/dkx/send" && req.method === "POST") {
-        const fd = new FormData(); fd.append("chat_id", String(DK_CHAT)); fd.append("disable_notification", "true"); const cap = (url.searchParams.get("cap") || "").slice(0, 1000); if (cap) fd.append("caption", cap); const rp = Number(url.searchParams.get("reply")); if (rp) fd.append("reply_to_message_id", String(rp));
+        const dst = String((await getAdmins(env))[0] || DK_CHAT);  // namunalar BAZA kanaliga emas, adminning diktor boti bilan shaxsiy chatiga (bazaga aralashib, to'plamga qo'shilib ketmasin — 2026-11-19)
+        const fd = new FormData(); fd.append("chat_id", dst); const cap = (url.searchParams.get("cap") || "").slice(0, 1000); if (cap) fd.append("caption", cap); const rp = Number(url.searchParams.get("reply")); if (rp) fd.append("reply_to_message_id", String(rp));
         const name = (url.searchParams.get("name") || "namuna.mp3").replace(/[^\w.\- ]+/g, "_").slice(0, 80); const isA = /\.(mp3|m4a|ogg)$/i.test(name); fd.append(isA ? "audio" : "document", new Blob([await req.arrayBuffer()], { type: isA ? "audio/mpeg" : "application/octet-stream" }), name); if (isA) fd.append("title", name.replace(/\.[a-z0-9]+$/i, ""));
         const r = await (await fetch(`https://api.telegram.org/bot${tok}/${isA ? "sendAudio" : "sendDocument"}`, { method: "POST", body: fd })).json(); return new Response(JSON.stringify({ ok: !!r.ok, m: r.ok ? r.result.message_id : 0, why: r.description || "" }), { headers: { "content-type": "application/json" } });
       }
-      if (url.pathname === "/dkx/say" && req.method === "POST") { const b = await req.json().catch(() => ({})); const r = await dkTg(tok, "sendMessage", { chat_id: DK_CHAT, text: String(b.text || "").slice(0, 3500), disable_notification: true }); return new Response(JSON.stringify({ ok: !!r.ok }), { headers: { "content-type": "application/json" } }); }
+      if (url.pathname === "/dkx/say" && req.method === "POST") { const b = await req.json().catch(() => ({})); const r = await dkTg(tok, "sendMessage", { chat_id: (await getAdmins(env))[0] || DK_CHAT, text: String(b.text || "").slice(0, 3500) }); return new Response(JSON.stringify({ ok: !!r.ok }), { headers: { "content-type": "application/json" } }); }
       return new Response("not found", { status: 404 });
     }
     if (url.pathname === "/dkhook" && req.method === "POST") { const tok = await kvGet(env, "dkToken", ""); if (!tok || req.headers.get("x-telegram-bot-api-secret-token") !== (await dkSecret(tok))) return new Response("forbidden", { status: 403 }); const up = await req.json(); ctx.waitUntil(dkUpdate(env, up, tok).catch(e => console.log("dk", e && e.message))); return new Response("ok"); }

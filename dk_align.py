@@ -467,6 +467,8 @@ def process_set(wavs, doc, out_dir, model_name="medium", lang="uz", device=None,
 def is_audio(m):
     if m is None or not m.media:
         return False
+    if re.match(r"(namuna_|asl_ovoz)", ((m.file.name or "") if m.file else ""), re.I):
+        return False  # diktor namunalari — baza yozuvi emas
     if m.voice or m.audio:
         return True
     d = m.document
