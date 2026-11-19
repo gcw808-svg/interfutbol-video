@@ -1,0 +1,783 @@
+{
+ "checked": "2026-11-19",
+ "models": {
+  "Boogu/Boogu-Image-0.1-Edit": {
+   "created": "2026-06-16",
+   "first": "2026-11-19",
+   "gb": 38.6,
+   "lib": "diffusers",
+   "lic": "apache-2.0",
+   "lic_file": false,
+   "likes": 189,
+   "seen": "2026-11-19",
+   "sha": "0cce2581de53bfdb5d67aa438e39c3d6e7556808",
+   "status": "yangi",
+   "task": "image-to-image"
+  },
+  "FireRedTeam/FireRed-Image-Edit-1.0": {
+   "created": "2026-02-12",
+   "first": "2026-11-19",
+   "gb": 57.7,
+   "lib": "diffusers",
+   "lic": "apache-2.0",
+   "lic_file": false,
+   "likes": 358,
+   "seen": "2026-11-19",
+   "sha": "0aea9d520c801c9f4b691cc92f736a7a8628e6a2",
+   "status": "yangi",
+   "task": "image-to-image"
+  },
+  "FireRedTeam/FireRed-Image-Edit-1.1": {
+   "created": "2026-03-02",
+   "first": "2026-11-19",
+   "gb": 57.7,
+   "lib": "diffusers",
+   "lic": "apache-2.0",
+   "lic_file": false,
+   "likes": 301,
+   "seen": "2026-11-19",
+   "sha": "3bc3f2a12722fd9883eb6357500de191d56baaf5",
+   "status": "yangi",
+   "task": "image-to-image"
+  },
+  "HiDream-ai/HiDream-I1-Full": {
+   "created": "2025-04-06",
+   "first": "2026-11-19",
+   "gb": 47.2,
+   "lib": "diffusers",
+   "lic": "mit",
+   "lic_file": false,
+   "likes": 1015,
+   "seen": "2026-11-19",
+   "sha": "8ccbbfb270ccdae26d6bb0081df67dc81e4033bf",
+   "status": "yangi",
+   "task": "text-to-image"
+  },
+  "InstantX/InstantID": {
+   "created": "2024-01-19",
+   "first": "2026-11-19",
+   "gb": 4.2,
+   "lib": "diffusers",
+   "lic": "apache-2.0",
+   "lic_file": false,
+   "likes": 896,
+   "seen": "2026-11-19",
+   "sha": "57b32dfee076092ad2930c71fd6d439c2c3b1820",
+   "status": "yangi",
+   "task": "text-to-image"
+  },
+  "InstantX/InstantIR": {
+   "created": "2024-10-09",
+   "first": "2026-11-19",
+   "gb": 8.4,
+   "lib": "diffusers",
+   "lic": "apache-2.0",
+   "lic_file": false,
+   "likes": 179,
+   "seen": "2026-11-19",
+   "sha": "7cbe3320352691cfa8c094811ebab32d3c5673ad",
+   "status": "yangi",
+   "task": "image-to-image"
+  },
+  "Kwai-Kolors/Kolors": {
+   "created": "2024-06-05",
+   "first": "2026-11-19",
+   "gb": 29.0,
+   "lib": "diffusers",
+   "lic": "apache-2.0",
+   "lic_file": false,
+   "likes": 882,
+   "seen": "2026-11-19",
+   "sha": "59e638b67119d3b8e74c3f4905c6572deb4dbfbc",
+   "status": "yangi",
+   "task": "text-to-image"
+  },
+  "OpenMOSS-Team/MOSS-Image-Base": {
+   "created": "2026-10-11",
+   "first": "2026-11-19",
+   "gb": 27.2,
+   "lib": "diffusers",
+   "lic": "apache-2.0",
+   "lic_file": true,
+   "likes": 686,
+   "seen": "2026-11-19",
+   "sha": "85975793d8b3d432f1b6e27f352abaa4c2a4c0d3",
+   "status": "yangi",
+   "task": "text-to-image"
+  },
+  "Qwen/Qwen-Image": {
+   "created": "2025-08-02",
+   "first": "2026-11-19",
+   "gb": 57.7,
+   "lib": "diffusers",
+   "lic": "apache-2.0",
+   "lic_file": true,
+   "likes": 2699,
+   "seen": "2026-11-19",
+   "sha": "75e0b4be04f60ec59a75f475837eced720f823b6",
+   "status": "yangi",
+   "task": "text-to-image"
+  },
+  "Qwen/Qwen-Image-2512": {
+   "created": "2025-12-30",
+   "first": "2026-11-19",
+   "gb": 57.7,
+   "lib": "diffusers",
+   "lic": "apache-2.0",
+   "lic_file": false,
+   "likes": 995,
+   "seen": "2026-11-19",
+   "sha": "25468b98e3276ca6700de15c6628e51b7de54a26",
+   "status": "yangi",
+   "task": "text-to-image"
+  },
+  "Qwen/Qwen-Image-Edit": {
+   "created": "2025-08-17",
+   "first": "2026-11-19",
+   "gb": 57.7,
+   "lib": "diffusers",
+   "lic": "apache-2.0",
+   "lic_file": false,
+   "likes": 2585,
+   "seen": "2026-11-19",
+   "sha": "ac7f9318f633fc4b5778c59367c8128225f1e3de",
+   "status": "yangi",
+   "task": "image-to-image"
+  },
+  "Qwen/Qwen-Image-Edit-2509": {
+   "created": "2025-09-22",
+   "first": "2026-11-19",
+   "gb": 57.7,
+   "lib": "diffusers",
+   "lic": "apache-2.0",
+   "lic_file": false,
+   "likes": 1271,
+   "seen": "2026-11-19",
+   "sha": "d3968ef930e841f4c73640fb8afa3b306a78167e",
+   "status": "yangi",
+   "task": "image-to-image"
+  },
+  "Qwen/Qwen-Image-Edit-2511": {
+   "created": "2025-12-17",
+   "first": "2026-11-19",
+   "gb": 57.7,
+   "lib": "diffusers",
+   "lic": "apache-2.0",
+   "lic_file": false,
+   "likes": 1570,
+   "seen": "2026-11-19",
+   "sha": "6f3ccc0b56e431dc6a0c2b2039706d7d26f22cb9",
+   "status": "yangi",
+   "task": "image-to-image"
+  },
+  "Tongyi-MAI/Z-Image": {
+   "created": "2026-01-23",
+   "first": "2026-11-19",
+   "gb": 20.5,
+   "lib": "diffusers",
+   "lic": "apache-2.0",
+   "lic_file": false,
+   "likes": 1307,
+   "seen": "2026-11-19",
+   "sha": "04cc4abb7c5069926f75c9bfde9ef43d49423021",
+   "status": "yangi",
+   "task": "text-to-image"
+  },
+  "Tongyi-MAI/Z-Image-Turbo": {
+   "created": "2025-11-25",
+   "first": "2026-11-19",
+   "gb": 32.9,
+   "lib": "diffusers",
+   "lic": "apache-2.0",
+   "lic_file": false,
+   "likes": 5631,
+   "seen": "2026-11-19",
+   "sha": "f332072aa78be7aecdf3ee76d5c247082da564a6",
+   "status": "yangi",
+   "task": "text-to-image"
+  },
+  "baidu/ERNIE-Image": {
+   "created": "2026-04-07",
+   "first": "2026-11-19",
+   "gb": 31.6,
+   "lib": "diffusers",
+   "lic": "apache-2.0",
+   "lic_file": true,
+   "likes": 689,
+   "seen": "2026-11-19",
+   "sha": "5346b31d68c9c23758ba56ef8be5e9dc174c7f99",
+   "status": "yangi",
+   "task": "text-to-image"
+  },
+  "black-forest-labs/FLUX.2-klein-4B": {
+   "created": "2026-01-14",
+   "first": "2026-11-19",
+   "gb": 23.7,
+   "lib": "diffusers",
+   "lic": "apache-2.0",
+   "lic_file": true,
+   "likes": 1132,
+   "seen": "2026-11-19",
+   "sha": "e7b7dc27f91deacad38e78976d1f2b499d76a294",
+   "status": "yangi",
+   "task": "image-to-image"
+  },
+  "black-forest-labs/FLUX.2-klein-base-4B": {
+   "created": "2026-01-14",
+   "first": "2026-11-19",
+   "gb": 23.7,
+   "lib": "diffusers",
+   "lic": "apache-2.0",
+   "lic_file": true,
+   "likes": 198,
+   "seen": "2026-11-19",
+   "sha": "a3b4f4849157f664bdbc776fd7453c2783562f4d",
+   "status": "yangi",
+   "task": "image-to-image"
+  },
+  "black-forest-labs/FLUX.2-small-decoder": {
+   "created": "2026-04-06",
+   "first": "2026-11-19",
+   "gb": 0.6,
+   "lib": "diffusers",
+   "lic": "apache-2.0",
+   "lic_file": false,
+   "likes": 191,
+   "seen": "2026-11-19",
+   "sha": "a3efc24f613ef42d9428af62fdbd6f5fd8856c4a",
+   "status": "yangi",
+   "task": "image-to-image"
+  },
+  "fal/AuraFlow": {
+   "created": "2024-07-11",
+   "first": "2026-11-19",
+   "gb": 65.8,
+   "lib": "diffusers",
+   "lic": "apache-2.0",
+   "lic_file": true,
+   "likes": 657,
+   "seen": "2026-11-19",
+   "sha": "f16d500f22e8689f10581936c6a453d7c6fe646a",
+   "status": "yangi",
+   "task": "text-to-image"
+  },
+  "fal/AuraSR-v2": {
+   "created": "2024-07-29",
+   "first": "2026-11-19",
+   "gb": 4.9,
+   "lib": "transformers",
+   "lic": "apache-2.0",
+   "lic_file": true,
+   "likes": 349,
+   "seen": "2026-11-19",
+   "sha": "ff452185a7c8b51206dd62c21c292e7baad5c3a3",
+   "status": "yangi",
+   "task": "image-to-image"
+  },
+  "h94/IP-Adapter": {
+   "created": "2023-08-16",
+   "first": "2026-11-19",
+   "gb": 19.8,
+   "lib": "diffusers",
+   "lic": "apache-2.0",
+   "lic_file": false,
+   "likes": 1464,
+   "seen": "2026-11-19",
+   "sha": "018e402774aeeddd60609b4ecdb7e298259dc729",
+   "status": "yangi",
+   "task": "text-to-image"
+  },
+  "lodestones/Chroma1-HD": {
+   "created": "2025-08-08",
+   "first": "2026-11-19",
+   "gb": 45.3,
+   "lib": "diffusers",
+   "lic": "apache-2.0",
+   "lic_file": false,
+   "likes": 461,
+   "seen": "2026-11-19",
+   "sha": "0e0c60ece1e82b17cb7f77342d765ba5024c40c0",
+   "status": "yangi",
+   "task": "text-to-image"
+  },
+  "meituan-longcat/LongCat-Image-Edit": {
+   "created": "2025-12-05",
+   "first": "2026-11-19",
+   "gb": 29.3,
+   "lib": "transformers",
+   "lic": "apache-2.0",
+   "lic_file": false,
+   "likes": 187,
+   "seen": "2026-11-19",
+   "sha": "7b54ef423aa7854be7861600024be5c56ab7875a",
+   "status": "yangi",
+   "task": "image-to-image"
+  },
+  "ostris/OpenFLUX.1": {
+   "created": "2024-08-04",
+   "first": "2026-11-19",
+   "gb": 51.7,
+   "lib": "diffusers",
+   "lic": "apache-2.0",
+   "lic_file": false,
+   "likes": 678,
+   "seen": "2026-11-19",
+   "sha": "fb984a0999ba79021827357f178f82062bc7a436",
+   "status": "yangi",
+   "task": "text-to-image"
+  },
+  "segmind/SSD-1B": {
+   "created": "2023-10-19",
+   "first": "2026-11-19",
+   "gb": 26.8,
+   "lib": "diffusers",
+   "lic": "apache-2.0",
+   "lic_file": false,
+   "likes": 851,
+   "seen": "2026-11-19",
+   "sha": "60987f37e94cd59c36b1cba832b9f97b57395a10",
+   "status": "yangi",
+   "task": "text-to-image"
+  },
+  "speridlabs/iris-3b": {
+   "created": "2026-10-05",
+   "first": "2026-11-19",
+   "gb": 41.9,
+   "lib": "pytorch",
+   "lic": "apache-2.0",
+   "lic_file": false,
+   "likes": 353,
+   "seen": "2026-11-19",
+   "sha": "adc05b909fb05d4276d26aae5a52b36406b2ef26",
+   "status": "yangi",
+   "task": "text-to-image"
+  },
+  "stabilityai/sd-vae-ft-mse-original": {
+   "created": "2022-10-13",
+   "first": "2026-11-19",
+   "gb": 0.7,
+   "lib": "",
+   "lic": "mit",
+   "lic_file": false,
+   "likes": 1447,
+   "seen": "2026-11-19",
+   "sha": "629b3ad3030ce36e15e70c5db7d91df0d60c627f",
+   "status": "yangi",
+   "task": "text-to-image"
+  },
+  "stepfun-ai/Step1X-Edit": {
+   "created": "2025-04-23",
+   "first": "2026-11-19",
+   "gb": 52.5,
+   "lib": "transformers",
+   "lic": "apache-2.0",
+   "lic_file": true,
+   "likes": 336,
+   "seen": "2026-11-19",
+   "sha": "752c0bc28a43f56249f588432a5964f1878c01ff",
+   "status": "yangi",
+   "task": "image-to-image"
+  },
+  "timbrooks/instruct-pix2pix": {
+   "created": "2023-01-20",
+   "first": "2026-11-19",
+   "gb": 31.9,
+   "lib": "diffusers",
+   "lic": "mit",
+   "lic_file": false,
+   "likes": 1191,
+   "seen": "2026-11-19",
+   "sha": "31519b5cb02a7fd89b906d88731cd4d6a7bbf88d",
+   "status": "yangi",
+   "task": "image-to-image"
+  },
+  "xinsir/controlnet-union-sdxl-1.0": {
+   "created": "2024-07-07",
+   "first": "2026-11-19",
+   "gb": 5.1,
+   "lib": "diffusers",
+   "lic": "apache-2.0",
+   "lic_file": false,
+   "likes": 1878,
+   "seen": "2026-11-19",
+   "sha": "801a4a3fa3d4c936f4feea95b98607bc6726f80c",
+   "status": "yangi",
+   "task": "text-to-image"
+  },
+  "zai-org/GLM-Image": {
+   "created": "2026-01-08",
+   "first": "2026-11-19",
+   "gb": 35.8,
+   "lib": "diffusers",
+   "lic": "mit",
+   "lic_file": false,
+   "likes": 1129,
+   "seen": "2026-11-19",
+   "sha": "2c433cc0cbc293bde2ac8ca9624f279b5d23fcf4",
+   "status": "yangi",
+   "task": "text-to-image"
+  }
+ },
+ "rejected": {
+  "ByteDance/InfiniteYou": {
+   "lic": "cc-by-nc-4.0",
+   "likes": 645,
+   "seen": "2026-11-19"
+  },
+  "ByteDance/SDXL-Lightning": {
+   "lic": "openrail++",
+   "likes": 2226,
+   "seen": "2026-11-19"
+  },
+  "Comfy-Org/Flux-1-Dev": {
+   "lic": "other",
+   "likes": 719,
+   "seen": "2026-11-19"
+  },
+  "Comfy-Org/Krea-2": {
+   "lic": "other",
+   "likes": 848,
+   "seen": "2026-11-19"
+  },
+  "Comfy-Org/MiniMax-H3-Image": {
+   "lic": "other",
+   "likes": 583,
+   "seen": "2026-11-19"
+  },
+  "Comfy-Org/Qwen-Image-2.1": {
+   "lic": "other",
+   "likes": 1346,
+   "seen": "2026-11-19"
+  },
+  "CompVis/stable-diffusion": {
+   "lic": "creativeml-openrail-m",
+   "likes": 977,
+   "seen": "2026-11-19"
+  },
+  "CompVis/stable-diffusion-v-1-4-original": {
+   "lic": "creativeml-openrail-m",
+   "likes": 2901,
+   "seen": "2026-11-19"
+  },
+  "CompVis/stable-diffusion-v1-4": {
+   "lic": "creativeml-openrail-m",
+   "likes": 7150,
+   "seen": "2026-11-19"
+  },
+  "CrucibleAI/ControlNetMediaPipeFace": {
+   "lic": "openrail",
+   "likes": 576,
+   "seen": "2026-11-19"
+  },
+  "Datou1111/shou_xin": {
+   "lic": "other",
+   "likes": 874,
+   "seen": "2026-11-19"
+  },
+  "DeepFloyd/IF-I-XL-v1.0": {
+   "lic": "deepfloyd-if-license",
+   "likes": 692,
+   "seen": "2026-11-19"
+  },
+  "Envvi/Inkpunk-Diffusion": {
+   "lic": "creativeml-openrail-m",
+   "likes": 998,
+   "seen": "2026-11-19"
+  },
+  "Linaqruf/anything-v3.0": {
+   "lic": "creativeml-openrail-m",
+   "likes": 761,
+   "seen": "2026-11-19"
+  },
+  "Lykon/DreamShaper": {
+   "lic": "other",
+   "likes": 1033,
+   "seen": "2026-11-19"
+  },
+  "MiniMaxAI/MiniMax-H3-Image": {
+   "lic": "other",
+   "likes": 1608,
+   "seen": "2026-11-19"
+  },
+  "Qwen/Qwen-Image-2.1": {
+   "lic": "other",
+   "likes": 3685,
+   "seen": "2026-11-19"
+  },
+  "Qwen/Qwen-Image-2.1-Turbo": {
+   "lic": "other",
+   "likes": 1148,
+   "seen": "2026-11-19"
+  },
+  "RunDiffusion/Juggernaut-XL-v9": {
+   "lic": "creativeml-openrail-m",
+   "likes": 533,
+   "seen": "2026-11-19"
+  },
+  "Shakker-Labs/FLUX.1-dev-ControlNet-Union-Pro": {
+   "lic": "other",
+   "likes": 633,
+   "seen": "2026-11-19"
+  },
+  "Viggle/Qwen-Image-2.1-viggle-turbo": {
+   "lic": "other",
+   "likes": 820,
+   "seen": "2026-11-19"
+  },
+  "WarriorMama777/OrangeMixs": {
+   "lic": "creativeml-openrail-m",
+   "likes": 3981,
+   "seen": "2026-11-19"
+  },
+  "XLabs-AI/flux-controlnet-collections": {
+   "lic": "other",
+   "likes": 551,
+   "seen": "2026-11-19"
+  },
+  "alimama-creative/FLUX.1-Turbo-Alpha": {
+   "lic": "other",
+   "likes": 643,
+   "seen": "2026-11-19"
+  },
+  "black-forest-labs/FLUX.1-Kontext-dev": {
+   "lic": "other",
+   "likes": 2972,
+   "seen": "2026-11-19"
+  },
+  "black-forest-labs/FLUX.1-Krea-dev": {
+   "lic": "other",
+   "likes": 965,
+   "seen": "2026-11-19"
+  },
+  "black-forest-labs/FLUX.1-dev": {
+   "lic": "other",
+   "likes": 16251,
+   "seen": "2026-11-19"
+  },
+  "black-forest-labs/FLUX.1-schnell": {
+   "lic": "apache-2.0 (yopiq kirish)",
+   "likes": 6848,
+   "seen": "2026-11-19"
+  },
+  "black-forest-labs/FLUX.2-dev": {
+   "lic": "other",
+   "likes": 2599,
+   "seen": "2026-11-19"
+  },
+  "black-forest-labs/FLUX.2-klein-9B": {
+   "lic": "other",
+   "likes": 1859,
+   "seen": "2026-11-19"
+  },
+  "black-forest-labs/flux-3-image-klein": {
+   "lic": "other",
+   "likes": 1055,
+   "seen": "2026-11-19"
+  },
+  "black-forest-labs/flux-3-image-klein-comfy": {
+   "lic": "other",
+   "likes": 3491,
+   "seen": "2026-11-19"
+  },
+  "cagliostrolab/animagine-xl-3.0": {
+   "lic": "openrail++",
+   "likes": 777,
+   "seen": "2026-11-19"
+  },
+  "cagliostrolab/animagine-xl-3.1": {
+   "lic": "openrail++",
+   "likes": 756,
+   "seen": "2026-11-19"
+  },
+  "cagliostrolab/animagine-xl-4.0": {
+   "lic": "openrail++",
+   "likes": 595,
+   "seen": "2026-11-19"
+  },
+  "dreamlike-art/dreamlike-diffusion-1.0": {
+   "lic": "other",
+   "likes": 1029,
+   "seen": "2026-11-19"
+  },
+  "dreamlike-art/dreamlike-photoreal-2.0": {
+   "lic": "other",
+   "likes": 1746,
+   "seen": "2026-11-19"
+  },
+  "fofr/sdxl-emoji": {
+   "lic": "creativeml-openrail-m",
+   "likes": 615,
+   "seen": "2026-11-19"
+  },
+  "gsdf/Counterfeit-V2.5": {
+   "lic": "creativeml-openrail-m",
+   "likes": 1597,
+   "seen": "2026-11-19"
+  },
+  "gsdf/Counterfeit-V3.0": {
+   "lic": "creativeml-openrail-m",
+   "likes": 569,
+   "seen": "2026-11-19"
+  },
+  "hakurei/waifu-diffusion": {
+   "lic": "creativeml-openrail-m",
+   "likes": 2513,
+   "seen": "2026-11-19"
+  },
+  "hakurei/waifu-diffusion-v1-3": {
+   "lic": "creativeml-openrail-m",
+   "likes": 607,
+   "seen": "2026-11-19"
+  },
+  "hakurei/waifu-diffusion-v1-4": {
+   "lic": "creativeml-openrail-m",
+   "likes": 1151,
+   "seen": "2026-11-19"
+  },
+  "jasperai/Flux.1-dev-Controlnet-Upscaler": {
+   "lic": "other",
+   "likes": 892,
+   "seen": "2026-11-19"
+  },
+  "krea/Krea-2-Raw": {
+   "lic": "other",
+   "likes": 1387,
+   "seen": "2026-11-19"
+  },
+  "krea/Krea-2-Turbo": {
+   "lic": "other",
+   "likes": 2037,
+   "seen": "2026-11-19"
+  },
+  "nerijs/pixel-art-xl": {
+   "lic": "creativeml-openrail-m",
+   "likes": 670,
+   "seen": "2026-11-19"
+  },
+  "nitrosocke/Arcane-Diffusion": {
+   "lic": "creativeml-openrail-m",
+   "likes": 752,
+   "seen": "2026-11-19"
+  },
+  "nitrosocke/Ghibli-Diffusion": {
+   "lic": "creativeml-openrail-m",
+   "likes": 785,
+   "seen": "2026-11-19"
+  },
+  "nitrosocke/mo-di-diffusion": {
+   "lic": "creativeml-openrail-m",
+   "likes": 964,
+   "seen": "2026-11-19"
+  },
+  "nitrosocke/redshift-diffusion": {
+   "lic": "creativeml-openrail-m",
+   "likes": 608,
+   "seen": "2026-11-19"
+  },
+  "nuigurumi/basil_mix": {
+   "lic": "other",
+   "likes": 987,
+   "seen": "2026-11-19"
+  },
+  "playgroundai/playground-v2-1024px-aesthetic": {
+   "lic": "other",
+   "likes": 560,
+   "seen": "2026-11-19"
+  },
+  "playgroundai/playground-v2.5-1024px-aesthetic": {
+   "lic": "other",
+   "likes": 774,
+   "seen": "2026-11-19"
+  },
+  "prompthero/openjourney": {
+   "lic": "creativeml-openrail-m",
+   "likes": 3274,
+   "seen": "2026-11-19"
+  },
+  "prompthero/openjourney-v4": {
+   "lic": "creativeml-openrail-m",
+   "likes": 1260,
+   "seen": "2026-11-19"
+  },
+  "stabilityai/sdxl-turbo": {
+   "lic": "other",
+   "likes": 2673,
+   "seen": "2026-11-19"
+  },
+  "stabilityai/stable-cascade": {
+   "lic": "other",
+   "likes": 1346,
+   "seen": "2026-11-19"
+  },
+  "stabilityai/stable-diffusion-3-medium": {
+   "lic": "other",
+   "likes": 5071,
+   "seen": "2026-11-19"
+  },
+  "stabilityai/stable-diffusion-3.5-large": {
+   "lic": "other",
+   "likes": 4238,
+   "seen": "2026-11-19"
+  },
+  "stabilityai/stable-diffusion-3.5-large-turbo": {
+   "lic": "other",
+   "likes": 755,
+   "seen": "2026-11-19"
+  },
+  "stabilityai/stable-diffusion-3.5-medium": {
+   "lic": "other",
+   "likes": 1344,
+   "seen": "2026-11-19"
+  },
+  "stabilityai/stable-diffusion-xl-base-0.9": {
+   "lic": "other",
+   "likes": 1421,
+   "seen": "2026-11-19"
+  },
+  "stabilityai/stable-diffusion-xl-base-1.0": {
+   "lic": "openrail++",
+   "likes": 8487,
+   "seen": "2026-11-19"
+  },
+  "stabilityai/stable-diffusion-xl-refiner-1.0": {
+   "lic": "openrail++",
+   "likes": 2088,
+   "seen": "2026-11-19"
+  },
+  "stable-diffusion-v1-5/stable-diffusion-v1-5": {
+   "lic": "creativeml-openrail-m",
+   "likes": 1375,
+   "seen": "2026-11-19"
+  },
+  "tencent/HunyuanImage-2.1": {
+   "lic": "other",
+   "likes": 656,
+   "seen": "2026-11-19"
+  },
+  "tencent/HunyuanImage-3.0": {
+   "lic": "other",
+   "likes": 1170,
+   "seen": "2026-11-19"
+  },
+  "tencent/HunyuanImage-3.0-Instruct": {
+   "lic": "other",
+   "likes": 1064,
+   "seen": "2026-11-19"
+  },
+  "tencent/SRPO": {
+   "lic": "other",
+   "likes": 988,
+   "seen": "2026-11-19"
+  },
+  "wavymulder/Analog-Diffusion": {
+   "lic": "creativeml-openrail-m",
+   "likes": 888,
+   "seen": "2026-11-19"
+  },
+  "yisol/IDM-VTON": {
+   "lic": "cc-by-nc-sa-4.0",
+   "likes": 750,
+   "seen": "2026-11-19"
+  }
+ }
+}

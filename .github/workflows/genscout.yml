@@ -1,0 +1,36 @@
+name: genscout
+# Razvedkachi robot (genscout.py): har dushanba tijoratga ruxsatli ochiq rasm modellarini tekshiradi (gen/MODELLAR.md, gen/models.json);
+# mirror=<model id> — shu modelning hamma faylini va kod kutubxonalarini o'zimizning yopiq Hugging Face omborimizga ko'chiradi (avtonomlik).
+on:
+  schedule:
+    - cron: "40 22 * * 0"
+  workflow_dispatch:
+    inputs:
+      mirror:
+        default: ""
+      notify:
+        default: "1"
+permissions:
+  contents: write
+concurrency:
+  group: genscout
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      MIRROR: ${{ inputs.mirror }}
+      NOTIFY: ${{ github.event_name == 'schedule' && '1' || inputs.notify }}
+      HF_HUB_DISABLE_PROGRESS_BARS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - if: ${{ inputs.mirror != '' }}
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android /opt/hostedtoolcache/CodeQL || true; df -h / | tail -1
+      - run: pip install -q requests "huggingface_hub>=0.25" && python3 genscout.py
+      - run: |
+          git config user.name "inter-futbol-bot"; git config user.email "bot@users.noreply.github.com"
+          git add gen/models.json gen/MODELLAR.md
+          git diff --cached --quiet || (git commit -q -m "genscout: modellar ro'yxati yangilandi" && (git push -q || (git pull -q --rebase && git push -q)))
