@@ -2358,6 +2358,18 @@ async function dkUpdate(env, u, tok) {
   const kb = { keyboard: [voices.map((v) => ({ text: "🎙 " + v }))], resize_keyboard: true, is_persistent: true };
   const pick = /^🎙\s*(.+)$/.exec(text.trim());
   if (pick && voices.includes(pick[1].trim())) { await kvPut(env, "dkTtsV:" + chat, pick[1].trim()); await dkTg(tok, "sendMessage", { chat_id: chat, reply_markup: kb, text: "«" + pick[1].trim() + "» bo'limi. Matn yozing — shu ovozda o'qib, audio qilib yuboraman (qisqa matn — 10 daqiqacha, uzuni — ko'proq). Sonlar va talaffuz lug'ati qoidalari qo'llanadi." }); return; }
+  // WORD FAYL (2026-11-19): bo'lim tanlangach Word (.docx) yoki .txt tashlansa — ichidagi mavzular (sarlavhalar) bo'yicha alohida audiolar tayyorlanadi
+  // (Kaggle'ning bepul videokartasida; sarlavha va yorliq qatorlari o'qilmaydi, abzatslar orasida pauza).
+  const wd = msg.document && /\.(docx|txt)$/i.test(msg.document.file_name || "") ? msg.document : null;
+  if (msg.document && !wd) { await dkTg(tok, "sendMessage", { chat_id: chat, reply_to_message_id: msg.message_id, reply_markup: kb, text: "Matn fayli .docx (Word) yoki .txt bo'lishi kerak." }); return; }
+  if (wd) {
+    const v = (await kvGet(env, "dkTtsV:" + chat, null)) || voices[0];
+    const id = "w" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    await kvPut(env, "dkt:" + id, { f: wd.file_id, name: String(wd.file_name || "matn.docx").slice(0, 120), v, chat, m: msg.message_id }, { expirationTtl: 6 * 3600 });
+    let ok = false; for (let i = 0; i < 3 && !ok; i++) { try { ok = await ghDispatch(env, "kgrun.yml", { script: "say", ref: id }); } catch (x) {} }
+    await dkTg(tok, "sendMessage", { chat_id: chat, reply_to_message_id: msg.message_id, reply_markup: kb, text: ok ? "🎙 " + v + ": Word fayl navbatga qo'yildi. Bir necha daqiqada o'qish boshlanadi — har mavzu alohida audio bo'lib shu yerga keladi." : "⚠️ Ishga tushmadi (server javob bermadi). Faylni qayta tashlang." });
+    return;
+  }
   if (text.trim() && !text.startsWith("/")) {
     const v = (await kvGet(env, "dkTtsV:" + chat, null)) || voices[0];
     const t = text.trim().slice(0, 2500); const id = "t" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -2366,7 +2378,7 @@ async function dkUpdate(env, u, tok) {
     await dkTg(tok, "sendMessage", { chat_id: chat, reply_to_message_id: msg.message_id, reply_markup: kb, text: ok ? "🎙 " + v + " o'qiyapti (" + t.length + " belgi" + (text.trim().length > 2500 ? ", 2500 dan ortig'i kesildi" : "") + "). Tayyor bo'lgach audio shu yerga keladi." : "⚠️ O'qish ishga tushmadi (server javob bermadi). Matnni qayta yuboring." });
     return;
   }
-  await dkTg(tok, "sendMessage", { chat_id: chat, reply_markup: kb, text: "Inter Diktor boti.\n\n🎙 Matnni ovozga aylantirish: pastdagi ovoz tugmasini bosing va matn yozing — shu ovozda o'qib beraman.\n\nOvozlar bazasi — «Inter Diktor — Ovozlar» kanali: u yerga ovoz yozuvini va uning matnini (Word .docx fayli) tashlang — bot ikkalasini moslab, yozuvni gaplarga bo'ladi va har bo'lakka o'z matnini qo'yadi. Qisqa yozuvda matnni izohga yozsa ham bo'ladi. Yozuvga «-» deb javob bersangiz, bazadan olinadi.\n/baza — bazada nechta yozuv borligi.\n/ovoz — bazaga yozilayotgan joriy ovoz." });
+  await dkTg(tok, "sendMessage", { chat_id: chat, reply_markup: kb, text: "Inter Diktor boti.\n\n🎙 Matnni ovozga aylantirish: pastdagi ovoz tugmasini bosing va matn yozing — shu ovozda o'qib beraman. Word fayl (.docx) tashlasangiz — ichidagi mavzular bo'yicha alohida audiolar tayyorlayman.\n\nOvozlar bazasi — «Inter Diktor — Ovozlar» kanali: u yerga ovoz yozuvini va uning matnini (Word .docx fayli) tashlang — bot ikkalasini moslab, yozuvni gaplarga bo'ladi va har bo'lakka o'z matnini qo'yadi. Qisqa yozuvda matnni izohga yozsa ham bo'ladi. Yozuvga «-» deb javob bersangiz, bazadan olinadi.\n/baza — bazada nechta yozuv borligi.\n/ovoz — bazaga yozilayotgan joriy ovoz." });
 }
 
 // ---------------- AFSONALAR TURKUMI (Bahtiyor aka tasdiqlagan, 2026-11-18 — Steven Gerrard namunasi; g'oya Goal.com "Icons" turkumidan) ----------------
@@ -3374,7 +3386,7 @@ async function ubRoute(env, req, url) {
   if (url.pathname === "/ub/stadium" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); if (!b0.club || !b0.f) return J({ ok: false }); const S = await kvGet(env, "stadiums", {}); S[b0.club] = { s: b0.s || "", f: b0.f, c: b0.c || "", t: Date.now() }; await kvPut(env, "stadiums", S); return J({ ok: true, n: Object.keys(S).length }); }
   if (url.pathname === "/ub/emojidone" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); const q = (await kvGet(env, "emojiNeed", [])).filter((x) => !(b0.names || []).includes(x.n)); await kvPut(env, "emojiNeed", q); return J({ ok: true, left: q.length }); }
   if (url.pathname === "/ub/emap" && req.method === "POST") { const m = await req.json(); const cur = await kvGet(env, "cemoji", {}); Object.assign(cur, m); await kvPut(env, "cemoji", cur); return J({ ok: true, n: Object.keys(cur).length }); }
-  if (url.pathname === "/ub/dktext" && req.method === "POST") { const b = await req.json().catch(() => ({})); const id = "t" + Date.now().toString(36); await kvPut(env, "dkt:" + id, { t: String(b.t || "").slice(0, 2500), v: DK_VOICE0 }, { expirationTtl: 7200 }); return J({ id, ok: await ghDispatch(env, "dksay.yml", { tid: id, label: "sinov" }) }); }  // sinov: natija kanalga "namuna_sinov" bo'lib tushadi
+  if (url.pathname === "/ub/dktext" && req.method === "POST") { const b = await req.json().catch(() => ({})); if (b.doc) { const tk = await kvGet(env, "dkToken", ""); const fw = await dkTg(tk, "forwardMessage", { chat_id: DK_CHAT, from_chat_id: DK_CHAT, message_id: Number(b.doc), disable_notification: true }); const d0 = fw.ok && fw.result.document; if (fw.ok) await dkTg(tk, "deleteMessage", { chat_id: DK_CHAT, message_id: fw.result.message_id }); if (!d0) return J({ ok: false, why: "hujjat emas" }); const wid = "w" + Date.now().toString(36); await kvPut(env, "dkt:" + wid, { f: d0.file_id, name: d0.file_name || "matn.docx", v: DK_VOICE0, chat: DK_CHAT, m: Number(b.doc) }, { expirationTtl: 6 * 3600 }); return J({ id: wid, ok: await ghDispatch(env, "kgrun.yml", { script: "say", ref: wid }) }); } const id = "t" + Date.now().toString(36); await kvPut(env, "dkt:" + id, { t: String(b.t || "").slice(0, 2500), v: DK_VOICE0 }, { expirationTtl: 7200 }); return J({ id, ok: await ghDispatch(env, "dksay.yml", { tid: id, label: "sinov" }) }); }  // sinov: natija kanalga "namuna_sinov" bo'lib tushadi
   if (url.pathname === "/ub/dktext") return J((await kvGet(env, "dkt:" + (url.searchParams.get("id") || ""), null)) || {});
   if (url.pathname === "/ub/ttslex") return J((await kvGet(env, "ttslex", null)) || {});
   if (url.pathname === "/ub/ttsjob") return J((await kvGet(env, "ttsj:" + url.searchParams.get("id"), null)) || {});
@@ -4441,6 +4453,10 @@ return new Response(ir.body, { status: ir.status, headers: { "content-type": "im
 if (url.pathname.startsWith("/dkx/")) { // vaqtinchalik kalit bilan: /dkx/file?k=&m=<xabar> — kanal faylini o'qish (20 MB gacha); /dkx/send?k=&name=&cap=&reply= — audio/faylni kanalga yuborish
       const kk = url.searchParams.get("k") || ""; if (!/^[0-9a-f]{48}$/.test(kk) || !(await kvGet(env, "dkk:" + kk, null))) return new Response("forbidden", { status: 403 });
       const tok = await kvGet(env, "dkToken", ""); if (!tok) return new Response("no bot", { status: 500 });
+      if (url.pathname === "/dkx/tjob") { const j = await kvGet(env, "dkt:" + (url.searchParams.get("id") || ""), null); return new Response(JSON.stringify(j || {}), { headers: { "content-type": "application/json" } }); }
+      if (url.pathname === "/dkx/tfile") { const j = await kvGet(env, "dkt:" + (url.searchParams.get("id") || ""), null); if (!j || !j.f) return new Response("not found", { status: 404 }); const gf = await dkTg(tok, "getFile", { file_id: j.f }); if (!gf.ok) return new Response("getFile: " + (gf.description || ""), { status: 502 }); return fetch(`https://api.telegram.org/file/bot${tok}/${gf.result.file_path}`); }
+      if (url.pathname === "/dkx/ttsref") { const b = await env.STATE.get("ttsref:" + (url.searchParams.get("m") || "oddiy"), "arrayBuffer"); return b ? new Response(b, { headers: { "content-type": "audio/wav" } }) : new Response("", { status: 404 }); }
+      if (url.pathname === "/dkx/ttslex") return new Response(JSON.stringify((await kvGet(env, "ttslex", null)) || {}), { headers: { "content-type": "application/json" } });
       if (url.pathname === "/dkx/file") {
         const m = Number(url.searchParams.get("m")); let fid = (await kvGet(env, "dka:" + m, null) || {}).f;
         if (!fid) { const fw = await dkTg(tok, "forwardMessage", { chat_id: DK_CHAT, from_chat_id: DK_CHAT, message_id: m, disable_notification: true }); const d = fw.ok && (fw.result.document || fw.result.audio || fw.result.voice); if (fw.ok) await dkTg(tok, "deleteMessage", { chat_id: DK_CHAT, message_id: fw.result.message_id }); fid = d && d.file_id; }

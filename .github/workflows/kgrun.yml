@@ -39,7 +39,7 @@ jobs:
           j = json.loads(urllib.request.urlopen(rq, timeout=60).read())
           print("to'plamlar:", [(s["doc"], s["v"], s["n"]) for s in j["sets"]])
           os.makedirs("k", exist_ok=True)
-          src = open("kg/" + os.environ["SCRIPT"] + ".py", encoding="utf-8").read().replace("__K__", j["k"]).replace("__REF__", os.environ["REF"]).replace("__ONLY__", os.environ.get("ONLY", "")).replace("__EPOCHS__", os.environ.get("EPOCHS", "")).replace("__LABEL__", os.environ.get("LABEL", "")).replace("__VOICE__", "").replace("__HF__", os.environ.get("HF_TOKEN", "") if os.environ["SCRIPT"] == "train" else "")
+          src = open("kg/" + os.environ["SCRIPT"] + ".py", encoding="utf-8").read().replace("__K__", j["k"]).replace("__REF__", os.environ["REF"]).replace("__ONLY__", os.environ.get("ONLY", "")).replace("__EPOCHS__", os.environ.get("EPOCHS", "")).replace("__LABEL__", os.environ.get("LABEL", "")).replace("__VOICE__", "").replace("__HF__", os.environ.get("HF_TOKEN", "") if os.environ["SCRIPT"] in ("train", "say") else "")
           open("k/run.py", "w", encoding="utf-8").write(src)
           json.dump({"id": "baxtiyoraxrarov/inter-diktor-" + os.environ["SCRIPT"], "title": "inter-diktor-" + os.environ["SCRIPT"], "code_file": "run.py", "language": "python", "kernel_type": "script", "is_private": True, "enable_gpu": True, "enable_internet": True, "dataset_sources": [], "competition_sources": [], "kernel_sources": []}, open("k/kernel-metadata.json", "w"))
           PY
