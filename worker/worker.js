@@ -2789,10 +2789,10 @@ async function qcCheck(env, text, media) {
   if (BOOKIE_RE.test(plain)) fatal.push("matnda bukmeker nomi bor (bukmeker reklamasi kanalda taqiqlangan)");
   if (/(?:Moskva|Ispaniya|Angliya|London|Madrid|Yevropa|Markaziy Yevropa) vaqti bilan/i.test(plain) && !/To[sş]h?kent vaqti/i.test(plain)) warn.push("vaqt Toshkent vaqtida berilmagan");
   if (/\*\*|__/.test(own)) warn.push("markdown belgilari (** yoki __) qolgan");
-  // sana tekshiruvi: kun-oy-yil 300 kundan uzoq kelajakda bo'lsa (shartnoma "…gacha" bundan mustasno) — yil xato bo'lishi mumkin
+  // sana tekshiruvi: kun-oy-yil 300 kundan uzoq kelajakda bo'lsa (shartnoma "…gacha"/"…qadar" bundan mustasno) — yil xato bo'lishi mumkin
   { const MON = { yanvar: 0, fevral: 1, mart: 2, aprel: 3, may: 4, iyun: 5, iyul: 6, avgust: 7, sentabr: 8, sentyabr: 8, oktabr: 9, noyabr: 10, dekabr: 11 };
     for (const mm of plain.matchAll(/(\d{4})-yil(?:ning)?\s+(\d{1,2})(?:[–-]\d{1,2})?-(yanvar|fevral|mart|aprel|may|iyun|iyul|avgust|sentabr|sentyabr|oktabr|noyabr|dekabr)(\S*)/gi)) {
-      if (/gacha/i.test(mm[4])) continue; const t = Date.UTC(+mm[1], MON[mm[3].toLowerCase()], +mm[2]); if (t - Date.now() > 300 * 86400e3) fatal.push("sana juda uzoq kelajakda: " + mm[0].replace(/\S*$/, "") + " — yil xato bo'lishi mumkin"); } }
+      if (/gacha|qadar/i.test(mm[4] + " " + plain.slice(mm.index + mm[0].length, mm.index + mm[0].length + 30).split(/[.!?\n]/)[0])) continue; /* 2026-11-19: "2032-yil 30-iyun kuniga qadar" (Tchouaméni shartnomasi) — "qadar" ham shartnoma muddati, post bekorga to'xtagan edi */ const t = Date.UTC(+mm[1], MON[mm[3].toLowerCase()], +mm[2]); if (t - Date.now() > 300 * 86400e3) fatal.push("sana juda uzoq kelajakda: " + mm[0].replace(/\S*$/, "") + " — yil xato bo'lishi mumkin"); } }
   // FUTBOLCHI VA LIGA MOSLIGI (2026-11-11: "Eldor Shomurodov Italiya chempionatida gol urdi" chiqib ketgan — u İstanbul Başakşehir'da, Süper Lig'da o'ynaydi):
   // gapda bizning futbolchi, o'yin/gol so'zi va uning klubi ligasi bo'lmagan boshqa liga bo'lsa (o'tmish haqida bo'lmasa) — post to'xtatiladi.
   try {
