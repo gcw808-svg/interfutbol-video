@@ -217,9 +217,10 @@
    "lic": "apache-2.0",
    "lic_file": true,
    "likes": 1132,
+   "mirror": "BaxtiyorAxrarov/inter-gen-flux.2-klein-4b @ e7b7dc27 (2026-11-19)",
    "seen": "2026-11-19",
    "sha": "e7b7dc27f91deacad38e78976d1f2b499d76a294",
-   "status": "yangi",
+   "status": "saqlangan",
    "task": "image-to-image"
   },
   "black-forest-labs/FLUX.2-klein-base-4B": {
@@ -436,12 +437,12 @@
   },
   "Comfy-Org/Krea-2": {
    "lic": "other",
-   "likes": 848,
+   "likes": 849,
    "seen": "2026-11-19"
   },
   "Comfy-Org/MiniMax-H3-Image": {
    "lic": "other",
-   "likes": 583,
+   "likes": 585,
    "seen": "2026-11-19"
   },
   "Comfy-Org/Qwen-Image-2.1": {
@@ -712,6 +713,11 @@
   "stabilityai/stable-diffusion-3-medium": {
    "lic": "other",
    "likes": 5071,
+   "seen": "2026-11-19"
+  },
+  "stabilityai/stable-diffusion-3-medium-diffusers": {
+   "lic": "other",
+   "likes": 527,
    "seen": "2026-11-19"
   },
   "stabilityai/stable-diffusion-3.5-large": {

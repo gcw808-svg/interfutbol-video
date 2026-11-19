@@ -14,7 +14,7 @@ Oxirgi tekshiruv: 2026-11-19. Robot: genscout.py (har dushanba). Litsenziya mode
 | Tongyi-MAI/Z-Image | apache-2.0 | 20.5 | 2026-01-23 | 1307 | yangi | — |
 | Qwen/Qwen-Image-Edit-2509 | apache-2.0 | 57.7 | 2025-09-22 | 1271 | yangi | — |
 | timbrooks/instruct-pix2pix | mit | 31.9 | 2023-01-20 | 1191 | yangi | — |
-| black-forest-labs/FLUX.2-klein-4B | apache-2.0 | 23.7 | 2026-01-14 | 1132 | yangi | — |
+| black-forest-labs/FLUX.2-klein-4B | apache-2.0 | 23.7 | 2026-01-14 | 1132 | saqlangan | BaxtiyorAxrarov/inter-gen-flux.2-klein-4b @ e7b7dc27 (2026-11-19) |
 | zai-org/GLM-Image | mit | 35.8 | 2026-01-08 | 1129 | yangi | — |
 | HiDream-ai/HiDream-I1-Full | mit | 47.2 | 2025-04-06 | 1015 | yangi | — |
 | Qwen/Qwen-Image-2512 | apache-2.0 | 57.7 | 2025-12-30 | 995 | yangi | — |
