@@ -22,7 +22,12 @@ jobs:
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update -qq > /dev/null 2>&1; sudo apt-get install -y -qq ffmpeg > /dev/null 2>&1; pip install -q torch torchaudio --index-url https://download.pytorch.org/whl/cpu && pip install -q f5-tts requests soundfile huggingface_hub
+      - uses: actions/cache/restore@v4
+        with:
+          path: .dkcache
+          key: dkcache-say
+          restore-keys: dkcache-
+      - run: sudo apt-get update -qq > /dev/null 2>&1; sudo apt-get install -y -qq ffmpeg > /dev/null 2>&1; pip install -q torch torchaudio --index-url https://download.pytorch.org/whl/cpu && pip install -q f5-tts requests soundfile huggingface_hub faster-whisper python-docx
       - env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -31,4 +36,5 @@ jobs:
           TEXTS: ${{ inputs.texts }}
           CAP: ${{ inputs.cap }}
           TID: ${{ inputs.tid }}
+          DK_CACHE: ${{ github.workspace }}/.dkcache
         run: python3 dk_say.py

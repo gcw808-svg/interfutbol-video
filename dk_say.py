@@ -36,6 +36,31 @@ def main():
         raise
 
 
+def load_asr():
+    # o'zbekcha eshitish modeli (moslashda ishlatiladigan, keshda tayyor turadi); bo'lmasa nazoratsiz o'qiladi
+    try:
+        from faster_whisper import WhisperModel
+        ct = os.path.join(os.environ.get("DK_CACHE", ".dkcache"), "ct2_islomov_rubaistt_v2_medium")
+        if not os.path.exists(os.path.join(ct, "model.bin")):
+            print("eshitish modeli keshda yo'q — nazoratsiz", flush=True)
+            return None
+        return WhisperModel(ct, device="cpu", compute_type="int8", cpu_threads=os.cpu_count() or 4)
+    except Exception as e:
+        print("eshitish modeli ochilmadi:", type(e).__name__, flush=True)
+        return None
+
+
+def score(fw, wav, sr, text):
+    import difflib
+    import dk_align as A
+    sf.write("chk.wav", wav, sr)
+    raw = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", "chk.wav", "-ac", "1", "-ar", "16000", "-f", "f32le", "-"], capture_output=True, check=True).stdout
+    segs, _ = fw.transcribe(np.frombuffer(raw, dtype=np.float32), language="uz", beam_size=2, temperature=0.0, condition_on_previous_text=False)
+    h = A.nkey(" ".join(x.text for x in segs)).replace(" ", "")
+    e = A.nkey(text).replace(" ", "")
+    return difflib.SequenceMatcher(None, e, h).ratio() if e else 0.0
+
+
 def _say(k, job):
     ref = requests.get(W + "/ub/ttsref", params={"m": MOOD}, headers=H, timeout=60)
     ref.raise_for_status()
@@ -56,15 +81,29 @@ def _say(k, job):
     except Exception:
         lex = {}
     print("lug'at:", len(lex), "ta so'z", flush=True)
-    NFE = int(os.environ.get("NFE") or (32 if sum(len(x) for x in TEXTS) <= 400 else 16))  # videokartasiz: uzun matnda qadamlar kamaytiriladi (tezlik uchun)
+    NFE = int(os.environ.get("NFE") or 32)  # videokartasiz: uzun matnda qadamlar kamaytiriladi (tezlik uchun)
+    fw, scores = load_asr(), []
+    TRIES = 3 if sum(len(x) for x in TEXTS) <= 700 else 2
     audio, sr = [], 24000
     gap = np.zeros(int(0.45 * 24000), dtype=np.float32)
     t0 = time.time()
     for t in TEXTS:
         for c in T.chunks(T.clean(T.apply_lex(T.cyr2lat(t), lex))):
-            wav, sr, _ = m.infer(ref_file="ref.wav", ref_text=T.REFS[MOOD], gen_text=c, nfe_step=NFE, remove_silence=False, speed=0.95)
-            audio += [np.asarray(wav, dtype=np.float32), gap]
-            print(f"tayyor: [{len(c)} belgi] ({time.time() - t0:.0f}s)", flush=True)
+            # SIFAT NAZORATI (2026-11-19, Bahtiyor aka: "g'alati o'qidi, sifatni oshir"): har bo'lak o'qilgach o'zbekcha eshitish modeli bilan tekshiriladi —
+            # aytilgani matnga mos kelmasa (so'z yutilgan, buzilgan, ortiqcha tovush) boshqa urinish qilinadi va ENG YAXSHISI olinadi.
+            best, bs = None, -1.0
+            for n in range(TRIES if fw else 1):
+                wav, sr, _ = m.infer(ref_file="ref.wav", ref_text=T.REFS[MOOD], gen_text=c, nfe_step=NFE, remove_silence=False, speed=0.95, seed=1000 + n * 77)
+                wav = np.asarray(wav, dtype=np.float32)
+                sc = score(fw, wav, sr, c) if fw else 1.0
+                print(f"  urinish {n + 1}: moslik {sc:.2f}", flush=True)
+                if sc > bs:
+                    best, bs = wav, sc
+                if sc >= 0.93:
+                    break
+            scores.append(bs)
+            audio += [best, gap]
+            print(f"tayyor: [{len(c)} belgi] moslik {bs:.2f} ({time.time() - t0:.0f}s)", flush=True)
     sf.write("o.wav", np.concatenate(audio), sr)
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", "o.wav", "-af", "loudnorm=I=-16:TP=-1.5", "-c:a", "libmp3lame", "-b:a", "160k", "o.mp3"], check=True)
     if job.get("chat"):
