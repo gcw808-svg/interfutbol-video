@@ -2223,7 +2223,7 @@ function vdEntry(m, md) {
 let VD_DB_OK = false;
 async function vdDb(env) {
   if (!env.DB) return null;
-  if (!VD_DB_OK) { await env.DB.prepare("CREATE TABLE IF NOT EXISTS vda (m INTEGER PRIMARY KEY, n TEXT, d INTEGER, k TEXT, g TEXT, sz INTEGER, at INTEGER, j TEXT)").run(); VD_DB_OK = true; }
+  if (!VD_DB_OK) { await env.DB.prepare("CREATE TABLE IF NOT EXISTS vda (m INTEGER PRIMARY KEY, n TEXT, d INTEGER, k TEXT, g TEXT, sz INTEGER, at INTEGER, j TEXT)").run(); await env.DB.prepare("CREATE TABLE IF NOT EXISTS vsrc (k TEXT PRIMARY KEY, m INTEGER, at INTEGER)").run(); VD_DB_OK = true; }
   return env.DB;
 }
 async function vdSave(env, e) {
@@ -3332,6 +3332,28 @@ async function ubRoute(env, req, url) {
     }
     if (hit) await kvPut(env, "faces", F);
     return J({ ok: hit > 0 });
+  }
+  // VIDEO ROBOTI (vidscout.py, 2026-11-19, Bahtiyor aka: "video arxivga video avtomatik yig'adigan qil"): faqat ERKIN LITSENZIYALI videolar (CC0, PD, CC BY, CC BY-SA).
+  // /ub/vdseen — ko'rilgan manbalar ro'yxati (takror yuklanmasin; rad etilganlari ham). /ub/vdsend — tayyor multipart so'rov Telegram'ga O'ZGARTIRILMAY uzatiladi
+  // (bot kaliti GitHub'ga chiqmaydi, fayl serverda saqlanmaydi), kanal manzilini server o'zi qo'yadi; javobdan yozuv D1 bazasiga tushadi.
+  if (url.pathname === "/ub/vdseen") {
+    const db = await vdDb(env); if (!db) return J({ ok: false, err: "D1 ulanmagan" });
+    await db.prepare("CREATE TABLE IF NOT EXISTS vsrc (k TEXT PRIMARY KEY, m INTEGER, at INTEGER)").run();
+    if (req.method === "POST") { const b0 = await req.json().catch(() => ({})); const ks = (b0.keys || []).slice(0, 300).map((k) => String(k).slice(0, 300)); if (ks.length) await db.batch(ks.map((k) => db.prepare("INSERT OR IGNORE INTO vsrc (k, m, at) VALUES (?, 0, ?)").bind(k, Date.now()))); return J({ ok: true, n: ks.length }); }
+    const r = await db.prepare("SELECT k FROM vsrc").all(); const c = await db.prepare("SELECT COUNT(*) AS n FROM vda").first();
+    return J({ ok: true, keys: (r.results || []).map((x) => x.k), total: (c && c.n) || 0 });
+  }
+  if (url.pathname === "/ub/vdsend" && req.method === "POST") {
+    const tok = await kvGet(env, "vdToken", ""); if (!tok) return J({ ok: false, err: "video bot kaliti yo'q" });
+    let meta = {}; try { meta = JSON.parse(url.searchParams.get("meta") || "{}"); } catch (x) {}
+    const r = await fetch(`https://api.telegram.org/bot${tok}/sendVideo?chat_id=${VD_CHAT}&disable_notification=true&supports_streaming=true`, { method: "POST", headers: { "content-type": req.headers.get("content-type") || "" }, body: req.body });
+    const j = await r.json().catch(() => ({}));
+    if (!j.ok) return J({ ok: false, err: String(j.description || ("http " + r.status)).slice(0, 300) });
+    const m = j.result, md = vdMedia(m); if (!md) return J({ ok: false, err: "video emas" });
+    const e = vdEntry(m, md); e.n = String(meta.n || e.n || "").slice(0, 120); e.src = String(meta.src || "").slice(0, 300); e.cr = String(meta.cr || "").slice(0, 300); e.auto = 1;
+    const how = await vdSave(env, e);
+    if (e.src) { try { const db = await vdDb(env); if (db) await db.prepare("INSERT OR REPLACE INTO vsrc (k, m, at) VALUES (?, ?, ?)").bind(e.src, e.m, Date.now()).run(); } catch (x) {} }
+    return J({ ok: true, m: e.m, how });
   }
   if (url.pathname === "/ub/stadiums") return J(await kvGet(env, "stadiums", {}));
   if (url.pathname === "/ub/stadium" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); if (!b0.club || !b0.f) return J({ ok: false }); const S = await kvGet(env, "stadiums", {}); S[b0.club] = { s: b0.s || "", f: b0.f, c: b0.c || "", t: Date.now() }; await kvPut(env, "stadiums", S); return J({ ok: true, n: Object.keys(S).length }); }
