@@ -55,8 +55,15 @@ def cyr2lat(t):
         out.append(r)
     return "".join(out)
 
+# DOIMIY TALAFFUZ QOIDALARI (Bahtiyor aka aytgan; yozuvda qanday bo'lsa ham shunday o'qiladi). Botdagi lug'at (KV ttslex) bularning ustiga qo'shiladi.
+LEX0 = {
+    "top-": "to'p-",              # top-klublar → to'p-klublar (2026-11-20)
+    "motivatsiya": "mativatsiya",  # motivatsiya → mativatsiya (2026-11-20)
+}
+
 def apply_lex(t, lex):
     # talaffuz lug'ati: "Napoli = Napli" -> Napolining -> Naplining (qo'shimchalar saqlanadi)
+    lex = {**LEX0, **(lex or {})}
     for k in sorted(lex, key=len, reverse=True):
         v = lex[k]
         t = re.sub(r"(?i)(?<![\w'])" + re.escape(k), lambda m: (v[:1].upper() + v[1:]) if m.group(0)[:1].isupper() else v, t)
