@@ -559,6 +559,16 @@ async def run(job_id):
         if r.get("fixed"):
             cap += f"\nMatn ovozga moslab tuzatildi ({len(r['fixed'])} ta faylda so'z tashlab ketilgan yoki qo'shib o'qilgan): {', '.join(r['fixed'][:14])}-fayl. Tafsiloti hisobot.csv da."
         cap += "\nZIP ichida: bo'laklar, metadata.csv, hisobot.csv (qaysi ovoz qaysi matnga tushgani)."
+        # O'QITISH BAZASI: to'plam yopiq omborga (Hugging Face, faqat egasi ko'radi) ham saqlanadi — diktorni shu bazada o'qitish uchun
+        try:
+            if os.environ.get("HF_TOKEN"):
+                from huggingface_hub import HfApi
+                api = HfApi(token=os.environ["HF_TOKEN"])
+                vs = re.sub(r"[^a-z0-9]+", "_", (j.get("v") or "Kozim Komilov").lower()).strip("_")
+                api.upload_file(path_or_fileobj=zp, path_in_repo=f"data/{vs}/{did}.zip", repo_id=api.whoami()["name"] + "/inter-diktor", commit_message=f"to'plam {did}: {r['n']} bo'lak")
+                print("bazaga saqlandi:", f"data/{vs}/{did}.zip", flush=True)
+        except Exception as e:
+            print("bazaga saqlanmadi:", str(e)[:200], flush=True)
         m = await c.send_file(ch, zp, caption=cap[:1000], reply_to=did, force_document=True)
         wapi("/ub/dkres", {"id": job_id, "ok": 1, "zip": m.id, "first": min(x.id for x in auds), "last": max(x.id for x in auds), **{k: v for k, v in r.items() if k not in ("weak", "miss", "fixed")}, "fixed": len(r.get("fixed") or []), "weak": len(r["weak"]), "miss": len(r["miss"])})
         await c.disconnect()
