@@ -21,6 +21,13 @@ BOT = os.environ["BOT_TOKEN"]
 W = "https://inter-futbol-bot.gcw808.workers.dev"
 KEY = hashlib.sha256(("ub-" + BOT).encode()).hexdigest()[:40]
 LIB = -1004498416461
+# ARXIV (2026-11-19, Bahtiyor aka: "rasmlar sonini cheklash noo'rin, qancha ko'p bo'lsa shuncha yaxshi — kelgusida generatsiya dasturiga g'oya bo'ladi"):
+# yopiq kanal "Inter Futbol — Arxiv". Post bazasiga (LIB) faqat saralangan, chegarali suratlar tushadi; post bazasiga yaramagan (bir necha odam, o'yin lahzasi,
+# kichik odam, eski forma, fayl nomida ismi yo'q) yoki chegaradan ortgan HAR BIR erkin litsenziyali surat shu arxivga CHEGARASIZ tashlanadi.
+# Bot arxivdan postga surat OLMAYDI (KV faces ga yozilmaydi), shuning uchun u yerda qattiq tekshiruv shart emas. Izohda: ism, #heshteg, manba fayl, muallif, litsenziya.
+ARCH = -1004396320401
+ARCH_LIMIT = int(os.environ.get("ARCH_LIMIT") or "0")   # bir ishga tushishda arxivga nechta surat (0 — arxiv o'chiq)
+ARCH_PER = int(os.environ.get("ARCH_PER") or "12")      # bir odamdan bir ishga tushishda nechta
 API = f"https://api.telegram.org/bot{BOT}/"
 UA = {"user-agent": "InterFutbolBot/1.2 (https://t.me/Inter_Futbol_TV)"}
 H = {"x-key": KEY, "user-agent": "InterFutbolPeople", "content-type": "application/json"}
@@ -263,7 +270,24 @@ def main():
     only = [x.strip().lower() for x in os.environ.get("ONLY", "").split(",") if x.strip()]
     extra = [(x.strip(), "", []) for x in os.environ.get("ADD", "").split(",") if x.strip()]
     items, total = [], 0
-    t0, st = time.time(), {"done": 0}
+    t0, st = time.time(), {"done": 0, "arch": 0}
+    tag = lambda n_: "#" + re.sub(r"[^0-9A-Za-z]+", "_", __import__("unicodedata").normalize("NFD", n_).encode("ascii", "ignore").decode()).strip("_")
+    def arch_send(name, c, why, im=None):  # arxiv kanaliga fayl bo'lib; True — yuborildi
+        try:
+            if im is None:
+                im = Image.open(io.BytesIO(requests.get(c["url"], headers=UA, timeout=90).content)).convert("RGB")
+            buf = io.BytesIO(); im.save(buf, "JPEG", quality=92, subsampling=0)
+            cap_ = f"{name} {tag(name)} #{why}\n{re.sub(r'^File:', '', c['t'])}\nFoto: {c['art']}, {c['lic']} (Wikimedia Commons)" + (f"\n{c['d']}" if c.get("d") else "")
+            for k_ in range(2):
+                r = requests.post(API + "sendDocument", data={"chat_id": ARCH, "caption": cap_[:1000], "disable_notification": True, "disable_content_type_detection": True},
+                                  files={"document": ("".join(ch if ch.isalnum() else "_" for ch in name)[:40] + ".jpg", buf.getvalue(), "image/jpeg")}, timeout=180).json()
+                if r.get("ok"):
+                    st["arch"] += 1; picked.append(c["t"]); time.sleep(3.2); return True
+                time.sleep(float((r.get("parameters") or {}).get("retry_after", 5)) + 1)
+            print("  arxivga yuborilmadi", r.get("description"))
+        except Exception as e_:
+            print("  arxiv xato", str(e_)[:80])
+        return False
     def flush(force=False):  # bazaga bo'lib-bo'lib yoziladi — ish vaqt chegarasida uzilsa ham kanalga tushgan suratlar bazasiz qolmaydi
         if len(items) - st["done"] >= (1 if force else 40):
             print("baza:", requests.post(W + "/ub/faceaddm", headers=H, data=json.dumps({"items": items[st["done"]:]}), timeout=60).text[:120]); st["done"] = len(items)
@@ -275,16 +299,17 @@ def main():
         plist = [p for p in plist[:STEP * 2] if cnt(p) == 0] + [p for p in plist[:STEP * 2] if cnt(p) > 0] + plist[STEP * 2:]
         print("avtomatik navbat:", off, "dan,", plist[0][0], "…")
     for name, term, al in plist:
-        if total >= LIMIT:
-            break
-        if time.time() - t0 > float(os.environ.get("MAXSEC", "2700")):
+        if total >= LIMIT and (not ARCH_LIMIT or DRY or st["arch"] >= ARCH_LIMIT):
+            break  # post bazasi kunlik chegarasi to'lgan bo'lsa ham arxiv o'z chegarasigacha davom etadi
+        if time.time() - t0 > float(os.environ.get("MAXSEC") or "2700"):
             print("vaqt chegarasi — to'xtatildi:", name); break
         flush()
         if only and name.lower() not in only:
             continue
         cur = len((have.get(pn(name)) or {}).get("ph", []))
         cap = MAXP_TOP if name in TOP else MAXP
-        if cur >= cap:
+        full = cur >= cap
+        if full and (st["arch"] >= ARCH_LIMIT or DRY):
             print("=", name, "bazada", cur, "ta — yetarli"); continue
         try:
             q = qid(term or name)
@@ -298,15 +323,16 @@ def main():
             cand = [c for c in raw if c["main"] or c.get("lead") or c.get("src") or any(k in pn(c["t"]) for k in keys)]
             print(" ", name, q, "nomzodlar:", len(raw), "→ ismi bor:", len(cand))
             got, days = 0, set()
-            for c in cand[:18]:
+            rej = [(c, "ismsiz", None) for c in raw if c not in cand and not c.get("src")]  # post bazasiga yaramaganlar → arxivga: (nomzod, sabab, yuklangan surat)
+            for c in ([] if full or total >= LIMIT else cand[:18]):
                 if got >= min(PER, cap - cur) or total >= LIMIT:
                     break
                 if c["d"] and c["d"] in days:
-                    continue
+                    rej.append((c, "seriya", None)); continue
                 if not c["main"] and 0 < c["y"] < 2016 and name not in LEGENDS:
-                    continue  # eskirgan surat (hozirgi murabbiy futbolchilik davrida va h.k.) — yangilikka mos emas
+                    rej.append((c, "eski", None)); continue  # eskirgan surat (hozirgi murabbiy futbolchilik davrida va h.k.) — yangilikka mos emas
                 if not c["main"] and other(c.get("title") or c["t"], keys):
-                    continue  # fayl nomida boshqa odam ham bor (ikki futbolchi kurashi) — kim asosiy ekanini aniqlab bo'lmaydi
+                    rej.append((c, "kop_odam", None)); continue  # fayl nomida boshqa odam ham bor (ikki futbolchi kurashi) — kim asosiy ekanini aniqlab bo'lmaydi
                 try:
                     im = Image.open(io.BytesIO(requests.get(c["url"], headers=UA, timeout=90).content)).convert("RGB")
                     if max(im.size) > 2560:  # tashqi manbadagi asl surat juda katta bo'lishi mumkin
@@ -317,7 +343,7 @@ def main():
                     continue
                 box, n, ex = persons.analyse(im)
                 if not box or n != 1 or (box[3] - box[1]) < 0.5 or (box[2] - box[0]) < 0.16 or (box[2] - box[0]) * (box[3] - box[1]) < 0.12:
-                    continue
+                    rej.append((c, "kop_odam" if n and n > 1 else "kichik", im)); continue
                 src = c.get("src") or ""  # bo'sh — Wikimedia Commons (bot post matniga manba nomini o'zi qo'shadi); boshqa manba nomi muallif yozuvining ichida
                 credit = f"Foto: {c['art']}, {c['lic']}" + (", " + src if src else "")
                 print("+", name, "|", c.get("title") or c["t"], c["y"], f"{im.width}x{im.height}", "|", credit, "|", src or "Commons")
@@ -332,13 +358,27 @@ def main():
                 d = r["result"]["document"]
                 items.append({"name": name, "al": al, "f": d["file_id"], "uid": d["file_unique_id"], "w": im.width, "h": im.height, "m": r["result"]["message_id"], "b": box, "x": ex, "c": credit, "wt": c["t"]})
                 time.sleep(3.2)
-            if not got:
+            if not got and not full:
                 print("-", name, "mos surat yo'q (nomzodlar:", len(cand), ")")
+            # ARXIV: post bazasiga yaramaganlar; odamning post bazasi to'lgan bo'lsa — qolgan hamma yangi surat (yaxshilari ham)
+            if ARCH_LIMIT and not DRY:
+                if full or cur + got >= cap:
+                    rej += [(c, "ortiqcha", None) for c in cand if c["t"] not in picked and all(c is not r_[0] for r_ in rej) and not c.get("src")]
+                na = 0
+                for c, why, im_ in rej:
+                    if na >= ARCH_PER or st["arch"] >= ARCH_LIMIT or time.time() - t0 > float(os.environ.get("MAXSEC") or "2700"):
+                        break
+                    if c["t"] in picked:
+                        continue
+                    na += arch_send(name, c, why, im_)
+                if na:
+                    print("  arxivga:", name, na, "ta")
         except Exception as ex_:
             print("-", name, "xato", str(ex_)[:120])
         time.sleep(0.4)
     flush(True)
     print("ITEMS", json.dumps([{k: it[k] for k in ("name", "f", "uid", "m", "wt")} for it in items]))
+    print("arxivga jami:", st["arch"])
     print("qo'shildi:", len(items), "| manbalar:", json.dumps({k: sum(1 for it in items if (it["c"].rsplit(", ", 1)[-1] if it["c"].endswith("Flickr") else "Commons") == k) for k in ("Commons", "Flickr")}), "| openverse so'rovlari:", _ov["n"])
     if not DRY:
         try:  # ko'rilgan fayllar KV'da (olib tashlanganlari qayta kelmasin)
