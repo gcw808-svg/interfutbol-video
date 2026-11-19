@@ -191,9 +191,10 @@
    "lic": "apache-2.0",
    "lic_file": false,
    "likes": 5631,
+   "mirror": "BaxtiyorAxrarov/inter-gen-z-image-turbo @ f332072a (2026-11-19)",
    "seen": "2026-11-19",
    "sha": "f332072aa78be7aecdf3ee76d5c247082da564a6",
-   "status": "yangi",
+   "status": "saqlangan",
    "task": "text-to-image"
   },
   "baidu/ERNIE-Image": {
@@ -442,7 +443,7 @@
   },
   "Comfy-Org/MiniMax-H3-Image": {
    "lic": "other",
-   "likes": 585,
+   "likes": 586,
    "seen": "2026-11-19"
   },
   "Comfy-Org/Qwen-Image-2.1": {
@@ -577,7 +578,7 @@
   },
   "black-forest-labs/flux-3-image-klein-comfy": {
    "lic": "other",
-   "likes": 3491,
+   "likes": 3492,
    "seen": "2026-11-19"
   },
   "cagliostrolab/animagine-xl-3.0": {

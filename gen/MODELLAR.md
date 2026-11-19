@@ -4,7 +4,7 @@ Oxirgi tekshiruv: 2026-11-19. Robot: genscout.py (har dushanba). Litsenziya mode
 
 | Model | Litsenziya | Hajmi (GB) | Chiqqan | Yoqtirishlar | Holati | Bizdagi nusxa |
 |---|---|---|---|---|---|---|
-| Tongyi-MAI/Z-Image-Turbo | apache-2.0 | 32.9 | 2025-11-25 | 5631 | yangi | — |
+| Tongyi-MAI/Z-Image-Turbo | apache-2.0 | 32.9 | 2025-11-25 | 5631 | saqlangan | BaxtiyorAxrarov/inter-gen-z-image-turbo @ f332072a (2026-11-19) |
 | Qwen/Qwen-Image | apache-2.0 | 57.7 | 2025-08-02 | 2699 | yangi | — |
 | Qwen/Qwen-Image-Edit | apache-2.0 | 57.7 | 2025-08-17 | 2585 | yangi | — |
 | xinsir/controlnet-union-sdxl-1.0 | apache-2.0 | 5.1 | 2024-07-07 | 1878 | yangi | — |
@@ -49,7 +49,7 @@ Oxirgi tekshiruv: 2026-11-19. Robot: genscout.py (har dushanba). Litsenziya mode
 | stabilityai/stable-diffusion-3.5-large | other | 4238 |
 | WarriorMama777/OrangeMixs | creativeml-openrail-m | 3981 |
 | Qwen/Qwen-Image-2.1 | other | 3685 |
-| black-forest-labs/flux-3-image-klein-comfy | other | 3491 |
+| black-forest-labs/flux-3-image-klein-comfy | other | 3492 |
 | prompthero/openjourney | creativeml-openrail-m | 3274 |
 | black-forest-labs/FLUX.1-Kontext-dev | other | 2972 |
 | CompVis/stable-diffusion-v-1-4-original | creativeml-openrail-m | 2901 |
