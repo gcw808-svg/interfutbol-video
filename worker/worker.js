@@ -3360,6 +3360,16 @@ async function ubRoute(env, req, url) {
     const r = await db.prepare("SELECT k FROM vsrc").all(); const c = await db.prepare("SELECT COUNT(*) AS n FROM vda").first();
     return J({ ok: true, keys: (r.results || []).map((x) => x.k), total: (c && c.n) || 0 });
   }
+  // O'Z INSTAGRAM VIDEOLARIMIZ (ownvids.py, 2026-11-19, Bahtiyor aka: "ha" — o'z videolarimizni arxivga ko'chirish): rasmiy Instagram API orqali FAQAT o'z hisobimiz
+  // (@interfutbol_tv) postlari ro'yxati; kalit serverda qoladi, ishga faqat vaqtinchalik fayl manzillari beriladi.
+  if (url.pathname === "/ub/igmedia") {
+    const g = await kvGet(env, "ig", null); if (!g || !g.k) return J({ ok: false, err: "Instagram ulanmagan" });
+    const q = new URLSearchParams({ fields: "id,media_type,media_product_type,media_url,caption,permalink,timestamp", limit: String(Math.min(50, Number(url.searchParams.get("limit")) || 25)), access_token: g.k });
+    const af = url.searchParams.get("after"); if (af) q.set("after", af);
+    const j = await (await fetch(g.h + "/" + g.id + "/media?" + q)).json().catch(() => ({}));
+    if (!j.data) return J({ ok: false, err: String((j.error && j.error.message) || "javob yo'q").slice(0, 300) });
+    return J({ ok: true, data: j.data, next: (j.paging && j.paging.next && j.paging.cursors && j.paging.cursors.after) || "" });
+  }
   if (url.pathname === "/ub/vdlist") { // robot qo'shgan (auto) yozuvlar — robot ularni joriy qoidalar bilan qayta tekshiradi
     const db = await vdDb(env); if (!db) return J({ ok: false, err: "D1 ulanmagan" });
     const r = await db.prepare("SELECT m, n, j FROM vda ORDER BY m DESC LIMIT 5000").all();
@@ -3377,7 +3387,7 @@ async function ubRoute(env, req, url) {
     const j = await r.json().catch(() => ({}));
     if (!j.ok) return J({ ok: false, err: String(j.description || ("http " + r.status)).slice(0, 300) });
     const m = j.result, md = vdMedia(m); if (!md) return J({ ok: false, err: "video emas" });
-    const e = vdEntry(m, md); e.n = String(meta.n || e.n || "").slice(0, 120); e.src = String(meta.src || "").slice(0, 300); e.cr = String(meta.cr || "").slice(0, 300); e.auto = 1;
+    const e = vdEntry(m, md); e.n = String(meta.n || e.n || "").slice(0, 120); e.src = String(meta.src || "").slice(0, 300); e.cr = String(meta.cr || "").slice(0, 300); if (meta.own) e.own = 1; else e.auto = 1;  // o'z videolarimiz (own) — robot tozalashi (vddel) ularga tegmaydi
     const how = await vdSave(env, e);
     if (e.src) { try { const db = await vdDb(env); if (db) await db.prepare("INSERT OR REPLACE INTO vsrc (k, m, at) VALUES (?, ?, ?)").bind(e.src, e.m, Date.now()).run(); } catch (x) {} }
     return J({ ok: true, m: e.m, how });
