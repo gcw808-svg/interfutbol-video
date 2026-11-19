@@ -111,8 +111,14 @@ def main():
             raise Exception("checkpoint llm ga mos emas: " + str(list(sd)[:4]))
         from cosyvoice.utils.file_utils import load_wav
         p16 = load_wav("ref16.wav", 16000)
+        def gen(t):  # CosyVoice'ning yangi nusxasida namuna FAYL YO'LI bo'lib beriladi, eskisida — tovush massivi
+            try:
+                return [o["tts_speech"] for o in cv.inference_zero_shot(t, ref_text, "/kaggle/working/ref16.wav", stream=False, text_frontend=False)]
+            except Exception as e1:
+                print("yo'l bilan bo'lmadi, massiv bilan urinilyapti:", str(e1)[:200], flush=True)
+                return [o["tts_speech"] for o in cv.inference_zero_shot(t, ref_text, p16, stream=False, text_frontend=False)]
         for i, t in enumerate(TEXTS, 1):
-            outs = [o["tts_speech"] for o in cv.inference_zero_shot(t, ref_text, p16, stream=False, text_frontend=False)]
+            outs = gen(t)
             torchaudio.save(f"o/B{i}.wav", torch.cat(outs, dim=1), cv.sample_rate)
         done.append("B")
     except KeyboardInterrupt:
