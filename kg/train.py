@@ -88,7 +88,8 @@ def main():
             f.write(f"wavs/{os.path.basename(p)}|{t}\n")
     # ---- F5-TTS uchun tayyorlash va o'qitish
     import f5_tts
-    pkg = os.path.dirname(f5_tts.__file__)
+    pkg = os.path.dirname(f5_tts.__file__) if getattr(f5_tts, "__file__", None) else list(f5_tts.__path__)[0]  # paket __init__siz bo'lishi mumkin
+    print("f5_tts:", pkg, os.path.exists(f"{pkg}/train/datasets/prepare_csv_wavs.py"), flush=True)
     data_dir = os.path.abspath(os.path.join(pkg, "..", "..", "data", "inter_custom"))
     os.makedirs(os.path.dirname(data_dir), exist_ok=True)
     sh(f"python {pkg}/train/datasets/prepare_csv_wavs.py /kaggle/working/ds {data_dir}", True, 2500)
