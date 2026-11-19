@@ -169,7 +169,7 @@ def run(job):
                     if sc >= 0.92:
                         break
                 low += bs < 0.8
-                audio += [best, np.zeros(int(0.35 * sr), dtype=np.float32)]
+                audio += [best, np.zeros(int(0.12 * sr), dtype=np.float32)]  # gaplar orasi asl o'qishdagidek qisqa (o'lchov: 0.26 s)
             audio.append(np.zeros(int(0.5 * sr), dtype=np.float32))  # abzatslar orasida uzunroq pauza
         full = np.concatenate(audio)
         sf.write("o.wav", full, sr)

@@ -34,6 +34,8 @@ def stats(ws, label):
     print(label, json.dumps({k: round(v, 2) for k, v in o.items()}), flush=True)
     for i, w in enumerate(ws):
         k = A.nkey(w[0]).replace(" ", "")
+        if os.environ.get("ONLYASL") and k.startswith("ya") and len(k) <= 6:
+            print(f"  {label} ya-so'z: «{k}» {w[2] - w[1]:.2f}s, oldin {gaps[i - 1] if i else 0:.2f}s, keyin {gaps[i] if i < len(gaps) else 0:.2f}s, keyingi so'z uzunligi {len(ws[i + 1][0]) if i + 1 < len(ws) else 0}", flush=True)
         if k.startswith("yani") or k.startswith("yaani"):
             print(f"  {label} «ya'ni»: so'z {w[2] - w[1]:.2f}s, keyingi pauza {gaps[i] if i < len(gaps) else 0:.2f}s, oldingi pauza {gaps[i - 1] if i else 0:.2f}s", flush=True)
             o["yani_pauza"] = gaps[i] if i < len(gaps) else 0.0
@@ -61,6 +63,8 @@ def main():
     subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", "asl.bin", "-ac", "1", "-ar", "24000", "asl.wav"], check=True)
     wr = words(fw, "asl.wav")
     sr_ = stats(wr, "ASL")
+    if os.environ.get("ONLYASL"):
+        return
     # matn: Word fayldan shu yozuvga to'g'ri keladigan abzats
     r = requests.get(W + "/dkx/file", params={"k": k, "m": DOC}, headers=UA, timeout=180)
     r.raise_for_status()

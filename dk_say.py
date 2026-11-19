@@ -85,7 +85,7 @@ def _say(k, job):
     fw, scores = load_asr(), []
     TRIES = 3 if sum(len(x) for x in TEXTS) <= 700 else 2
     audio, sr = [], 24000
-    gap = np.zeros(int(0.45 * 24000), dtype=np.float32)
+    gap = np.zeros(int(0.12 * 24000), dtype=np.float32)  # gaplar orasi: asl o'qishda 0.26 s (o'lchangan, 2026-11-20) — model o'zi qo'shadigan sukunat ustiga ozgina
     t0 = time.time()
     for t in TEXTS:
         for c in T.chunks(T.clean(T.apply_lex(T.cyr2lat(t), lex))):
