@@ -19,7 +19,7 @@ on:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update -qq > /dev/null 2>&1; sudo apt-get install -y -qq ffmpeg > /dev/null 2>&1; pip install -q torch torchaudio --index-url https://download.pytorch.org/whl/cpu && pip install -q f5-tts requests soundfile huggingface_hub

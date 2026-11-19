@@ -56,12 +56,13 @@ def _say(k, job):
     except Exception:
         lex = {}
     print("lug'at:", len(lex), "ta so'z", flush=True)
+    NFE = int(os.environ.get("NFE") or (32 if sum(len(x) for x in TEXTS) <= 400 else 16))  # videokartasiz: uzun matnda qadamlar kamaytiriladi (tezlik uchun)
     audio, sr = [], 24000
     gap = np.zeros(int(0.45 * 24000), dtype=np.float32)
     t0 = time.time()
     for t in TEXTS:
         for c in T.chunks(T.clean(T.apply_lex(T.cyr2lat(t), lex))):
-            wav, sr, _ = m.infer(ref_file="ref.wav", ref_text=T.REFS[MOOD], gen_text=c, nfe_step=int(os.environ.get("NFE", "32")), remove_silence=False, speed=0.95)
+            wav, sr, _ = m.infer(ref_file="ref.wav", ref_text=T.REFS[MOOD], gen_text=c, nfe_step=NFE, remove_silence=False, speed=0.95)
             audio += [np.asarray(wav, dtype=np.float32), gap]
             print(f"tayyor: [{len(c)} belgi] ({time.time() - t0:.0f}s)", flush=True)
     sf.write("o.wav", np.concatenate(audio), sr)

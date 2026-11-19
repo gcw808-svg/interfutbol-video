@@ -2264,7 +2264,7 @@ async function dkUpdate(env, u, tok) {
   const voices = (await kvGet(env, "dkVoices", null)) || [DK_VOICE0];
   const kb = { keyboard: [voices.map((v) => ({ text: "🎙 " + v }))], resize_keyboard: true, is_persistent: true };
   const pick = /^🎙\s*(.+)$/.exec(text.trim());
-  if (pick && voices.includes(pick[1].trim())) { await kvPut(env, "dkTtsV:" + chat, pick[1].trim()); await dkTg(tok, "sendMessage", { chat_id: chat, reply_markup: kb, text: "«" + pick[1].trim() + "» bo'limi. Matn yozing — shu ovozda o'qib, audio qilib yuboraman (2–8 daqiqa). Sonlar va talaffuz lug'ati qoidalari qo'llanadi." }); return; }
+  if (pick && voices.includes(pick[1].trim())) { await kvPut(env, "dkTtsV:" + chat, pick[1].trim()); await dkTg(tok, "sendMessage", { chat_id: chat, reply_markup: kb, text: "«" + pick[1].trim() + "» bo'limi. Matn yozing — shu ovozda o'qib, audio qilib yuboraman (qisqa matn — 10 daqiqacha, uzuni — ko'proq). Sonlar va talaffuz lug'ati qoidalari qo'llanadi." }); return; }
   if (text.trim() && !text.startsWith("/")) {
     const v = (await kvGet(env, "dkTtsV:" + chat, null)) || voices[0];
     const t = text.trim().slice(0, 2500); const id = "t" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
