@@ -46,7 +46,8 @@ def main():
     os.makedirs("/kaggle/working/o", exist_ok=True)
     os.chdir("/kaggle/working")
     sh("nvidia-smi | head -15")
-    urllib.request.urlretrieve(f"{W}/dkx/file?k={K}&m={REF_MSG}", "ref_src")
+    rq = urllib.request.Request(f"{W}/dkx/file?k={K}&m={REF_MSG}", headers={"user-agent": "kg"})  # oddiy Python nomi bilan so'rovni Cloudflare 403 bilan qaytaradi
+    open("ref_src", "wb").write(urllib.request.urlopen(rq, timeout=120).read())
     sh("ffmpeg -loglevel error -y -i ref_src -ac 1 -ar 24000 ref24.wav && ffmpeg -loglevel error -y -i ref_src -ac 1 -ar 16000 ref16.wav", True)
     # namuna matni: o'zbekchaga o'rgatilgan Whisper bilan eshitib olinadi
     ref_text = ""
