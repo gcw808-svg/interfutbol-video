@@ -2187,7 +2187,7 @@ async function dkConnect(env, chat, msg) {
 // ---------------- INTER FUTBOL VIDEO ARXIV — ALOHIDA BOT (2026-11-19, Bahtiyor aka: "video arxiv uchun diktorniki kabi alohida bot, shunda chalkash bo'lmaydi";
 // nomi @InterFutbolVideoArxivBot — "Futbol" so'zi bilan, chunki Inter MMA ham bor) ----------------
 // Video arxiv: yopiq kanal "Inter Futbol — Video Arxiv" (VD_CHAT) — videolardan lavhalar va o'z videolarimiz. Kalit kodda emas — KV vdToken da (admin BotFather
-// xabarini asosiy botga uzatadi). Hozircha 1-bosqich: ulanish va /start. Bot faqat BOSHQARUVCHI: 20 MB dan katta faylni yuklab ololmaydi, 50 MB dan kattasini
+// xabarini asosiy botga uzatadi). 1-bosqich: ulanish va /start. Bot faqat BOSHQARUVCHI: 20 MB dan katta faylni yuklab ololmaydi, 50 MB dan kattasini
 // yubora olmaydi — og'ir ish (videoni olish, lavhalarga kesish) hisob seansi va GitHub'da bajariladi. KV'ga har xabarda yozilmaydi (kunlik yozish limiti umumiy).
 const VD_CHAT = -1004385358467;
 async function vdConnect(env, chat, tok, me) {
@@ -2196,9 +2196,80 @@ async function vdConnect(env, chat, tok, me) {
   await dkTg(tok, "setMyCommands", { commands: [{ command: "start", description: "Bot haqida" }] });
   await tg(env, "sendMessage", { chat_id: chat, text: (wh.ok ? "✅ Inter Futbol Video Arxiv boti ulandi: @" + me.username : "Kalit saqlandi, lekin ulanishda xato: " + (wh.description || "")) + "\nKalitli xabar o'chirildi." });
 }
+// 2-BOSQICH (2026-11-19, Bahtiyor aka: "ha boshla"): ARXIVGA QABUL. Kanalga tashlangan har bir video O'Z kalitida yoziladi (vda:<xabar>, qisqa ma'lumoti
+// metadata'da — ro'yxat bitta "list" so'rovi bilan o'qiladi, har yozuv alohida o'qilmaydi). Videoning o'zi Telegram kanalida turadi — serverda joy olmaydi.
+// LIMIT: bitta video = bitta KV yozuvi; nom berish/olib tashlash — yana bitta. Yozish limiti tugagan bo'lsa video yo'qolmaydi (kanalda turadi) — bot aytadi,
+// keyin videoga javob "?" bilan ro'yxatga qo'shiladi. Nom: izohning birinchi qatori; izoh bo'lmasa fayl nomi; albomda nomsizlari albomdagi nomlisidan oladi.
+// Videoga javob: matn — nom berish; "-" — ro'yxatdan olib tashlash (video kanalda qoladi); "?" — qayta yozish. Shaxsiy chatda (faqat admin): /arxiv.
+const vdDur = (x) => { x = Math.round(x || 0); return Math.floor(x / 60) + ":" + String(x % 60).padStart(2, "0"); };
+const vdMb = (b) => !b ? "" : b >= 1048576 ? (b / 1048576).toFixed(b >= 10485760 ? 0 : 1) + " MB" : Math.max(1, Math.round(b / 1024)) + " KB";
+function vdMedia(m) {
+  const v = m.video || m.animation || m.video_note || (m.document && /^video\//.test(m.document.mime_type || "") ? m.document : null);
+  return v ? { v, k: m.video ? "video" : m.animation ? "gif" : m.video_note ? "dumaloq" : "fayl" } : null;
+}
+function vdName(cap, fn) {
+  const c = String(cap || "").split("\n").map((x) => x.trim()).filter(Boolean)[0] || "";
+  if (c) return c.slice(0, 120);
+  const f = String(fn || "").replace(/\.[a-z0-9]{2,5}$/i, "").replace(/[_]+/g, " ").trim();
+  return /^(video|vid|img|mov|document|file|telegram|whatsapp|screen|record|\d|-|\s)*$/i.test(f) ? "" : f.slice(0, 120);
+}
+function vdEntry(m, md) {
+  const v = md.v;
+  return { m: m.message_id, f: v.file_id, u: v.file_unique_id || "", k: md.k, n: vdName(m.caption, v.file_name), c: String(m.caption || "").slice(0, 1000),
+    d: v.duration || 0, w: v.width || v.length || 0, h: v.height || v.length || 0, sz: v.file_size || 0, g: m.media_group_id || "", at: Date.now() };
+}
+async function vdSave(env, e) { await env.STATE.put("vda:" + e.m, JSON.stringify(e), { metadata: { n: e.n.slice(0, 80), d: e.d, k: e.k, g: e.g, sz: e.sz } }); }
+const vdLine = (e) => [e.d ? vdDur(e.d) : "", e.w && e.h ? e.w + "x" + e.h : "", vdMb(e.sz)].filter(Boolean).join(" · ");
+async function vdList(env) {
+  const out = []; let cursor;
+  for (let i = 0; i < 5; i++) { const r = await env.STATE.list({ prefix: "vda:", cursor }); for (const k of r.keys) out.push({ m: Number(k.name.slice(4)), ...(k.metadata || {}) }); if (r.list_complete || !r.cursor) break; cursor = r.cursor; }
+  const gn = {}; for (const x of out) if (x.g && x.n && !gn[x.g]) gn[x.g] = x.n;  // albom: nomsizlari nomlisidan oladi
+  for (const x of out) if (!x.n && x.g && gn[x.g]) x.n = gn[x.g];
+  return out.sort((a, b) => b.m - a.m);
+}
 async function vdUpdate(env, up, tok) {
+  const cp = up.channel_post;
+  if (cp) {
+    if (!cp.chat || cp.chat.id !== VD_CHAT) return;
+    const say = (text, to) => dkTg(tok, "sendMessage", { chat_id: VD_CHAT, reply_to_message_id: to || cp.message_id, text, disable_notification: true });
+    const md = vdMedia(cp);
+    if (md) {
+      const e = vdEntry(cp, md);
+      try { await vdSave(env, e); } catch (x) { await say("⚠️ Video qabul qilindi va kanalda turibdi, lekin ro'yxatga yozilmadi: serverning bugungi yozish limiti tugagan.\nLimit yangilangach shu videoga javob qilib «?» yozing — ro'yxatga qo'shaman."); return; }
+      if (e.g && !e.n) return;  // albomning izohsiz bo'laklari — javob bitta, izohlisida
+      await say("✅ Arxivga yozildi — №" + e.m + (e.g ? " (albom)" : "") + "\n" + (e.n ? "Nomi: " + e.n : "Nomi yo'q — shu videoga javob qilib nom yozing.") + (vdLine(e) ? "\n" + vdLine(e) : ""));
+      return;
+    }
+    const rt = cp.reply_to_message, t = (cp.text || "").trim();
+    if (!rt || !t) return;
+    const rmd = vdMedia(rt); if (!rmd) return;
+    try {
+      if (t === "-") { await env.STATE.delete("vda:" + rt.message_id); await say("Ro'yxatdan olib tashlandi — №" + rt.message_id + ". Videoning o'zi kanalda qoladi.", rt.message_id); return; }
+      const cur = await kvGet(env, "vda:" + rt.message_id, null);
+      const e = cur && cur.f ? cur : vdEntry(rt, rmd);
+      if (t === "?") { await vdSave(env, e); await say("✅ Ro'yxatga yozildi — №" + e.m + (e.n ? "\nNomi: " + e.n : "\nNomi yo'q — shu videoga javob qilib nom yozing."), rt.message_id); return; }
+      e.n = t.split("\n")[0].trim().slice(0, 120); await vdSave(env, e); await say("Nomi saqlandi — №" + e.m + ": " + e.n, rt.message_id);
+    } catch (x) { await say("⚠️ Saqlanmadi: serverning bugungi yozish limiti tugagan. Limit yangilangach qayta yozing.", rt.message_id); }
+    return;
+  }
   const m = up.message; if (!m || !m.chat || m.chat.type !== "private") return;
-  if (/^\/start/.test(m.text || "")) await dkTg(tok, "sendMessage", { chat_id: m.chat.id, text: "Inter Futbol Video Arxiv boti.\n\nVideo arxiv (videolardan lavhalar va o'z videolarimiz) shu bot orqali boshqariladi. Hozircha tayyorlanmoqda." });
+  const adm = (await getAdmins(env)).includes(m.chat.id);
+  const txt = m.text || "";
+  if (/^\/start/.test(txt)) {
+    if (adm) await dkTg(tok, "setMyCommands", { commands: [{ command: "start", description: "Bot haqida" }, { command: "arxiv", description: "Video arxiv ro'yxati" }] });
+    await dkTg(tok, "sendMessage", { chat_id: m.chat.id, text: "Inter Futbol Video Arxiv boti.\n\n" + (adm ? "Videoni «Inter Futbol — Video Arxiv» kanaliga tashlang — izohiga nomini yozing. Bot uni ro'yxatga yozib, javob beradi.\n\nVideoga javob qilib yozilsa:\n• matn — nomini o'zgartiradi\n• «-» — ro'yxatdan olib tashlaydi\n\n/arxiv — ro'yxat" : "Bu bot yopiq arxiv uchun ishlaydi.") });
+    return;
+  }
+  if (!adm) return;
+  if (/^\/arxiv/.test(txt)) {
+    const L = await vdList(env);
+    if (!L.length) { await dkTg(tok, "sendMessage", { chat_id: m.chat.id, text: "Arxiv hozircha bo'sh. Videoni «Inter Futbol — Video Arxiv» kanaliga tashlang." }); return; }
+    const sec = L.reduce((a, x) => a + (x.d || 0), 0), sz = L.reduce((a, x) => a + (x.sz || 0), 0), nn = L.filter((x) => !x.n).length;
+    const rows = L.slice(0, 25).map((x) => "№" + x.m + " — " + (x.n || "nomsiz") + (x.d ? " (" + vdDur(x.d) + ")" : ""));
+    await dkTg(tok, "sendMessage", { chat_id: m.chat.id, text: "Video arxiv: " + L.length + " ta video, jami " + vdDur(sec) + (sz ? ", " + vdMb(sz) : "") + (nn ? "\nNomsiz: " + nn + " ta" : "") + "\n\nOxirgilari:\n" + rows.join("\n") });
+    return;
+  }
+  if (vdMedia(m)) await dkTg(tok, "sendMessage", { chat_id: m.chat.id, text: "Videoni shu yerga emas, «Inter Futbol — Video Arxiv» kanaliga tashlang — o'sha yerda arxivga yoziladi." });
 }
 // TO'PLAM (2026-11-19): bitta matn fayli (Word) + shu matn o'qilgan bir nechta ovoz fayli. Ish matn fayli bo'yicha boshlanadi (bitta hodisa — poyga yo'q);
 // ovozlar ro'yxatini Modal'dagi ish kanalning o'zidan o'qiydi (matndan keyin, keyingi matn fayligacha tashlanganlari) va ular tashlab bo'linishini kutadi.
