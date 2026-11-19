@@ -9,7 +9,7 @@ on:
     workflows: ["dkalign"]
     types: [completed]
 concurrency:
-  group: dksweep
+  group: dk-session  # Telegram seansini bir vaqtda faqat BITTA ish ishlatadi (2026-11-19: bir vaqtda 5 ta ish — Telegram seansni bekor qildi)
   cancel-in-progress: false
 jobs:
   run:

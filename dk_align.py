@@ -625,14 +625,14 @@ async def sweep():
             why = "to'plam yo'q"
         elif st["st"] == "xato":
             why = "xato bilan tugagan"
-        elif st["st"] == "moslanmoqda" and time.time() - (st.get("at") or 0) / 1000 > 45 * 60:
+        elif st["st"] == "moslanmoqda" and time.time() - (st.get("at") or 0) / 1000 > 4 * 60:  # ishlar navbat bilan (bitta guruh): nazoratchi ishlayotganda boshqa ish yo'q — demak bu ish navbatda bekor bo'lgan
             why = "osilib qolgan"
         elif st["st"] == "tayyor" and (st.get("files") != len(auds) or st.get("last") != max(auds)):
             why = f"ovozlar soni o'zgargan ({st.get('files')} → {len(auds)})"
         print(f"matn {d}: {len(auds)} ta ovoz, holat {st and st['st']} {('— ' + why) if why else ''}", flush=True)
         if why:
             todo.append(d)
-    for d in todo[:4]:
+    for d in todo[:1]:  # bittadan: ish tugagach nazoratchi o'zi qayta ishga tushib keyingisini yuboradi (navbatdagi ishlar bir-birini bekor qilmasligi uchun)
         print("qayta moslashga:", d, wapi("/ub/dkredo", {"doc": d}), flush=True)
 
 

@@ -7,7 +7,7 @@ on:
       job:
         required: true
 concurrency:
-  group: dkalign-${{ inputs.job }}  # har ish alohida: umumiy guruhda navbatdagi ish oldingisini bekor qilib yuborgan edi (2026-11-19)
+  group: dk-session  # Telegram seansini bir vaqtda faqat BITTA ish ishlatadi (2026-11-19: bir vaqtda 5 ta ish — Telegram seansni bekor qildi)
   cancel-in-progress: false
 jobs:
   run:
