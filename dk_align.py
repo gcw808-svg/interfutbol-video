@@ -329,7 +329,7 @@ def reconcile(sub, heard):
     if len(H) < 4 or not A:
         return list(sub), [], []
     sm = difflib.SequenceMatcher(None, A, H, autojunk=False)
-    if sm.ratio() < 0.8:  # eshitish ishonchsiz — matnga tegilmaydi
+    if sm.ratio() < 0.55:  # eshitish ishonchsiz yoki boshqa matn — tegilmaydi
         return list(sub), [], []
     drop_w = [False] * len(A)
     ins = {}  # token index -> qo'shiladigan so'zlar (shu tokendan KEYIN); -1 — eng boshiga
