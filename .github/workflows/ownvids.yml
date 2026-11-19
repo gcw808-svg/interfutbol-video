@@ -25,5 +25,5 @@ jobs:
       - run: pip install -q requests imageio-ffmpeg
       - env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-          LIMIT: ${{ inputs.limit || (github.event_name == 'push' && '3') || '25' }}
+          LIMIT: ${{ inputs.limit || (github.event_name == 'push' && '10') || '25' }}
         run: python3 ownvids.py
