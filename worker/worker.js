@@ -2663,7 +2663,7 @@ async function qcCheck(env, text, media) {
   for (const t of ["b", "i", "a", "u", "s", "code", "blockquote"]) { const o = (raw.match(new RegExp("<" + t + "(\\s[^>]*)?>", "g")) || []).length, cl = (raw.match(new RegExp("</" + t + ">", "g")) || []).length; if (o !== cl) fatal.push("HTML teg buzilgan (<" + t + ">)"); }
   const lt = (own.match(/\p{L}/gu) || []).length, cy = (own.match(/[\u0400-\u04FF]/g) || []).length;
   if (lt > 40 && cy / lt > 0.15) fatal.push("matnda kirill (ruscha) qismi qolgan");
-  else { const cw = own.match(/[\p{L}]*[\u0400-\u04FF][\p{L}]*/gu) || []; const cwl = cw.filter((w) => w.length >= 3 && !((w.match(/[A-Za-zÀ-ɏ]/g) || []).length >= (w.match(/[\u0400-\u04FF]/g) || []).length)); if (cwl.length) fatal.push("matnda kirill harfli so'z qolgan: " + cwl.slice(0, 3).join(", ")); } // 2026-11-13: lotin harflari ko'p aralash so'z ("o'ртоqlik" — 10:21 da to'xtatilgan Shomurodov posti) to'xtatilmaydi, cyrFix bilan lotinga o'giriladi; 2026-11-12: 226-postda bitta "Mюнхенликлар" so'zi 15% chegaradan o'tib ketgan edi
+  else { const cw = own.match(/[\p{L}]*[\u0400-\u04FF][\p{L}]*/gu) || []; const cwl = cw.filter((w) => w.length >= 3 && !((w.match(/[A-Za-zÀ-ɏ]/g) || []).length >= (w.match(/[\u0400-\u04FF]/g) || []).length)); if (cwl.length && !/[ўқғҳЎҚҒҲ]/.test(own)) fatal.push("matnda kirill harfli so'z qolgan: " + cwl.slice(0, 3).join(", ")); } // 2026-11-19: o'zbekcha kirill so'zlar (ў/қ/ғ/ҳ bor — "чуқурлаштирилган, тиббий" Fayzullayev posti to'xtagan edi) post to'xtatmaydi — pastda cyrFix bilan yangi alifboga o'giriladi // 2026-11-13: lotin harflari ko'p aralash so'z ("o'ртоqlik" — 10:21 da to'xtatilgan Shomurodov posti) to'xtatilmaydi, cyrFix bilan lotinga o'giriladi; 2026-11-12: 226-postda bitta "Mюнхенликлар" so'zi 15% chegaradan o'tib ketgan edi
   const en = (own.match(/\b(the|and|with|has|have|been|will|from|after|their|this|that|was|were|for)\b/gi) || []).length;
   if (en >= 5) fatal.push("matnda tarjima qilinmagan inglizcha qism bor");
   if (BOOKIE_RE.test(plain)) fatal.push("matnda bukmeker nomi bor (bukmeker reklamasi kanalda taqiqlangan)");
@@ -3724,6 +3724,7 @@ return;
       await env.STATE.delete("qch:" + qid);
       await tg(env, "editMessageReplyMarkup", { chat_id: chat, message_id: q.message.message_id, reply_markup: { inline_keyboard: [] } });
       if (cd === "qcskip") { await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: "Bekor qilindi" }); return; }
+      if (/[ўқғҳЎҚҒҲ]/.test(h.text)) h.text = cyrFix(h.text); // 2026-11-19: o'zbekcha kirill qolgan to'xtatilgan post — chiqarishda yangi alifboga o'giriladi
       const r = (await userPublish(env, h.text, h.img, h.url, h.video, chat, true).catch(() => null)) || (await publish(env, h.text, h.img, h.url ? readMore(h.url) : undefined, h.video, true));
       await tg(env, "answerCallbackQuery", { callback_query_id: q.id, text: r?.ok ? "✅ Kanalga yuborildi" : "⚠️ " + (r?.description || "chiqmadi") });
       return;
