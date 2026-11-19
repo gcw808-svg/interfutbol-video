@@ -30,6 +30,8 @@ def clean(t):
     t = t.replace("ʻ", "'").replace("‘", "'").replace("’", "'").replace("ʼ", "'").replace("`", "'")
     t = re.sub(r"\b[A-Z']{4,}\b", lambda m: m.group(0).capitalize(), t)  # KATTA HARFLI so'zlar
     t = norm(t)
+    # "Ya'ni" (Bahtiyor aka, 2026-11-20): tutuq belgisi aniq eshitilishi va so'zdan keyin qisqa pauza bo'lishi kerak — keyiniga vergul qo'yiladi ("Ya'ni, Rafinya ...")
+    t = re.sub(r"(?i)(?<![\w'])(ya'ni)(?![\w'])(?!\s*[,.:;!?—-])", r"\1,", t)
     t = re.sub(r"[«»“”\"]", "", t)
     return re.sub(r"\s+", " ", t).strip()
 
