@@ -516,9 +516,13 @@ async def run(job_id):
                 if is_audio(m) or doc_name(m):
                     last = m
                     break
-            if last is None or time.time() - last.date.timestamp() > 100:
+            if last is None or time.time() - last.date.timestamp() > 150:
                 break
             await asyncio.sleep(20)
+        if not wapi("/ub/dkjob?id=" + job_id).get("live", 1):  # shu matn uchun yangiroq ish boshlangan — bu eskirgan
+            print("eskirgan ish — to'xtadi", flush=True)
+            await c.disconnect()
+            return
         lo = max(1, did - 400)
         ms = [m for m in await c.get_messages(ch, ids=list(range(lo, did + 401))) if m is not None]
         md = next((m for m in ms if m.id == did), None)

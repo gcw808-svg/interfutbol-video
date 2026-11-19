@@ -7,7 +7,7 @@ on:
       job:
         required: true
 concurrency:
-  group: dkalign
+  group: dkalign-${{ inputs.job }}  # har ish alohida: umumiy guruhda navbatdagi ish oldingisini bekor qilib yuborgan edi (2026-11-19)
   cancel-in-progress: false
 jobs:
   run:

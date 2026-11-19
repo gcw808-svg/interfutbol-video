@@ -2192,11 +2192,13 @@ async function dkSetStart(env, tok, docM, now, voice) {
   const cur = await kvGet(env, "dkset:" + docM, null); if (cur && cur.st === "moslanmoqda" && Date.now() - (cur.at || 0) < 40 * 60e3) return cur.job;
   const id = "a" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const v = String(voice || (cur && cur.v) || (await kvGet(env, "dkVoice", DK_VOICE0))).slice(0, 60);
-  await kvPut(env, "dkset:" + docM, { st: "moslanmoqda", job: id, at: Date.now(), v });
+  const oz = cur && (cur.zip || cur.oz) || 0;  // avvalgi to'plam (ZIP) — yangisi tayyor bo'lgach o'chiriladi
+  await kvPut(env, "dkset:" + docM, { st: "moslanmoqda", job: id, at: Date.now(), v, oz, last: (cur && cur.last) || 0 });
+  if (docM > ((await kvGet(env, "dkLastDoc", 0)) || 0)) await kvPut(env, "dkLastDoc", docM);
   await kvPut(env, "dkj:" + id, { d: docM, now: now ? 1 : 0, v }, { expirationTtl: 3 * 86400 });
   let ok = false; for (let i = 0; i < 3 && !ok; i++) { try { ok = await ghDispatch(env, "dkalign.yml", { job: id }); } catch (x) {} }  // 2026-11-19: moslash GitHub'da (ochiq ombor — bepul, 4 yadro)
   if (!ok) await kvPut(env, "dkset:" + docM, { st: "xato", job: id, at: Date.now(), err: "server javob bermadi" });
-  await dkTg(tok, "sendMessage", { chat_id: DK_CHAT, reply_to_message_id: docM, text: ok ? "Matn fayli qabul qilindi (ovoz: " + v + "). Shu matnning ovoz fayllarini ketidan tashlang (bir nechta bo'lsa — tartib bilan). Oxirgi fayldan keyin 2 daqiqa kutib, hammasini o'zim ulayman, matnga moslayman va tayyor to'plamni (ZIP) shu yerga tashlayman." : "⚠️ Moslash ishga tushmadi (server javob bermadi). Birozdan keyin matn faylini qayta tashlang." });
+  await dkTg(tok, "sendMessage", { chat_id: DK_CHAT, reply_to_message_id: docM, text: ok ? (oz ? "Yangi yozuvlar qo'shildi — to'plam qayta moslanmoqda (ovoz: " + v + ")." : "Matn fayli qabul qilindi (ovoz: " + v + ").") + " Shu matnning ovoz fayllarini ketidan tashlang (bir nechta bo'lsa — tartib bilan). Oxirgi fayldan keyin 2 daqiqa kutib, hammasini o'zim ulayman, matnga moslayman va tayyor to'plamni (ZIP) shu yerga tashlayman." : "⚠️ Moslash ishga tushmadi (server javob bermadi). Birozdan keyin matn faylini qayta tashlang." });
   return id;
 }
 async function dkUpdate(env, u, tok) {
@@ -2225,6 +2227,8 @@ async function dkUpdate(env, u, tok) {
     const cap = (cp.caption || "").trim();
     const e = { m: cp.message_id, f: a.file_id, k: cp.voice ? "voice" : "file", d: a.duration || 0, sz: a.file_size || 0, t: cap.slice(0, 4000), at: Date.now() };
     await env.STATE.put("dka:" + cp.message_id, JSON.stringify(e), { metadata: { d: e.d, t: cap ? 1 : 0 } });
+    // to'plam tayyor bo'lgandan KEYIN shu matnning yana ovozlari kelsa (bo'lib-bo'lib tashlangan) — to'plam o'zi qayta moslanadi
+    if (!u.edited_channel_post) { const ld = await kvGet(env, "dkLastDoc", 0); if (ld && cp.message_id > ld) { const st = await kvGet(env, "dkset:" + ld, null); if (st && (st.st === "tayyor" || st.st === "xato") && cp.message_id > (st.last || 0)) await dkSetStart(env, tok, ld, false); } }
     if (!u.edited_channel_post && (cp.voice || a.file_size > 20 * 1024 * 1024)) await dkTg(tok, "sendMessage", { chat_id: DK_CHAT, reply_to_message_id: cp.message_id, text: cp.voice ? "Ovozli xabar qabul qilindi, lekin sifat uchun yozuvni FAYL qilib yuborgan ma'qul." : "Katta fayl qabul qilindi (hisob orqali yuklab olinadi)." });
     return;
   }
@@ -3166,9 +3170,11 @@ async function ubRoute(env, req, url) {
   }
   if (url.pathname === "/ub/dkping") { const ju = await kvGet(env, "jobsUrl", "https://gcw808-svg--inter-jobs-dispatch.modal.run"); const t0 = Date.now(); try { const r = await fetch(ju, { method: "POST", headers: { "x-key": await ubKey(env), "content-type": "application/json" }, body: JSON.stringify({ wf: "x", job: "y" }), signal: AbortSignal.timeout(20000) }); return J({ ju, st: r.status, ms: Date.now() - t0, body: (await r.text()).slice(0, 200) }); } catch (e) { return J({ ju, err: String(e && e.message), ms: Date.now() - t0 }); } }
   if (url.pathname === "/ub/dkredo" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); const tok = await kvGet(env, "dkToken", ""); if (!tok || !b0.doc) return J({ ok: false }); await env.STATE.delete("dkset:" + b0.doc); return J({ ok: true, job: await dkSetStart(env, tok, Number(b0.doc), true) }); }
-  if (url.pathname === "/ub/dkjob") { const j = await kvGet(env, "dkj:" + url.searchParams.get("id"), null); return J(j ? { ...j, chat: DK_CHAT, session: await kvGet(env, "usess", null) } : {}); }
+  if (url.pathname === "/ub/dkjob") { const j = await kvGet(env, "dkj:" + url.searchParams.get("id"), null); const ds = j ? await kvGet(env, "dkset:" + j.d, null) : null; return J(j ? { ...j, live: !ds || ds.job === url.searchParams.get("id") ? 1 : 0, chat: DK_CHAT, session: await kvGet(env, "usess", null) } : {}); }
   if (url.pathname === "/ub/dkres" && req.method === "POST") {
     const b0 = await req.json().catch(() => ({})); const jb = await kvGet(env, "dkj:" + b0.id, null); const tok = await kvGet(env, "dkToken", ""); if (!jb) return J({ ok: false });
+    const prev = await kvGet(env, "dkset:" + jb.d, null); if (prev && prev.job && prev.job !== b0.id) return J({ ok: false, why: "eskirgan ish" });
+    if (b0.ok && prev && prev.oz && tok) { try { await dkTg(tok, "deleteMessage", { chat_id: DK_CHAT, message_id: prev.oz }); } catch (x) {} }
     await kvPut(env, "dkset:" + jb.d, b0.ok ? { st: "tayyor", v: jb.v || DK_VOICE0, job: b0.id, at: Date.now(), zip: b0.zip, n: b0.n, sec: b0.sec, lown: b0.lown || 0, lost: b0.lost || 0, files: b0.files, first: b0.first, last: b0.last } : { st: "xato", job: b0.id, at: Date.now(), err: String(b0.err || "").slice(0, 200) });
     if (!b0.ok && tok) await dkTg(tok, "sendMessage", { chat_id: DK_CHAT, reply_to_message_id: jb.d, text: "⚠️ Moslash bajarilmadi: " + String(b0.err || "noma'lum xato").slice(0, 300) + "\nTuzatgach, matn fayliga javob qilib «qayta» deb yozing." });
     return J({ ok: true });
