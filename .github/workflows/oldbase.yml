@@ -1,55 +1,68 @@
 name: oldbase
-# Eski diktor o'qitilgan audiolar qayerdadir saqlanib qolganmi — Kaggle natijalari va muharrir boti chatini ko'rib chiqish (kalitlar chiqarilmaydi)
+# Bahtiyor aka ruxsati bilan (2026-11-19): audio bor shaxsiy suhbatlardagi OVOZ diktor ovoziga (Kozim Komilov) mos keladimi — son bilan tekshirish.
+# Hech narsa ko'chirilmaydi; xabar matni o'qilmaydi; jurnalga ism ham, matn ham chiqarilmaydi (jurnal ochiq).
 on:
   workflow_dispatch:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - run: pip install -q "kaggle>=1.8" six telethon cryptg
+      - run: sudo apt-get update -qq > /dev/null 2>&1; sudo apt-get install -y -qq ffmpeg > /dev/null 2>&1; pip install -q torch --index-url https://download.pytorch.org/whl/cpu && pip install -q telethon cryptg resemblyzer numpy
       - env:
-          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           TG_API_ID: ${{ secrets.TG_API_ID }}
           TG_API_HASH: ${{ secrets.TG_API_HASH }}
         run: |
           python3 - <<'PY'
-          import asyncio, hashlib, json, os, urllib.request
+          import asyncio, hashlib, json, os, subprocess, urllib.request
+          import numpy as np
           from telethon import TelegramClient
           from telethon.sessions import StringSession
+          from resemblyzer import VoiceEncoder, preprocess_wav
           key = hashlib.sha256(("ub-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:40]
           j = json.loads(urllib.request.urlopen(urllib.request.Request("https://inter-futbol-bot.gcw808.workers.dev/ub/dksweep", headers={"x-key": key, "user-agent": "oldbase"}), timeout=120).read())
+          enc = VoiceEncoder("cpu", verbose=False)
+          def emb(path):
+              w = path + ".wav"
+              subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-ss", "2", "-t", "40", "-i", path, "-ac", "1", "-ar", "16000", w], check=True)
+              return enc.embed_utterance(preprocess_wav(w))
+          def isaud(m):
+              f = m.file
+              return bool(f and ((f.mime_type or "").startswith("audio/") or m.voice) and not (f.name or "").lower().startswith(("namuna_", "asl_ovoz")))
           async def main():
               c = TelegramClient(StringSession(j["session"]), int(os.environ["TG_API_ID"]), os.environ["TG_API_HASH"])
               await c.connect()
-              found = {}
+              await c.get_dialogs(limit=300)
+              os.makedirs("a", exist_ok=True)
+              ch = await c.get_entity(int(j["chat"]))
+              refs = [m async for m in c.iter_messages(ch, limit=400) if isaud(m)]
+              R = []
+              for m in refs[::max(1, len(refs) // 8)][:8]:
+                  R.append(emb(await c.download_media(m, file=f"a/r{m.id}")))
+              ref = np.mean(R, axis=0); ref /= np.linalg.norm(ref)
+              own = [float(np.dot(ref, x / np.linalg.norm(x))) for x in R]
+              print(f"diktor namunalari o'zaro o'xshashligi: {min(own):.2f}–{max(own):.2f}", flush=True)
+              n = 0
               async for d in c.iter_dialogs(limit=300):
-                  n = a = 0; sec = 0; first = last = None; docs = 0
-                  if not (d.is_user or (d.is_channel and getattr(d.entity, "creator", False))):
+                  if not d.is_user or getattr(d.entity, "bot", False):
                       continue
-                  async for m in c.iter_messages(d.entity, limit=1500):
-                      f = m.file
-                      if not f:
-                          continue
-                      mt = (f.mime_type or "")
-                      if mt.startswith("audio/") or m.voice:
-                          a += 1; sec += (f.duration or 0); last = last or m.date; first = m.date
-                      elif (f.name or "").lower().endswith((".docx", ".txt")):
-                          docs += 1
-                  if a >= 5:
-                      kind = "bot" if (d.is_user and getattr(d.entity, "bot", False)) else ("o'zim" if d.is_user and getattr(d.entity, "is_self", False) else ("kanal" if d.is_channel else "shaxs"))
-                      title = d.name if kind in ("bot", "kanal", "o'zim") else "(shaxsiy suhbat)"
-                      if kind == "kanal":
-                          continue
-                      found[d.id] = f"• {d.name} — {a} ta audio ({sec/60:.0f} daqiqa), {docs} ta Word/matn fayli, {str(first)[:10]} dan {str(last)[:10]} gacha"
-                      print(f"SUHBAT [{kind}] topildi: {a} ta audio, {docs} ta matn fayli")  # nomi jurnalga chiqarilmaydi (jurnal ochiq)
+                  ms = [m async for m in c.iter_messages(d.entity, limit=1500) if isaud(m)]
+                  if len(ms) < 5:
+                      continue
+                  n += 1
+                  pick = ms[::max(1, len(ms) // 10)][:10]
+                  sims, durs = [], []
+                  for m in pick:
+                      try:
+                          if (m.file.size or 0) > 40 * 1024 * 1024:
+                              continue
+                          x = emb(await c.download_media(m, file=f"a/c{n}_{m.id}"))
+                          sims.append(float(np.dot(ref, x / np.linalg.norm(x)))); durs.append(m.file.duration or 0)
+                      except Exception as e:
+                          print("  o'tkazib yuborildi:", type(e).__name__, flush=True)
+                  out = [m for m in pick if m.out]
+                  print(f"SUHBAT ({len(ms)} ta audio; tekshirilgan {len(sims)} ta, shundan men yuborgan {len(out)} ta): o'xshashlik {' '.join(f'{s:.2f}' for s in sims)} | o'rtacha {np.mean(sims):.2f} | davomiyligi {int(np.median(durs))} s (median)", flush=True)
               await c.disconnect()
-              if found:  # ro'yxat NOMLARI bilan faqat yopiq kanalga (Bahtiyor akaning o'ziga) yuboriladi
-                  kk = json.loads(urllib.request.urlopen(urllib.request.Request("https://inter-futbol-bot.gcw808.workers.dev/ub/dkkey", data=b"{}", headers={"x-key": key, "content-type": "application/json", "user-agent": "oldbase"}), timeout=120).read())["k"]
-                  txt = "Telegram hisobingizda audio va Word fayllar bor suhbatlar (qaysi birida diktor yozuvlari borligini aniqlash uchun):\n\n" + "\n".join(found.values()) + "\n\nBu xabarni faqat siz ko'rasiz. Claude'ga qaysi suhbat ekanini ayting."
-                  urllib.request.urlopen(urllib.request.Request("https://inter-futbol-bot.gcw808.workers.dev/dkx/say?k=" + kk, data=json.dumps({"text": txt}).encode(), headers={"content-type": "application/json", "user-agent": "oldbase"}), timeout=60).read()
-                  print("ro'yxat kanalga yuborildi:", len(found), "ta suhbat")
           asyncio.run(main())
           PY
