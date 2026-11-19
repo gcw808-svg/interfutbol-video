@@ -102,10 +102,12 @@ def main():
         sd = torch.load(ck, map_location="cpu")
         if isinstance(sd, dict) and "state_dict" in sd:
             sd = sd["state_dict"]
-        sd = {k: v for k, v in sd.items() if hasattr(v, "shape")}
+        sd = {k: (v.float() if v.is_floating_point() else v) for k, v in sd.items() if hasattr(v, "shape")}  # og'irliklar BF16 da saqlangan — oddiy aniqlikka o'tkaziladi
         print("navoiy kalitlari:", len(sd), list(sd)[:6], flush=True)
         tgt = cv.model.llm
         r = tgt.load_state_dict(sd, strict=False)
+        tgt.float()
+        print("llm turi:", next(tgt.parameters()).dtype, "| namuna:", sh("ffprobe -v error -show_entries format=duration:stream=sample_rate -of csv=p=0 ref16.wav").stdout.strip(), flush=True)
         print("llm yuklandi: yetishmagan", len(r.missing_keys), "ortiqcha", len(r.unexpected_keys), r.unexpected_keys[:5], flush=True)
         if len(r.missing_keys) > 0.5 * len(tgt.state_dict()):
             raise Exception("checkpoint llm ga mos emas: " + str(list(sd)[:4]))
@@ -115,7 +117,7 @@ def main():
             try:
                 return [o["tts_speech"] for o in cv.inference_zero_shot(t, ref_text, "/kaggle/working/ref16.wav", stream=False, text_frontend=False)]
             except Exception as e1:
-                print("yo'l bilan bo'lmadi, massiv bilan urinilyapti:", str(e1)[:200], flush=True)
+                print("yo'l bilan bo'lmadi, massiv bilan urinilyapti:", traceback.format_exc()[-1800:], flush=True)
                 return [o["tts_speech"] for o in cv.inference_zero_shot(t, ref_text, p16, stream=False, text_frontend=False)]
         for i, t in enumerate(TEXTS, 1):
             outs = gen(t)
