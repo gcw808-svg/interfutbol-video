@@ -1,1 +1,4 @@
 44508772393 2026-11-19 30 ta qo'shildi, 8 tasi olib tashlandi
+44512270041 2026-11-19 2 ta qo'shildi (qo'lda, Haaland), 0 tasi olib tashlandi
+44626043844 2026-11-20 jadvaldagi ish yiqildi (null == '0' — Modal 404); people.yml tuzatildi, qayta ishga tushirildi
+44628866681 2026-11-20 30 ta qo'shildi, 7 tasi olib tashlandi
