@@ -990,8 +990,8 @@ async function dateCheck(env, post, item) {
   // 2026-11-15 (17:51 posti "2026-yil yanvar oyida transferlar uchun mablag' ajratishni rejalashtirmoqda"): noyabrda kelasi zamondagi gapda kunsiz
   // "joriy yil + o'tib ketgan oy" — keyingi yil (qishki transfer oynasi 2027-yil yanvarida). O'tgan zamon yoki manbada shu yil yozilgan bo'lsa tegilmaydi.
   { const AP = "['ʻ’‘ʼ`]"; const mNow = new Date(now + 5 * 3600e3).getUTCMonth();
-    const FUT2 = new RegExp("(adigan|ydigan|moqda|kutil|rejalashtir|niyat|tayyor|moqchi|ochiladi|ochilad|bo" + AP + "ladi)", "iu");
-    const PAST2 = new RegExp("(edi\\b|gan edi|bo" + AP + "ld|qildi|o" + AP + "tkazild|sotib olgan|qo" + AP + "shilgan|imzolagan)", "iu");
+    const FUT2 = new RegExp("(adigan|ydigan|moqda|kutil|rejalashtir|niyat|tayyor|moqchi|ochiladi|ochilad|bo" + AP + "ladi|ehtimol|mumkin|transfer(?:lar)? oyna)", "iu"); // 2026-11-19: 347-post "...egallasa, 2026-yil yanvar oyidagi transfer oynasi... ehtimoli mavjud"
+    const PAST2 = new RegExp("(edi\\b|gan edi|bo" + AP + "ld|qildi|o" + AP + "tkazild|sotib olgan|qo" + AP + "shilgan|imzolagan|dan beri)", "iu");
     const MRE = new RegExp("(?<![\\p{L}\\d-])" + y0 + "-yil (" + UZ_MON.join("|") + ")(?![\\p{L}]*-)", "giu");
     if (mNow >= 9 && !src.includes(String(y0))) { const parts = text.split(/(?<=[.!?])(\s+)/);
       for (let i = 0; i < parts.length; i++) { const sn = parts[i]; if (!FUT2.test(sn) || PAST2.test(sn)) continue;
