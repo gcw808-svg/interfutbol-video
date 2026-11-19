@@ -92,8 +92,12 @@ def _say(k, job):
             # SIFAT NAZORATI (2026-11-19, Bahtiyor aka: "g'alati o'qidi, sifatni oshir"): har bo'lak o'qilgach o'zbekcha eshitish modeli bilan tekshiriladi —
             # aytilgani matnga mos kelmasa (so'z yutilgan, buzilgan, ortiqcha tovush) boshqa urinish qilinadi va ENG YAXSHISI olinadi.
             best, bs = None, -1.0
-            for n in range(TRIES if fw else 1):
-                wav, sr, _ = m.infer(ref_file="ref.wav", ref_text=T.REFS[MOOD], gen_text=c, nfe_step=NFE, remove_silence=False, speed=0.95, seed=1000 + n * 77)
+            # JUDA QISQA MATN ("Bahti qalesan" — umuman o'qilmagan edi): model qisqa gapga juda kam vaqt ajratadi va tovush chiqmaydi/buziladi —
+            # qisqa bo'lakda sekinroq tezliklar ham sinab ko'riladi (ko'proq vaqt beriladi) va tekshiruvdan eng yaxshi o'tgani olinadi.
+            short = len(c) < 45
+            plan = [(0.8, 1000), (0.65, 1077), (0.95, 1154), (0.55, 1231)] if short else [(0.95, 1000 + n * 77) for n in range(TRIES)]
+            for n, (spd, seed) in enumerate(plan if fw else plan[:1]):
+                wav, sr, _ = m.infer(ref_file="ref.wav", ref_text=T.REFS[MOOD], gen_text=c if re.search(r"[.!?…]$", c) else c + ".", nfe_step=NFE, remove_silence=False, speed=spd, seed=seed)
                 wav = np.asarray(wav, dtype=np.float32)
                 sc = score(fw, wav, sr, c) if fw else 1.0
                 print(f"  urinish {n + 1}: moslik {sc:.2f}", flush=True)

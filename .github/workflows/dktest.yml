@@ -35,6 +35,9 @@ jobs:
           if os.environ.get("DOC", "").startswith("fw:"):
               rq = urllib.request.Request("https://inter-futbol-bot.gcw808.workers.dev/ub/dkfw", data=json.dumps({"m": int(os.environ["DOC"][3:])}).encode(), headers={"x-key": key, "content-type": "application/json", "user-agent": "dktest"})
               print("kochirish:", urllib.request.urlopen(rq, timeout=60).read().decode()[:300]); raise SystemExit(0)
+          if os.environ.get("DOC", "").startswith("say:"):
+              rq = urllib.request.Request("https://inter-futbol-bot.gcw808.workers.dev/ub/dktext", data=json.dumps({"t": os.environ["DOC"][4:]}).encode(), headers={"x-key": key, "content-type": "application/json", "user-agent": "dktest"})
+              print("oqish:", urllib.request.urlopen(rq, timeout=60).read().decode()[:300]); raise SystemExit(0)
           if os.environ.get("DOC") == "say":  # matnni ovozga aylantirishni sinash (natija kanalga namuna_sinov bo'lib tushadi)
               rq = urllib.request.Request("https://inter-futbol-bot.gcw808.workers.dev/ub/dktext", data=json.dumps({"t": "2026-yil 19-noyabr kuni Real Madrid 3:1 hisobida g'alaba qozondi. Jamoa 45 foiz to'pga egalik qildi."}).encode(), headers={"x-key": key, "content-type": "application/json", "user-agent": "dktest"})
               print("oqish:", urllib.request.urlopen(rq, timeout=60).read().decode()[:300]); raise SystemExit(0)
