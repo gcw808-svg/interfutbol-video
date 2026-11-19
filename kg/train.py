@@ -92,6 +92,9 @@ def main():
     print("f5_tts:", pkg, os.path.exists(f"{pkg}/train/datasets/prepare_csv_wavs.py"), flush=True)
     data_dir = os.path.abspath(os.path.join(pkg, "..", "..", "data", "inter_custom"))
     os.makedirs(os.path.dirname(data_dir), exist_ok=True)
+    pv = os.path.join(os.path.dirname(data_dir), "Emilia_ZH_EN_pinyin")  # tayyorlovchi "asl lug'at"ni shu yerdan qidiradi — o'zbekcha lug'atni qo'yamiz
+    os.makedirs(pv, exist_ok=True)
+    shutil.copy(vocab, os.path.join(pv, "vocab.txt"))
     sh(f"python {pkg}/train/datasets/prepare_csv_wavs.py /kaggle/working/ds {data_dir}", True, 2500)
     shutil.copy(vocab, os.path.join(data_dir, "vocab.txt"))  # o'zbekcha model lug'ati (asl inglizcha-xitoycha emas)
     print("tayyor baza:", os.listdir(data_dir), flush=True)
