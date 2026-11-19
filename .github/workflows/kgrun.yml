@@ -8,6 +8,9 @@ on:
       ref:
         description: "ovoz namunasi — kanal xabari raqami"
         default: "27"
+      only:
+        description: "faqat shu model(lar), masalan B (bo'sh — hammasi)"
+        default: ""
 jobs:
   run:
     runs-on: ubuntu-latest
@@ -20,6 +23,7 @@ jobs:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           SCRIPT: ${{ inputs.script }}
           REF: ${{ inputs.ref }}
+          ONLY: ${{ inputs.only }}
         run: |
           python3 - <<'PY'
           import hashlib, json, os, urllib.request
@@ -28,7 +32,7 @@ jobs:
           j = json.loads(urllib.request.urlopen(rq, timeout=60).read())
           print("to'plamlar:", [(s["doc"], s["v"], s["n"]) for s in j["sets"]])
           os.makedirs("k", exist_ok=True)
-          src = open("kg/" + os.environ["SCRIPT"] + ".py", encoding="utf-8").read().replace("__K__", j["k"]).replace("__REF__", os.environ["REF"])
+          src = open("kg/" + os.environ["SCRIPT"] + ".py", encoding="utf-8").read().replace("__K__", j["k"]).replace("__REF__", os.environ["REF"]).replace("__ONLY__", os.environ.get("ONLY", ""))
           open("k/run.py", "w", encoding="utf-8").write(src)
           json.dump({"id": "baxtiyoraxrarov/inter-diktor-" + os.environ["SCRIPT"], "title": "inter-diktor-" + os.environ["SCRIPT"], "code_file": "run.py", "language": "python", "kernel_type": "script", "is_private": True, "enable_gpu": True, "enable_internet": True, "dataset_sources": [], "competition_sources": [], "kernel_sources": []}, open("k/kernel-metadata.json", "w"))
           PY

@@ -6,6 +6,7 @@ import json, os, subprocess, sys, traceback, urllib.parse, urllib.request
 
 K = "__K__"
 REF_MSG = int("__REF__")
+ONLY = "__ONLY__".strip()  # bo'sh — hammasi; "B" — faqat shu model
 W = "https://inter-futbol-bot.gcw808.workers.dev"
 TEXTS = [
     "Kecha kechqurun bo‘lib o‘tgan o‘yinda mezbonlar so‘nggi daqiqalarda g‘alaba golini urishdi.",
@@ -16,7 +17,7 @@ TEXTS = [
 
 def sh(c, check=False):
     print("+", c, flush=True)
-    r = subprocess.run(c, shell=True, capture_output=True, text=True)
+    r = subprocess.run(c, shell=True, capture_output=True, text=True, env={**os.environ, "PYTHONHASHSEED": "0"})  # oldingi model muhitni buzgan qiymatni qoldiradi — pip yiqilardi
     print((r.stdout or "")[-1500:], (r.stderr or "")[-1500:], flush=True)
     if check and r.returncode:
         raise Exception("buyruq xatosi: " + c[:80] + " :: " + (r.stderr or "")[-300:])
@@ -64,6 +65,8 @@ def main():
     done = []
     # ---- A: hozirgi model (F5-TTS o'zbekcha) — taqqoslash uchun asos
     try:
+        if ONLY and "A" not in ONLY:
+            raise KeyboardInterrupt
         sh("pip install -q f5-tts", True)
         from huggingface_hub import hf_hub_download
         from f5_tts.api import F5TTS
@@ -74,12 +77,17 @@ def main():
             sf.write(f"o/A{i}.wav", wav, sr)
         del tts
         done.append("A")
+    except KeyboardInterrupt:
+        pass
     except Exception:
-        say("A ishlamadi: " + traceback.format_exc()[-700:])
+        print("A ishlamadi: " + traceback.format_exc()[-1500:], flush=True)
     # ---- B: Navoiy TTS (CosyVoice2 asosida, Apache-2.0)
     try:
+        if ONLY and "B" not in ONLY:
+            raise KeyboardInterrupt
         import torch
         torch.cuda.empty_cache()
+        os.environ["PYTHONHASHSEED"] = "0"
         if not os.path.exists("CosyVoice"):
             sh("git clone -q --recursive https://github.com/FunAudioLLM/CosyVoice.git && cd CosyVoice && git checkout -q 074ca6dc9e80a2f424f1f74b48bdd7d3fea531cc && git submodule update --init --recursive", True)
         sh("pip install -q hyperpyyaml conformer==0.3.2 diffusers lightning modelscope inflect omegaconf hydra-core wetext onnxruntime-gpu gdown wget x-transformers einops rich pyworld openai-whisper 2>&1 | tail -3")
@@ -107,16 +115,19 @@ def main():
             outs = [o["tts_speech"] for o in cv.inference_zero_shot(t, ref_text, p16, stream=False, text_frontend=False)]
             torchaudio.save(f"o/B{i}.wav", torch.cat(outs, dim=1), cv.sample_rate)
         done.append("B")
+    except KeyboardInterrupt:
+        pass
     except Exception:
-        say("B ishlamadi: " + traceback.format_exc()[-900:])
+        print("B ishlamadi: " + traceback.format_exc()[-2500:], flush=True)
     # ---- natijalar
-    if done:
+    if done and not ONLY:
         say("Diktor namunalari: bir xil 3 ta gap, bir xil ovoz namunasi (Kozim Komilov), har xil model. Eshitib, qaysi HARF odamga ko'proq o'xshashini ayting. Avval asl ovoz, keyin namunalar.")
         send("ref24.wav", "ASL OVOZ (taqqoslash uchun)", "asl_ovoz.mp3")
+    if done:
         for L in done:
             sh("ffmpeg -loglevel error -y " + " ".join(f"-i o/{L}{i}.wav" for i in (1, 2, 3)) + f' -filter_complex "[0][1][2]concat=n=3:v=0:a=1" o/{L}.wav', True)
             send(f"o/{L}.wav", f"Namuna {L}", f"namuna_{L}.mp3")
-    say("Solishtirish tugadi: " + (", ".join(done) or "hech biri ishlamadi"))
+    print("Solishtirish tugadi: " + (", ".join(done) or "hech biri ishlamadi"), flush=True)
 
 
 main()
