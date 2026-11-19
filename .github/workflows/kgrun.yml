@@ -1,0 +1,35 @@
+name: kgrun
+# Kaggle'ning bepul videokartasida diktor ishlarini ishga tushirish (kg/ papkasidagi skript). Kalitlar jurnalga chiqarilmaydi.
+on:
+  workflow_dispatch:
+    inputs:
+      script:
+        default: "bakeoff"
+      ref:
+        description: "ovoz namunasi — kanal xabari raqami"
+        default: "27"
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install -q "kaggle>=1.8" six
+      - env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          SCRIPT: ${{ inputs.script }}
+          REF: ${{ inputs.ref }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, urllib.request
+          key = hashlib.sha256(("ub-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:40]
+          rq = urllib.request.Request("https://inter-futbol-bot.gcw808.workers.dev/ub/dkkey", data=b"{}", headers={"x-key": key, "content-type": "application/json", "user-agent": "kgrun"})
+          j = json.loads(urllib.request.urlopen(rq, timeout=60).read())
+          print("to'plamlar:", [(s["doc"], s["v"], s["n"]) for s in j["sets"]])
+          os.makedirs("k", exist_ok=True)
+          src = open("kg/" + os.environ["SCRIPT"] + ".py", encoding="utf-8").read().replace("__K__", j["k"]).replace("__REF__", os.environ["REF"])
+          open("k/run.py", "w", encoding="utf-8").write(src)
+          json.dump({"id": "baxtiyoraxrarov/inter-diktor-" + os.environ["SCRIPT"], "title": "inter-diktor-" + os.environ["SCRIPT"], "code_file": "run.py", "language": "python", "kernel_type": "script", "is_private": True, "enable_gpu": True, "enable_internet": True, "dataset_sources": [], "competition_sources": [], "kernel_sources": []}, open("k/kernel-metadata.json", "w"))
+          PY
+          kaggle kernels push -p k 2>&1 | sed -E 's/[0-9a-f]{48}/[K]/g' | tail -5
