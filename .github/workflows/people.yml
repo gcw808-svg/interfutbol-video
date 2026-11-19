@@ -63,7 +63,8 @@ jobs:
       REG: ${{ inputs.reg }}
       MAXSEC: ${{ inputs.maxsec || '3600' }}
     steps:
-      - if: ${{ inputs.gh == '0' }}
+      # jadvalda inputs bo'sh (null) va null == '0' rost chiqadi — shuning uchun hodisa turi ham tekshiriladi (2026-11-20: jadvaldagi ish Modal'ga ketib, 404 bilan yiqilgan)
+      - if: ${{ github.event_name != 'schedule' && inputs.gh == '0' }}
         run: |
           python3 - <<'PY'
           import hashlib, json, os, urllib.request
@@ -72,7 +73,7 @@ jobs:
           rq = urllib.request.Request("https://gcw808-svg--inter-jobs-dispatch.modal.run", data=json.dumps({"wf": "people.yml", "job": json.dumps(job, ensure_ascii=False)}).encode(), headers={"x-key": key, "content-type": "application/json"})
           print("modal:", urllib.request.urlopen(rq, timeout=60).read().decode()[:200])
           PY
-      - if: ${{ inputs.gh != '0' }}
+      - if: ${{ github.event_name == 'schedule' || inputs.gh != '0' }}
         uses: actions/checkout@v4
-      - if: ${{ inputs.gh != '0' }}
+      - if: ${{ github.event_name == 'schedule' || inputs.gh != '0' }}
         run: pip install -q requests pillow numpy onnxruntime && python3 people.py
