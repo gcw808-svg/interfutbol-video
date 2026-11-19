@@ -81,52 +81,54 @@ def main():
         pass
     except Exception:
         print("A ishlamadi: " + traceback.format_exc()[-1500:], flush=True)
-    # ---- B: Navoiy TTS (CosyVoice2 asosida, Apache-2.0)
+    # ---- B: Navoiy TTS (CosyVoice2 asosida, Apache-2.0) — MUALLIFLARNING O'Z skripti bilan (inference.py).
+    # 1-urinishda modelni o'zim boshqacha usulda (zero-shot, namuna matni bilan) chaqirganim uchun tushunarsiz ovoz chiqqan edi.
     try:
         if ONLY and "B" not in ONLY:
             raise KeyboardInterrupt
-        import torch
-        torch.cuda.empty_cache()
         os.environ["PYTHONHASHSEED"] = "0"
         if not os.path.exists("CosyVoice"):
             sh("git clone -q --recursive https://github.com/FunAudioLLM/CosyVoice.git && cd CosyVoice && git checkout -q 074ca6dc9e80a2f424f1f74b48bdd7d3fea531cc && git submodule update --init --recursive", True)
+        from huggingface_hub import snapshot_download
+        nv = snapshot_download("aisha-org/navoiy-tts", local_dir="navoiy-tts")
+        print("navoiy fayllari:", sorted(os.listdir(nv))[:30], flush=True)
         sh("pip install -q hyperpyyaml conformer==0.3.2 diffusers lightning modelscope inflect omegaconf hydra-core wetext onnxruntime-gpu gdown wget x-transformers einops rich pyworld openai-whisper 2>&1 | tail -3")
-        sys.path.insert(0, "/kaggle/working/CosyVoice")
-        sys.path.insert(0, "/kaggle/working/CosyVoice/third_party/Matcha-TTS")
-        from huggingface_hub import hf_hub_download, snapshot_download
-        base = snapshot_download("FunAudioLLM/CosyVoice2-0.5B", local_dir="cv2base")
-        ck = hf_hub_download("aisha-org/navoiy-tts", "emotion_600h_joint.pt")
-        import torchaudio
-        from cosyvoice.cli.cosyvoice import CosyVoice2
-        cv = CosyVoice2(base, load_jit=False, load_trt=False, fp16=False)
-        sd = torch.load(ck, map_location="cpu")
-        if isinstance(sd, dict) and "state_dict" in sd:
-            sd = sd["state_dict"]
-        sd = {k: (v.float() if v.is_floating_point() else v) for k, v in sd.items() if hasattr(v, "shape")}  # og'irliklar BF16 da saqlangan — oddiy aniqlikka o'tkaziladi
-        print("navoiy kalitlari:", len(sd), list(sd)[:6], flush=True)
-        tgt = cv.model.llm
-        r = tgt.load_state_dict(sd, strict=False)
-        tgt.float()
-        print("llm turi:", next(tgt.parameters()).dtype, "| namuna:", sh("ffprobe -v error -show_entries format=duration:stream=sample_rate -of csv=p=0 ref16.wav").stdout.strip(), flush=True)
-        print("llm yuklandi: yetishmagan", len(r.missing_keys), "ortiqcha", len(r.unexpected_keys), r.unexpected_keys[:5], flush=True)
-        if len(r.missing_keys) > 0.5 * len(tgt.state_dict()):
-            raise Exception("checkpoint llm ga mos emas: " + str(list(sd)[:4]))
-        from cosyvoice.utils.file_utils import load_wav
-        p16 = load_wav("ref16.wav", 16000)
-        def gen(t):  # CosyVoice'ning yangi nusxasida namuna FAYL YO'LI bo'lib beriladi, eskisida — tovush massivi
-            try:
-                return [o["tts_speech"] for o in cv.inference_zero_shot(t, ref_text, "/kaggle/working/ref16.wav", stream=False, text_frontend=False)]
-            except Exception as e1:
-                print("yo'l bilan bo'lmadi, massiv bilan urinilyapti:", traceback.format_exc()[-1800:], flush=True)
-                return [o["tts_speech"] for o in cv.inference_zero_shot(t, ref_text, p16, stream=False, text_frontend=False)]
+        if os.path.exists("navoiy-tts/requirements.txt"):
+            print(open("navoiy-tts/requirements.txt").read()[:600], flush=True)
+            sh("pip install -q -r navoiy-tts/requirements.txt 2>&1 | tail -3")
+        base = snapshot_download("FunAudioLLM/CosyVoice2-0.5B", local_dir="CosyVoice/pretrained_models/CosyVoice2-0.5B")
+        sh("python navoiy-tts/inference.py --help | head -40")
         for i, t in enumerate(TEXTS, 1):
-            outs = gen(t)
-            torchaudio.save(f"o/B{i}.wav", torch.cat(outs, dim=1), cv.sample_rate)
+            r = sh(f'python navoiy-tts/inference.py --cosyvoice-dir CosyVoice --base-model-dir CosyVoice/pretrained_models/CosyVoice2-0.5B --checkpoint navoiy-tts/emotion_600h_joint.pt --reference ref24.wav --text "{t}" --emotion calm --output o/B{i}.wav')
+            if not os.path.exists(f"o/B{i}.wav"):
+                raise Exception("inference.py natija bermadi: " + (r.stderr or r.stdout or "")[-1200:])
         done.append("B")
     except KeyboardInterrupt:
         pass
     except Exception:
         print("B ishlamadi: " + traceback.format_exc()[-2500:], flush=True)
+    # ---- TEKSHIRUV: har namuna o'zbekcha model bilan qayta eshitiladi — so'zlarning necha foizi to'g'ri aytilgani o'lchanadi.
+    # 75% dan past (tushunarsiz) namuna kanalga YUBORILMAYDI (2026-11-19: tekshirmasdan yuborilgan B tushunarsiz chiqqan edi).
+    score = {}
+    try:
+        import difflib, re, torch
+        from transformers import pipeline
+        asr = pipeline("automatic-speech-recognition", model="islomov/rubaistt_v2_medium", device=0 if torch.cuda.is_available() else -1)
+        nk = lambda x: re.sub(r"[^a-z0-9 ]+", "", re.sub(r"[‘’ʻʼ`']", "", x.lower())).split()
+        for L in list(done):
+            rs = []
+            for i, t in enumerate(TEXTS, 1):
+                sh(f"ffmpeg -loglevel error -y -i o/{L}{i}.wav -ac 1 -ar 16000 o/{L}{i}_16.wav")
+                h = asr(f"o/{L}{i}_16.wav", generate_kwargs={"language": "uz", "task": "transcribe"})["text"]
+                rs.append(difflib.SequenceMatcher(None, nk(t), nk(h), autojunk=False).ratio())
+                print(f"TEKSHIRUV {L}{i}: {rs[-1]:.2f} | {h[:110]}", flush=True)
+            score[L] = sum(rs) / len(rs)
+            if score[L] < 0.75:
+                done.remove(L)
+                print(f"{L} tushunarsiz ({score[L]:.2f}) — yuborilmaydi", flush=True)
+    except Exception:
+        print("tekshiruv ishlamadi: " + traceback.format_exc()[-1200:], flush=True)
+    print("BAHOLAR:", json.dumps(score), flush=True)
     # ---- natijalar
     if done and not ONLY:
         say("Diktor namunalari: bir xil 3 ta gap, bir xil ovoz namunasi (Kozim Komilov), har xil model. Eshitib, qaysi HARF odamga ko'proq o'xshashini ayting. Avval asl ovoz, keyin namunalar.")
@@ -134,7 +136,7 @@ def main():
     if done:
         for L in done:
             sh("ffmpeg -loglevel error -y " + " ".join(f"-i o/{L}{i}.wav" for i in (1, 2, 3)) + f' -filter_complex "[0][1][2]concat=n=3:v=0:a=1" o/{L}.wav', True)
-            send(f"o/{L}.wav", f"Namuna {L}", f"namuna_{L}.mp3")
+            send(f"o/{L}.wav", f"Namuna {L} (yangi)" + (f" — so'zlar aniqligi {round(score[L] * 100)}%" if L in score else ""), f"namuna_{L}_yangi.mp3")
     print("Solishtirish tugadi: " + (", ".join(done) or "hech biri ishlamadi"), flush=True)
 
 
