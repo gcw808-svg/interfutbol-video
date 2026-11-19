@@ -1,0 +1,30 @@
+name: dksay
+# Diktor namunasi: avvalgi o'rgatilgan model bilan matn o'qitib, adminning diktor boti chatiga yuborish
+on:
+  workflow_dispatch:
+    inputs:
+      label:
+        default: "C"
+      run:
+        description: "model nusxasi (run4, run5...) — bo'sh bo'lsa eng so'nggisi"
+        default: ""
+      texts:
+        description: "JSON ro'yxat — bo'sh bo'lsa 3 ta sinov gapi"
+        default: ""
+      cap:
+        default: ""
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq > /dev/null 2>&1; sudo apt-get install -y -qq ffmpeg > /dev/null 2>&1; pip install -q torch torchaudio --index-url https://download.pytorch.org/whl/cpu && pip install -q f5-tts requests soundfile huggingface_hub
+      - env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          LABEL: ${{ inputs.label }}
+          RUN: ${{ inputs.run }}
+          TEXTS: ${{ inputs.texts }}
+          CAP: ${{ inputs.cap }}
+        run: python3 dk_say.py
