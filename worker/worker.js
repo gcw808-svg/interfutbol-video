@@ -3348,6 +3348,16 @@ async function ubRoute(env, req, url) {
     const r = await db.prepare("SELECT k FROM vsrc").all(); const c = await db.prepare("SELECT COUNT(*) AS n FROM vda").first();
     return J({ ok: true, keys: (r.results || []).map((x) => x.k), total: (c && c.n) || 0 });
   }
+  if (url.pathname === "/ub/vdlist") { // robot qo'shgan (auto) yozuvlar — robot ularni joriy qoidalar bilan qayta tekshiradi
+    const db = await vdDb(env); if (!db) return J({ ok: false, err: "D1 ulanmagan" });
+    const r = await db.prepare("SELECT m, n, j FROM vda ORDER BY m DESC LIMIT 5000").all();
+    return J({ ok: true, items: (r.results || []).map((x) => { let e = {}; try { e = JSON.parse(x.j || "{}"); } catch (y) {} return { m: x.m, n: x.n, auto: e.auto ? 1 : 0, src: e.src || "" }; }) });
+  }
+  if (url.pathname === "/ub/vddel" && req.method === "POST") { // FAQAT robot qo'shgan (auto) videoni kanaldan va ro'yxatdan olib tashlash; qo'lda tashlanganiga tegilmaydi
+    const tok = await kvGet(env, "vdToken", ""); const b0 = await req.json().catch(() => ({})); const out = [];
+    for (const m of (b0.m || []).slice(0, 30)) { const e = await vdGet(env, Number(m)); if (!e || !e.auto) { out.push([m, "auto emas"]); continue; } const r = await dkTg(tok, "deleteMessage", { chat_id: VD_CHAT, message_id: Number(m) }); await vdDel(env, Number(m)); out.push([m, r && r.ok ? "o'chdi" : "ro'yxatdan olindi"]); }
+    return J({ ok: true, out });
+  }
   if (url.pathname === "/ub/vdsend" && req.method === "POST") {
     const tok = await kvGet(env, "vdToken", ""); if (!tok) return J({ ok: false, err: "video bot kaliti yo'q" });
     let meta = {}; try { meta = JSON.parse(url.searchParams.get("meta") || "{}"); } catch (x) {}
