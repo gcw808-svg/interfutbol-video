@@ -1,0 +1,29 @@
+name: ownvids
+# O'z videolarimiz roboti: Instagram'dagi O'Z hisobimiz (@interfutbol_tv) videolarini "Inter Futbol — Video Arxiv" kanaliga va bot bazasiga (D1) ko'chiradi.
+# Har 3 soatda LIMIT tadan (hammasi ko'chib bo'lgach faqat yangi chiqqan videolarni oladi). Qo'lda: limit.
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        default: "25"
+  schedule:
+    - cron: "17 */3 * * *"
+  push:
+    branches: [main]
+    paths: ["ownvids.py", ".github/workflows/ownvids.yml"]
+concurrency:
+  group: vidscout
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install -q requests imageio-ffmpeg
+      - env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          LIMIT: ${{ inputs.limit || (github.event_name == 'push' && '3') || '25' }}
+        run: python3 ownvids.py
