@@ -2218,11 +2218,33 @@ function vdEntry(m, md) {
   return { m: m.message_id, f: v.file_id, u: v.file_unique_id || "", k: md.k, n: vdName(m.caption, v.file_name), c: String(m.caption || "").slice(0, 1000),
     d: v.duration || 0, w: v.width || v.length || 0, h: v.height || v.length || 0, sz: v.file_size || 0, g: m.media_group_id || "", at: Date.now() };
 }
-async function vdSave(env, e) { await env.STATE.put("vda:" + e.m, JSON.stringify(e), { metadata: { n: e.n.slice(0, 80), d: e.d, k: e.k, g: e.g, sz: e.sz } }); }
+// XOTIRA: D1 bazasi "inter-futbol" (env.DB; 2026-11-19, Bahtiyor aka: "shuni ulaylik") — bepul tarifda kuniga 100 000 qator yozish (KV'da 1000), shuning uchun
+// video ro'yxati D1'da turadi va KV limitini yemaydi. D1 javob bermasa yoki ulanmagan bo'lsa — eski yo'l (KV vda:<xabar>) zaxira; ro'yxat ikkalasidan yig'iladi.
+let VD_DB_OK = false;
+async function vdDb(env) {
+  if (!env.DB) return null;
+  if (!VD_DB_OK) { await env.DB.prepare("CREATE TABLE IF NOT EXISTS vda (m INTEGER PRIMARY KEY, n TEXT, d INTEGER, k TEXT, g TEXT, sz INTEGER, at INTEGER, j TEXT)").run(); VD_DB_OK = true; }
+  return env.DB;
+}
+async function vdSave(env, e) {
+  try { const db = await vdDb(env); if (db) { await db.prepare("INSERT OR REPLACE INTO vda (m, n, d, k, g, sz, at, j) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(e.m, e.n, e.d || 0, e.k, e.g || "", e.sz || 0, e.at || Date.now(), JSON.stringify(e)).run(); return "d1"; } } catch (x) { console.log("vd d1", x && x.message); }
+  await env.STATE.put("vda:" + e.m, JSON.stringify(e), { metadata: { n: e.n.slice(0, 80), d: e.d, k: e.k, g: e.g, sz: e.sz } }); return "kv";
+}
+async function vdGet(env, m) {
+  try { const db = await vdDb(env); if (db) { const r = await db.prepare("SELECT j FROM vda WHERE m = ?").bind(m).first(); if (r && r.j) return JSON.parse(r.j); } } catch (x) { console.log("vd d1", x && x.message); }
+  return await kvGet(env, "vda:" + m, null);
+}
+async function vdDel(env, m) {
+  let ok = false;
+  try { const db = await vdDb(env); if (db) { await db.prepare("DELETE FROM vda WHERE m = ?").bind(m).run(); ok = true; } } catch (x) { console.log("vd d1", x && x.message); }
+  if (!ok || (await env.STATE.get("vda:" + m)) !== null) await env.STATE.delete("vda:" + m);
+}
 const vdLine = (e) => [e.d ? vdDur(e.d) : "", e.w && e.h ? e.w + "x" + e.h : "", vdMb(e.sz)].filter(Boolean).join(" · ");
 async function vdList(env) {
   const out = []; let cursor;
-  for (let i = 0; i < 5; i++) { const r = await env.STATE.list({ prefix: "vda:", cursor }); for (const k of r.keys) out.push({ m: Number(k.name.slice(4)), ...(k.metadata || {}) }); if (r.list_complete || !r.cursor) break; cursor = r.cursor; }
+  try { const db = await vdDb(env); if (db) { const r = await db.prepare("SELECT m, n, d, k, g, sz FROM vda ORDER BY m DESC LIMIT 5000").all(); for (const x of r.results || []) out.push(x); } } catch (x) { console.log("vd d1", x && x.message); }
+  const have = new Set(out.map((x) => x.m));
+  for (let i = 0; i < 5; i++) { const r = await env.STATE.list({ prefix: "vda:", cursor }); for (const k of r.keys) { const m = Number(k.name.slice(4)); if (!have.has(m)) out.push({ m, ...(k.metadata || {}) }); } if (r.list_complete || !r.cursor) break; cursor = r.cursor; }
   const gn = {}; for (const x of out) if (x.g && x.n && !gn[x.g]) gn[x.g] = x.n;  // albom: nomsizlari nomlisidan oladi
   for (const x of out) if (!x.n && x.g && gn[x.g]) x.n = gn[x.g];
   return out.sort((a, b) => b.m - a.m);
@@ -2235,7 +2257,7 @@ async function vdUpdate(env, up, tok) {
     const md = vdMedia(cp);
     if (md) {
       const e = vdEntry(cp, md);
-      try { await vdSave(env, e); } catch (x) { await say("⚠️ Video qabul qilindi va kanalda turibdi, lekin ro'yxatga yozilmadi: serverning bugungi yozish limiti tugagan.\nLimit yangilangach shu videoga javob qilib «?» yozing — ro'yxatga qo'shaman."); return; }
+      try { await vdSave(env, e); } catch (x) { await say("⚠️ Video qabul qilindi va kanalda turibdi, lekin ro'yxatga yozilmadi: xotira hozir javob bermadi.\nKeyinroq shu videoga javob qilib «?» yozing — ro'yxatga qo'shaman."); return; }
       if (e.g && !e.n) return;  // albomning izohsiz bo'laklari — javob bitta, izohlisida
       await say("✅ Arxivga yozildi — №" + e.m + (e.g ? " (albom)" : "") + "\n" + (e.n ? "Nomi: " + e.n : "Nomi yo'q — shu videoga javob qilib nom yozing.") + (vdLine(e) ? "\n" + vdLine(e) : ""));
       return;
@@ -2244,12 +2266,12 @@ async function vdUpdate(env, up, tok) {
     if (!rt || !t) return;
     const rmd = vdMedia(rt); if (!rmd) return;
     try {
-      if (t === "-") { await env.STATE.delete("vda:" + rt.message_id); await say("Ro'yxatdan olib tashlandi — №" + rt.message_id + ". Videoning o'zi kanalda qoladi.", rt.message_id); return; }
-      const cur = await kvGet(env, "vda:" + rt.message_id, null);
+      if (t === "-") { await vdDel(env, rt.message_id); await say("Ro'yxatdan olib tashlandi — №" + rt.message_id + ". Videoning o'zi kanalda qoladi.", rt.message_id); return; }
+      const cur = await vdGet(env, rt.message_id);
       const e = cur && cur.f ? cur : vdEntry(rt, rmd);
       if (t === "?") { await vdSave(env, e); await say("✅ Ro'yxatga yozildi — №" + e.m + (e.n ? "\nNomi: " + e.n : "\nNomi yo'q — shu videoga javob qilib nom yozing."), rt.message_id); return; }
       e.n = t.split("\n")[0].trim().slice(0, 120); await vdSave(env, e); await say("Nomi saqlandi — №" + e.m + ": " + e.n, rt.message_id);
-    } catch (x) { await say("⚠️ Saqlanmadi: serverning bugungi yozish limiti tugagan. Limit yangilangach qayta yozing.", rt.message_id); }
+    } catch (x) { await say("⚠️ Saqlanmadi: xotira hozir javob bermadi. Keyinroq qayta yozing.", rt.message_id); }
     return;
   }
   const m = up.message; if (!m || !m.chat || m.chat.type !== "private") return;
@@ -2266,7 +2288,7 @@ async function vdUpdate(env, up, tok) {
     if (!L.length) { await dkTg(tok, "sendMessage", { chat_id: m.chat.id, text: "Arxiv hozircha bo'sh. Videoni «Inter Futbol — Video Arxiv» kanaliga tashlang." }); return; }
     const sec = L.reduce((a, x) => a + (x.d || 0), 0), sz = L.reduce((a, x) => a + (x.sz || 0), 0), nn = L.filter((x) => !x.n).length;
     const rows = L.slice(0, 25).map((x) => "№" + x.m + " — " + (x.n || "nomsiz") + (x.d ? " (" + vdDur(x.d) + ")" : ""));
-    await dkTg(tok, "sendMessage", { chat_id: m.chat.id, text: "Video arxiv: " + L.length + " ta video, jami " + vdDur(sec) + (sz ? ", " + vdMb(sz) : "") + (nn ? "\nNomsiz: " + nn + " ta" : "") + "\n\nOxirgilari:\n" + rows.join("\n") });
+    await dkTg(tok, "sendMessage", { chat_id: m.chat.id, text: "Video arxiv: " + L.length + " ta video, jami " + vdDur(sec) + (sz ? ", " + vdMb(sz) : "") + (nn ? "\nNomsiz: " + nn + " ta" : "") + "\nXotira: " + (env.DB ? "D1 bazasi" : "KV (zaxira)") + "\n\nOxirgilari:\n" + rows.join("\n") });
     return;
   }
   if (vdMedia(m)) await dkTg(tok, "sendMessage", { chat_id: m.chat.id, text: "Videoni shu yerga emas, «Inter Futbol — Video Arxiv» kanaliga tashlang — o'sha yerda arxivga yoziladi." });
