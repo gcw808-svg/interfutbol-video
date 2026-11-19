@@ -61,7 +61,7 @@ def main():
         torch.cuda.empty_cache()
     except Exception:
         traceback.print_exc()
-    print("REF_TEXT:", ref_text, flush=True)
+    print("REF_TEXT uzunligi:", len(ref_text), flush=True)
     done = []
     # ---- A: hozirgi model (F5-TTS o'zbekcha) — taqqoslash uchun asos
     try:
@@ -121,7 +121,7 @@ def main():
                 sh(f"ffmpeg -loglevel error -y -i o/{L}{i}.wav -ac 1 -ar 16000 o/{L}{i}_16.wav")
                 h = asr(f"o/{L}{i}_16.wav", generate_kwargs={"language": "uz", "task": "transcribe"})["text"]
                 rs.append(difflib.SequenceMatcher(None, nk(t), nk(h), autojunk=False).ratio())
-                print(f"TEKSHIRUV {L}{i}: {rs[-1]:.2f} | {h[:110]}", flush=True)
+                print(f"TEKSHIRUV {L}{i}: {rs[-1]:.2f}", flush=True)
             score[L] = sum(rs) / len(rs)
             if score[L] < 0.75:
                 done.remove(L)

@@ -46,7 +46,7 @@ def main():
         for c in T.chunks(T.clean(T.apply_lex(T.cyr2lat(t), lex))):
             wav, sr, _ = m.infer(ref_file="ref.wav", ref_text=T.REFS[MOOD], gen_text=c, nfe_step=int(os.environ.get("NFE", "32")), remove_silence=False, speed=0.95)
             audio += [np.asarray(wav, dtype=np.float32), gap]
-            print(f"tayyor: {c[:50]} ({time.time() - t0:.0f}s)", flush=True)
+            print(f"tayyor: [{len(c)} belgi] ({time.time() - t0:.0f}s)", flush=True)
     sf.write("o.wav", np.concatenate(audio), sr)
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", "o.wav", "-af", "loudnorm=I=-16:TP=-1.5", "-c:a", "libmp3lame", "-b:a", "160k", "o.mp3"], check=True)
     cap = os.environ.get("CAP") or f"Namuna {LABEL} — avvalgi diktor (sizning ovozingizga o'rgatilgan model, {fs[-1].split('/')[0]})"

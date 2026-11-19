@@ -9,6 +9,13 @@ import csv, hashlib, io, json, os, re, subprocess, sys, zipfile
 W = "https://inter-futbol-bot.gcw808.workers.dev"
 
 
+def _t(x, n=0):
+    # OMBOR JURNALLARI HAMMAGA OCHIQ (2026-11-19): ssenariy matni va eshitilgan gaplar jurnalga CHIQARILMAYDI — faqat uzunligi.
+    # (video chiqishidan oldin matnni begonalar ko'rmasligi uchun; DK_LOGTEXT=1 faqat yopiq muhitda tashxis uchun)
+    x = str(x)
+    return x[:n or 200] if os.environ.get("DK_LOGTEXT") == "1" else f"[{len(x)} belgi]"
+
+
 def docx_text(path):
     # Word matni: sarlavhalar va "o'qima" izohlari o'qilmaydi (skill qoidasi)
     if path.lower().endswith(".txt"):
@@ -28,15 +35,15 @@ def docx_text(path):
                 elif tg == "tab":
                     o.append(" ")
             return "".join(o)
-        if os.environ.get("DK_DEBUG", "1") == "1":
+        if os.environ.get("DK_DEBUG", "0") == "1":
             print("xatboshilar:", len(d.paragraphs), flush=True)
             for p in d.paragraphs[:14]:
-                print("P>", repr(ptext(p))[:150], "| uslub:", (p.style.name if p.style is not None else ""), flush=True)
+                print("P>", _t(ptext(p)), "| uslub:", (p.style.name if p.style is not None else ""), flush=True)
             for p in d.paragraphs:
                 if "Edgar Davids" in p.text and "Birinchi" in p.text:
                     xx = re.sub(r"\s+", " ", p._p.xml)
                     ii = xx.find("Edgar Davids")
-                    print("XML>", xx[max(0, ii - 300):ii + 700], flush=True)
+                    print("XML>", _t(xx[max(0, ii - 300):ii + 700], 1000), flush=True)
                     break
         paras = []
         for p in d.paragraphs:
@@ -224,7 +231,7 @@ def hear(wavs, lang="uz", keys=None):
                 segs, _ = fw.transcribe(np.frombuffer(raw, dtype=np.float32), language=lang, beam_size=2, temperature=0.0, condition_on_previous_text=False, vad_filter=False, no_speech_threshold=None, log_prob_threshold=None, compression_ratio_threshold=None)
                 out[i] = " ".join(x.text.strip() for x in segs)
                 done.append(i)
-                print(f"eshitildi {i + 1}/{len(wavs)}: {out[i][:80]}", flush=True)
+                print(f"eshitildi {i + 1}/{len(wavs)}: {_t(out[i])}", flush=True)
             del fw
         except Exception as e:
             print("faster-whisper ishlamadi:", str(e)[:300], flush=True)
@@ -439,8 +446,8 @@ def process_set(wavs, doc, out_dir, model_name="medium", lang="uz", device=None,
         if dr or [q for q in ad if not q.startswith("? ")]:
             fixed.append(f"{k:03d}")
         if dr or ad:
-            print(f"  tuzatildi {k}: tashlab ketilgan={dr} qo'shilgan={ad}", flush=True)
-        print(f"fayl {k} ({durs[k-1]:.0f}s): gaplar {x['s']+1}-{x['e']} mos={x['fit']} oxsh={x['sim']} | {' '.join(sub)[:70]} || {x['heard'][:60]}", flush=True)
+            print(f"  tuzatildi {k}: tashlab ketilgan {len(dr)} ta ibora, qo'shilgan/shubhali {len(ad)} ta", flush=True)
+        print(f"fayl {k} ({durs[k-1]:.0f}s): gaplar {x['s']+1}-{x['e']} mos={x['fit']} oxsh={x['sim']} | matn {_t(' '.join(sub))} || eshitilgan {_t(x['heard'])}", flush=True)
         for a, b, i0, i1 in split_file(w, sub, durs[k - 1]):
             n += 1
             fn = f"{n:04d}.wav"

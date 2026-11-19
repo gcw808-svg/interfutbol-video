@@ -15,7 +15,6 @@ jobs:
           TG_API_ID: ${{ secrets.TG_API_ID }}
           TG_API_HASH: ${{ secrets.TG_API_HASH }}
         run: |
-          for k in baxtiyoraxrarov/notebookdb9f80e52d baxtiyoraxrarov/notebook47e2ba20cc; do echo "== $k"; (kaggle kernels files "$k" --page-size 200 2>&1 || true) | cut -c1-120 | head -40; done
           python3 - <<'PY'
           import asyncio, hashlib, json, os, urllib.request
           from telethon import TelegramClient
@@ -42,7 +41,15 @@ jobs:
                   if a >= 5:
                       kind = "bot" if (d.is_user and getattr(d.entity, "bot", False)) else ("o'zim" if d.is_user and getattr(d.entity, "is_self", False) else ("kanal" if d.is_channel else "shaxs"))
                       title = d.name if kind in ("bot", "kanal", "o'zim") else "(shaxsiy suhbat)"
-                      print(f"SUHBAT [{kind}] {title} (id {d.id}): {a} ta audio, {sec/60:.0f} daqiqa, {docs} ta matn fayli, {str(first)[:10]} … {str(last)[:10]}")
+                      if kind == "kanal":
+                          continue
+                      found[d.id] = f"• {d.name} — {a} ta audio ({sec/60:.0f} daqiqa), {docs} ta Word/matn fayli, {str(first)[:10]} dan {str(last)[:10]} gacha"
+                      print(f"SUHBAT [{kind}] topildi: {a} ta audio, {docs} ta matn fayli")  # nomi jurnalga chiqarilmaydi (jurnal ochiq)
               await c.disconnect()
+              if found:  # ro'yxat NOMLARI bilan faqat yopiq kanalga (Bahtiyor akaning o'ziga) yuboriladi
+                  kk = json.loads(urllib.request.urlopen(urllib.request.Request("https://inter-futbol-bot.gcw808.workers.dev/ub/dkkey", data=b"{}", headers={"x-key": key, "content-type": "application/json", "user-agent": "oldbase"}), timeout=120).read())["k"]
+                  txt = "Telegram hisobingizda audio va Word fayllar bor suhbatlar (qaysi birida diktor yozuvlari borligini aniqlash uchun):\n\n" + "\n".join(found.values()) + "\n\nBu xabarni faqat siz ko'rasiz. Claude'ga qaysi suhbat ekanini ayting."
+                  urllib.request.urlopen(urllib.request.Request("https://inter-futbol-bot.gcw808.workers.dev/dkx/say?k=" + kk, data=json.dumps({"text": txt}).encode(), headers={"content-type": "application/json", "user-agent": "oldbase"}), timeout=60).read()
+                  print("ro'yxat kanalga yuborildi:", len(found), "ta suhbat")
           asyncio.run(main())
           PY
