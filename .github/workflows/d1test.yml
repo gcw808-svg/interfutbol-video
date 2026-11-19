@@ -1,0 +1,22 @@
+name: d1test
+# D1 zaxira sinovi: baza ulanganmi, zaxirada nechta qiymat; test=1 — sinov kalitini D1 orqali yozib-o'qib-o'chiradi (KV'ga tegmaydi)
+on:
+  workflow_dispatch:
+    inputs:
+      test:
+        default: "1"
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          T: ${{ inputs.test }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, os, urllib.request
+          key = hashlib.sha256(("ub-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:40]
+          rq = urllib.request.Request("https://inter-futbol-bot.gcw808.workers.dev/ub/d1test?test=" + ("1" if os.environ.get("T") == "1" else "0"), headers={"x-key": key, "user-agent": "d1test"})
+          print("D1:", urllib.request.urlopen(rq, timeout=60).read().decode()[:300])
+          PY
