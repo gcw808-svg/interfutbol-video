@@ -3207,7 +3207,7 @@ async function ubRoute(env, req, url) {
   }
   if (url.pathname === "/ub/dksweep") { // nazoratchi uchun: barcha to'plamlar holati + kanalni o'qish uchun seans
     const sets = {}; let cur; do { const L = await env.STATE.list({ prefix: "dkset:", cursor: cur }); for (const q of L.keys) { const v = await kvGet(env, q.name, null); if (v) sets[q.name.slice(6)] = { st: v.st, at: v.at, files: v.files || 0, last: v.last || 0 }; } cur = L.list_complete ? null : L.cursor; } while (cur);
-    return J({ chat: DK_CHAT, session: await kvGet(env, "usess", null), sets });
+    return J({ chat: DK_CHAT, session: (await kvGet(env, "usessDk", null)) || (await kvGet(env, "usess", null)), sets });
   }
   if (url.pathname === "/ub/dkfw" && req.method === "POST") { // namunani adminning bot chatidan ovozlar kanaliga ko'chirish (namuna_ nomli audio bazaga qo'shilmaydi)
     const b0 = await req.json().catch(() => ({})); const tok = await kvGet(env, "dkToken", ""); const adm = (await getAdmins(env))[0];
@@ -3216,13 +3216,15 @@ async function ubRoute(env, req, url) {
   }
   if (url.pathname === "/ub/dkping") { const ju = await kvGet(env, "jobsUrl", "https://gcw808-svg--inter-jobs-dispatch.modal.run"); const t0 = Date.now(); try { const r = await fetch(ju, { method: "POST", headers: { "x-key": await ubKey(env), "content-type": "application/json" }, body: JSON.stringify({ wf: "x", job: "y" }), signal: AbortSignal.timeout(20000) }); return J({ ju, st: r.status, ms: Date.now() - t0, body: (await r.text()).slice(0, 200) }); } catch (e) { return J({ ju, err: String(e && e.message), ms: Date.now() - t0 }); } }
   if (url.pathname === "/ub/dkredo" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); const tok = await kvGet(env, "dkToken", ""); if (!tok || !b0.doc) return J({ ok: false }); await env.STATE.delete("dkset:" + b0.doc); return J({ ok: true, job: await dkSetStart(env, tok, Number(b0.doc), true) }); }
-  if (url.pathname === "/ub/dkjob") { const j = await kvGet(env, "dkj:" + url.searchParams.get("id"), null); const ds = j ? await kvGet(env, "dkset:" + j.d, null) : null; return J(j ? { ...j, live: !ds || ds.job === url.searchParams.get("id") ? 1 : 0, chat: DK_CHAT, session: await kvGet(env, "usess", null) } : {}); }
+  if (url.pathname === "/ub/dkjob") { const j = await kvGet(env, "dkj:" + url.searchParams.get("id"), null); const ds = j ? await kvGet(env, "dkset:" + j.d, null) : null; return J(j ? { ...j, live: !ds || ds.job === url.searchParams.get("id") ? 1 : 0, chat: DK_CHAT, session: (await kvGet(env, "usessDk", null)) || (await kvGet(env, "usess", null)) } : {}); }
   if (url.pathname === "/ub/dkres" && req.method === "POST") {
     const b0 = await req.json().catch(() => ({})); const jb = await kvGet(env, "dkj:" + b0.id, null); const tok = await kvGet(env, "dkToken", ""); if (!jb) return J({ ok: false });
     const prev = await kvGet(env, "dkset:" + jb.d, null); if (prev && prev.job && prev.job !== b0.id) return J({ ok: false, why: "eskirgan ish" });
     if (b0.ok && prev && prev.oz && tok) { try { await dkTg(tok, "deleteMessage", { chat_id: DK_CHAT, message_id: prev.oz }); } catch (x) {} }
     await kvPut(env, "dkset:" + jb.d, b0.ok ? { st: "tayyor", v: jb.v || DK_VOICE0, job: b0.id, at: Date.now(), zip: b0.zip, n: b0.n, sec: b0.sec, lown: b0.lown || 0, lost: b0.lost || 0, files: b0.files, first: b0.first, last: b0.last } : { st: "xato", job: b0.id, at: Date.now(), err: String(b0.err || "").slice(0, 200) });
-    if (!b0.ok && tok) await dkTg(tok, "sendMessage", { chat_id: DK_CHAT, reply_to_message_id: jb.d, text: "⚠️ Moslash bajarilmadi: " + String(b0.err || "noma'lum xato").slice(0, 300) + "\nTuzatgach, matn fayliga javob qilib «qayta» deb yozing." });
+    const dead = /authorization key|AuthKey|session file|not authorized|disconnected/i.test(String(b0.err || ""));
+    if (!b0.ok && tok && dead) { if (!(await kvGet(env, "dkDeadSaid", 0))) { await kvPut(env, "dkDeadSaid", 1, { expirationTtl: 6 * 3600 }); await dkTg(tok, "sendMessage", { chat_id: DK_CHAT, text: "⚠️ Telegram hisobiga ulanish uzilgan — moslash vaqtincha to'xtadi. Tashlangan fayllar yo'qolmaydi: ulanish tiklangach hammasi o'zi navbat bilan moslanadi (qayta tashlash shart emas)." }); } }
+    else if (!b0.ok && tok) await dkTg(tok, "sendMessage", { chat_id: DK_CHAT, reply_to_message_id: jb.d, text: "⚠️ Moslash bajarilmadi: " + String(b0.err || "noma'lum xato").slice(0, 300) + "\nO'zim qayta urinaman; bo'lmasa matn fayliga javob qilib «qayta» deb yozing." });
     return J({ ok: true });
   }
   if (url.pathname === "/ub/afsona" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); let r; try { r = await afsonaRun(env, b0.chan ? null : admin, b0.name || ""); } catch (e) { r = "xato: " + e.message; } return J({ r: String(r) }); }
