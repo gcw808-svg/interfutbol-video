@@ -1,0 +1,31 @@
+name: dkcmp
+# Asl o'qish (kanal yozuvi) bilan diktor o'qishini o'lchab solishtirish va diktorni moslash. Jurnalga matn chiqarilmaydi.
+on:
+  workflow_dispatch:
+    inputs:
+      msg:
+        default: "478"
+      doc:
+        default: "474"
+      find:
+        default: "11 ta golda"
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache/restore@v4
+        with:
+          path: .dkcache
+          key: dkcache-cmp
+          restore-keys: dkcache-
+      - run: sudo apt-get update -qq > /dev/null 2>&1; sudo apt-get install -y -qq ffmpeg > /dev/null 2>&1; pip install -q torch torchaudio --index-url https://download.pytorch.org/whl/cpu && pip install -q f5-tts requests soundfile huggingface_hub faster-whisper python-docx
+      - env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          DK_CACHE: ${{ github.workspace }}/.dkcache
+          MSG: ${{ inputs.msg }}
+          DOC: ${{ inputs.doc }}
+          FIND: ${{ inputs.find }}
+        run: python3 dk_cmp.py
