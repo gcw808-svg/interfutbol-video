@@ -100,6 +100,18 @@ def main():
     print("tayyor baza:", os.listdir(data_dir), flush=True)
     ck_dir = os.path.abspath(os.path.join(pkg, "..", "..", "ckpts", "inter"))
     os.makedirs(ck_dir, exist_ok=True)
+    # asos model fayli "toza" kalitlar bilan saqlangan; o'qituvchi esa EMA ko'rinishini kutadi ("ema_model." old qo'shimchasi, initted, step) — moslab beramiz
+    import torch
+    from safetensors.torch import load_file, save_file
+    sd = load_file(base_ckpt)
+    if not any(k.startswith("ema_model.") for k in sd):
+        sd = {"ema_model." + k: v for k, v in sd.items() if k not in ("initted", "step")}
+        sd["initted"] = torch.tensor(True)
+        sd["step"] = torch.tensor(0)
+        base_ckpt = "/kaggle/working/asos_ema.safetensors"
+        save_file(sd, base_ckpt)
+    print("asos kalitlari:", len(sd), flush=True)
+    del sd
     upd_ep = max(1, int(total * 93.75 / 3200))  # bir epochdagi qadamlar (taxminan)
     t0 = time.time()
     r = sh(f"cd {os.path.join(pkg, '..', '..')} && f5-tts_finetune-cli --exp_name F5TTS_v1_Base --dataset_name inter --tokenizer custom --tokenizer_path {vocab} --finetune --pretrain {base_ckpt} "
@@ -108,7 +120,9 @@ def main():
     print(f"o'qitish vaqti: {(time.time() - t0) / 60:.0f} daqiqa, kod {r.returncode}", flush=True)
     last = sorted(glob.glob(os.path.join(ck_dir, "model_last.pt")) + glob.glob(os.path.join(ck_dir, "model_*.pt")), key=os.path.getmtime)
     if not last:
-        raise Exception("model saqlanmadi: " + (r.stderr or "")[-600:])
+        e = r.stderr or ""
+        i = max(e.rfind("Traceback"), 0)
+        raise Exception("model saqlanmadi: " + re.sub(r'"[\w.]+", ', "", e[i:])[:1800])
     import torch
     from safetensors.torch import save_file
     ck = torch.load(last[-1], map_location="cpu", weights_only=True)
