@@ -66,6 +66,10 @@ PEOPLE = [
 ]
 
 
+# ENG KO'P POST CHIQADIGAN ODAMLAR (yulduzlar, top klub murabbiylari, o'zbek futbolchilari — yuqoridagi birinchi ro'yxat): bazada 20 tagacha surat
+# (2026-11-19, Bahtiyor aka: "8 ta kam emasmi") — ular haftasiga bir necha marta postga chiqadi, 8 ta surat tez takrorlanadi; qolganlarga MAXP (8) yetarli.
+TOP = {p[0] for p in PEOPLE}
+MAXP_TOP = max(MAXP, int(os.environ.get("MAXP_TOP") or "20"))
 pn = lambda x: re.sub(r"[^a-z0-9]+", " ", __import__("unicodedata").normalize("NFD", x.lower().replace("ş", "sh").replace("ç", "ch")).encode("ascii", "ignore").decode()).strip()
 
 # 2-bosqich (2026-11-17): bizning klublar tarkibidagi boshqa futbolchilar
@@ -74,6 +78,7 @@ PEOPLE += [(n, "", [n.split()[-1]] if len(n.split()) > 1 and len(n.split()[-1]) 
 PEOPLE += [(n, "", [n.split()[-1]] if len(n.split()) > 1 and len(n.split()[-1]) >= 5 else []) for n in """Mason Mount|Luke Shaw|Lisandro Martínez|Leny Yoro|Diogo Dalot|Noussair Mazraoui|Casemiro|Manuel Ugarte|Joshua Zirkzee|Rasmus Højlund|André Onana|Alejandro Garnacho|Jadon Sancho|Mason Greenwood|Scott McTominay|Romelu Lukaku|Paul Pogba|David de Gea|Raphaël Varane|Jack Grealish|Ederson|John Stones|Kyle Walker|Nathan Aké|Mateo Kovačić|İlkay Gündoğan|Savinho|Andrew Robertson|Joe Gomez|Curtis Jones|Ryan Gravenberch|Wataru Endo|Harvey Elliott|Federico Chiesa|Darwin Núñez|Giorgi Mamardashvili|Milos Kerkez|Ben White|Jurriën Timber|Riccardo Calafiori|Thomas Partey|Jorginho|Gabriel Jesus|Mikel Merino|Noni Madueke|Ethan Nwaneri|Myles Lewis-Skelly|Levi Colwill|Wesley Fofana|Malo Gusto|Roméo Lavia|Nicolas Jackson|Christopher Nkunku|Liam Delap|Estêvão|Dani Ceballos|Brahim Díaz|Ferland Mendy|David Alaba|Lucas Vázquez|Andriy Lunin|Franco Mastantuono|Ronald Araújo|Andreas Christensen|Iñigo Martínez|Marc Casadó|Ansu Fati|Wojciech Szczęsny|José María Giménez|Marcos Llorente|Conor Gallagher|Álex Baena|Giuliano Simeone|Robin Le Normand|Nahuel Molina|Thiago Almada|Henrikh Mkhitaryan|Francesco Acerbi|Stefan de Vrij|Benjamin Pavard|Davide Frattesi|Piotr Zieliński|Mehdi Taremi|Theo Hernández|Ruben Loftus-Cheek|Santiago Giménez|Strahinja Pavlović|Alexis Saelemaekers|Andrea Cambiaso|Weston McKennie|Teun Koopmeiners|Federico Gatti|Khéphren Thuram|Loïs Openda|Kingsley Coman|Leroy Sané|Konrad Laimer|Aleksandar Pavlović|Jonathan Tah|Kim Min-jae|Raphaël Guerreiro|Emre Can|Marcel Sabitzer|Niklas Süle|Felix Nmecha|Pascal Groß|Jobe Bellingham|Maximilian Beier|Gonçalo Ramos|Lee Kang-in|Fabián Ruiz|Lucas Hernández|Willian Pacho|Illia Zabarnyi|Nico Williams|Mikel Oyarzabal|Álvaro Morata|Unai Simón|Granit Xhaka|Xavi Simons|Memphis Depay|Youri Tielemans|Christian Eriksen|Pierre-Emile Højbjerg|Takefusa Kubo|Kaoru Mitoma|Salem Al-Dawsari|Akram Afif|Mohammed Kudus|Riyad Mahrez|Yassine Bounou|Hakim Ziyech|Sofyan Amrabat|Victor Boniface|Ademola Lookman|Tyler Adams|Folarin Balogun|Giovanni Reyna|James Rodríguez|Emiliano Martínez|Ángel Di María|Paulo Dybala|Nicolás Otamendi|Cristian Romero|Bruno Guimarães|Lucas Paquetá|Richarlison|Antony|João Pedro|Javier Mascherano|Thomas Frank|Nuno Espírito Santo|David Moyes|Marco Silva|Fabian Hürzeler|Niko Kovač|Kasper Hjulmand|Sebastian Hoeneß|Cristian Chivu|Igor Tudor|Gian Piero Gasperini|Maurizio Sarri|Stefano Pioli|Vincenzo Italiano|Manuel Pellegrini|Ernesto Valverde|Sérgio Conceição|Jorge Jesus|Hervé Renard|Walid Regragui|Dorival Júnior|Jesse Marsch|Ralf Rangnick|Murat Yakin|Zlatko Dalić|Vincenzo Montella|Domenico Tedesco|Rudi Garcia|Michael Carrick|Rúben Amorim|Graham Potter|Gareth Southgate|Steven Gerrard|Frank Lampard|Wayne Rooney|Xavi|Thiago Motta|Roberto Mancini""".split("|") if n not in [p[0] for p in PEOPLE]]
 # o'zbek futbolchilari: (kanaldagi yozilishi, Wikidata qidiruv so'zi)
 PEOPLE += [(a, b, [a.split()[-1]]) for a, b in [("Husniddin Aliqulov", "Khusniddin Alikulov"), ("Dostonbek Hamdamov", "Dostonbek Khamdamov"), ("O'tkir Yusupov", "Utkir Yusupov"), ("Farrux Sayfiyev", "Farrukh Sayfiev"), ("Sherzod Nasrullayev", "Sherzod Nasrullaev"), ("Azizbek Turg'unboyev", "Azizbek Turgunboev"), ("Xojimat Erkinov", "Khojimat Erkinov"), ("Jamshid Iskandarov", "Jamshid Iskanderov"), ("Akmal Mozgovoy", "Akmal Mozgovoy"), ("Oston O'runov", "Oston Urunov"), ("Odiljon Hamrobekov", "Odiljon Hamrobekov"), ("Umarali Rahmonaliyev", "Umarali Rakhmonaliev"), ("Sherzod Esanov", "Sherzod Esanov"), ("Mirjalol Qosimov", "Mirjalol Qosimov"), ("Vitaliy Denisov", "Vitaliy Denisov"), ("Anzur Ismoilov", "Anzur Ismailov"), ("Abbos Fayzullayev", "Abbosbek Fayzullaev")][:16]]
+TOP |= {p[0] for p in PEOPLE[-16:]}
 # afsonalar (tarixiy faktlar uchun) — eski suratlar ham olinadi
 LEGENDS = """Diego Maradona|Ronaldinho|Ronaldo Nazário|David Beckham|Thierry Henry|Andrés Iniesta|Gianluigi Buffon|Paolo Maldini|Francesco Totti|Andrea Pirlo|Kaká|Wayne Rooney|Steven Gerrard|Frank Lampard|Carles Puyol|Iker Casillas|Bastian Schweinsteiger|Arjen Robben|Franck Ribéry|Robin van Persie|Dennis Bergkamp|Eric Cantona|Ryan Giggs|Paul Scholes|Alex Ferguson|Arsène Wenger|Roberto Baggio|Alessandro Del Piero|Javier Zanetti|Raúl González|Luís Figo|Roberto Carlos|Cafu|Rivaldo|Samuel Eto'o|Didier Drogba|Fernando Torres|David Villa|Xabi Alonso|Philipp Lahm|Miroslav Klose|Oliver Kahn|Michael Ballack|Andriy Shevchenko|Pavel Nedvěd|Clarence Seedorf|Patrick Vieira|Petr Čech|John Terry|Rio Ferdinand|Michael Owen|Alan Shearer|Gary Lineker|Fabio Capello|Marcello Lippi|Vicente del Bosque|Louis van Gaal|Guus Hiddink|Rafael Benítez|Claudio Ranieri|Zinedine Zidane""".split("|")
 PEOPLE += [(n, "", [n.split()[-1]] if len(n.split()) > 1 and len(n.split()[-1]) >= 5 else []) for n in LEGENDS if n not in [p[0] for p in PEOPLE]]
@@ -278,7 +283,8 @@ def main():
         if only and name.lower() not in only:
             continue
         cur = len((have.get(pn(name)) or {}).get("ph", []))
-        if cur >= MAXP:
+        cap = MAXP_TOP if name in TOP else MAXP
+        if cur >= cap:
             print("=", name, "bazada", cur, "ta — yetarli"); continue
         try:
             q = qid(term or name)
@@ -293,7 +299,7 @@ def main():
             print(" ", name, q, "nomzodlar:", len(raw), "→ ismi bor:", len(cand))
             got, days = 0, set()
             for c in cand[:18]:
-                if got >= min(PER, MAXP - cur) or total >= LIMIT:
+                if got >= min(PER, cap - cur) or total >= LIMIT:
                     break
                 if c["d"] and c["d"] in days:
                     continue
