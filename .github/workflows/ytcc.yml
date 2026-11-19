@@ -1,0 +1,22 @@
+name: ytcc
+# YouTube'dagi Creative Commons videolar SINOVI: topiladimi, litsenziyasi o'qiladimi, serverdan yuklanadimi. Arxivga hech narsa qo'shmaydi.
+on:
+  workflow_dispatch:
+    inputs:
+      q:
+        default: ""
+  push:
+    branches: [main]
+    paths: ["ytcc.py", ".github/workflows/ytcc.yml"]
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install -q -U yt-dlp
+      - env:
+          Q: ${{ inputs.q }}
+        run: python3 ytcc.py
