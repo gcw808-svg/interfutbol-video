@@ -142,11 +142,13 @@ def run(job):
         y = librosa.resample(wav, orig_sr=sr, target_sr=16000) if sr != 16000 else wav
         h = asr({"raw": y, "sampling_rate": 16000}, generate_kwargs={"language": "uz", "task": "transcribe"})["text"]
         return difflib.SequenceMatcher(None, nk(text), nk(h)).ratio()
-    if not job.get("only"):
+    if not (job.get("only") or job.get("find")):
         say(chat, f"🎙 {voice}: Word qabul qilindi — {len(secs)} ta mavzu, {nchar} belgi. O'qiyapman; har mavzu alohida audio bo'lib keladi.")
     t0, sent, low = time.time(), 0, 0
     for si, (title, paras) in enumerate(secs, 1):
         if job.get("only") and si != int(job["only"]):
+            continue
+        if job.get("find") and not any(job["find"].lower() in p.lower() for p in paras):
             continue
         audio, sr = [], 24000
         for p in paras:
@@ -179,7 +181,7 @@ def run(job):
         okr = '"ok":true' in r
         sent += okr
         print(f"mavzu {si}/{len(secs)}: {len(full) / sr:.0f} soniya, yuborildi {okr} ({time.time() - t0:.0f}s)", flush=True)
-    if not job.get("only"):
+    if not (job.get("only") or job.get("find")):
         say(chat, f"✅ Tayyor: {sent}/{len(secs)} ta audio, {int((time.time() - t0) / 60)} daqiqada." + (f" Tekshiruvdan past o'tgan bo'laklar: {low} ta — o'sha joylarni eshitib ko'ring." if low else ""))
 
 

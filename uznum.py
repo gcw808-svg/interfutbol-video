@@ -16,6 +16,8 @@ def norm(t):
     t=t.replace("‘","'").replace("’","'").replace("ʻ","'").replace("ʼ","'").replace("“","").replace("”","").replace("«","").replace("»","").replace("—",",")
     # MAVSUM (Bahtiyor aka, 2026-11-20): "2026/27 yilgi mavsum" → "ikki ming yigirma olti, yigirma yettinchi yilgi mavsum" (ikkinchi yil tartib son bilan)
     t=re.sub(r"\b(\d{4})\s*[/–-]\s*(\d{2}|\d{4})(?:-| )?\s*(yilgi|yil|mavsum)", lambda m: card(m[1])+", "+ordw(m[2][-2:])+" "+m[3], t)
+    # "N ta" (Bahtiyor aka, 2026-11-20): bir bilan tugaydigan son + "ta" → "bitta": 1 ta → bitta, 11 ta → o'n bitta, 21 ta → yigirma bitta
+    t=re.sub(r"\b(\d+)[ -]?ta\b", lambda m: (re.sub(r"\s*bir$", " bitta", card(m[1])).strip() if int(m[1]) % 10 == 1 else card(m[1]) + " ta"), t)
     t=re.sub(r"\b(XIX|XX|XXI)(-| )asr", lambda m: {"XIX":"o'n to'qqizinchi","XX":"yigirmanchi","XXI":"yigirma birinchi"}[m[1]]+" asr", t)
     t=re.sub(r"\b1/(2|4|8|16) final", lambda m: {"2":"yarim","4":"chorak","8":"sakkizdan bir","16":"o'n oltidan bir"}[m[1]]+" final", t)
     t=re.sub(r"\b(\d{1,2}):(\d{1,2})\b", lambda m: score(m[1],m[2]), t)
