@@ -3160,6 +3160,7 @@ async function ubRoute(env, req, url) {
   }
   if (url.pathname === "/ub/dkdel" && req.method === "POST") { // sinov va eski xabarlarni ovozlar kanalidan tozalash (Bahtiyor aka ruxsati bilan; ovoz va matn fayllariga tegilmaydi — ro'yxatni chaqiruvchi beradi)
     const b0 = await req.json().catch(() => ({})); const tok = await kvGet(env, "dkToken", ""); const ids = (b0.ids || []).map(Number).filter((x) => x > 0).slice(0, 100); if (!tok || !ids.length) return J({ ok: false });
+    if (b0.lastdoc) await kvPut(env, "dkLastDoc", Number(b0.lastdoc));
     const r = await dkTg(tok, "deleteMessages", { chat_id: DK_CHAT, message_ids: ids }); for (const m of ids) { try { await env.STATE.delete("dka:" + m); } catch (x) {} } if (b0.old) { try { await env.STATE.delete("dkBase"); await env.STATE.delete("dkDoc"); } catch (x) {} }
     return J({ ok: !!r.ok, n: ids.length, why: r.description || "" });
   }
