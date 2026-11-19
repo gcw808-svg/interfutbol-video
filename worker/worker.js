@@ -2732,7 +2732,7 @@ async function ghDispatch(env, wf, inputs, viaGh) {
   }
   if (!env.GH_TOKEN) return false;
   const r = await fetch(`https://api.github.com/repos/${env.GH_REPO || "gcw808-svg/interfutbol-video"}/actions/workflows/${wf}/dispatches`, { method: "POST", headers: { authorization: "Bearer " + env.GH_TOKEN, accept: "application/vnd.github+json", "user-agent": "InterFutbolBot", "content-type": "application/json" }, body: JSON.stringify({ ref: "main", inputs }) });
-  return r.status === 204;
+  return r.ok;  // GitHub endi 204 o'rniga 200 (ish raqami bilan) qaytarishi mumkin — faqat 204 ni kutish ishni 3 marta ishga tushirib yuborgan edi (2026-11-19)
 }
 // null qaytsa — oddiy (bot) usulida chiqariladi
 async function userPublish(env, text, img, url, video, chat, noQc) {
