@@ -22,10 +22,10 @@ W = "https://inter-futbol-bot.gcw808.workers.dev"
 KEY = hashlib.sha256(("ub-" + BOT).encode()).hexdigest()[:40]
 LIB = -1004498416461
 # ARXIV (2026-11-19, Bahtiyor aka: "rasmlar sonini cheklash noo'rin, qancha ko'p bo'lsa shuncha yaxshi — kelgusida generatsiya dasturiga g'oya bo'ladi"):
-# yopiq kanal "Inter Futbol — Arxiv". Post bazasiga (LIB) faqat saralangan, chegarali suratlar tushadi; post bazasiga yaramagan (bir necha odam, o'yin lahzasi,
+# yopiq kanal "Inter Futbol — Rasm generatsiya Arxiv" (nom: keyinchalik alohida VIDEO arxiv ham bo'ladi — videolardan lavhalar va o'z videolarimiz; bu kanal faqat rasm generatsiyasi uchun). Post bazasiga (LIB) faqat saralangan, chegarali suratlar tushadi; post bazasiga yaramagan (bir necha odam, o'yin lahzasi,
 # kichik odam, eski forma, fayl nomida ismi yo'q) yoki chegaradan ortgan HAR BIR erkin litsenziyali surat shu arxivga CHEGARASIZ tashlanadi.
 # Bot arxivdan postga surat OLMAYDI (KV faces ga yozilmaydi), shuning uchun u yerda qattiq tekshiruv shart emas. Izohda: ism, #heshteg, manba fayl, muallif, litsenziya.
-ARCH = -1004396320401
+ARCH = -1003533987068
 ARCH_LIMIT = int(os.environ.get("ARCH_LIMIT") or "0")   # bir ishga tushishda arxivga nechta surat (0 — arxiv o'chiq)
 ARCH_PER = int(os.environ.get("ARCH_PER") or "12")      # bir odamdan bir ishga tushishda nechta
 API = f"https://api.telegram.org/bot{BOT}/"

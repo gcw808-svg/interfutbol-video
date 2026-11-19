@@ -57,7 +57,7 @@ jobs:
       AUTO: ${{ github.event_name == 'schedule' && '1' || inputs.auto }}
       SRC_OFF: ${{ github.event_name == 'schedule' && 'openverse' || inputs.src_off }}
       REPORT: "1"
-      ARCH_LIMIT: ${{ github.event_name == 'schedule' && '250' || inputs.arch }}  # "Inter Futbol — Arxiv" kanaliga bir ishda nechta surat (0 — o'chiq)
+      ARCH_LIMIT: ${{ github.event_name == 'schedule' && '250' || inputs.arch }}  # "Inter Futbol — Rasm generatsiya Arxiv" kanaliga bir ishda nechta surat (0 — o'chiq)
       DRY: ${{ inputs.dry }}
       DEL: ${{ inputs.del }}
       REG: ${{ inputs.reg }}
