@@ -1690,7 +1690,7 @@ async function rasmRedo(env, chat, mid, quiet, ov) {
       // muallifni ko'rsatishni talab qiladi — shuning uchun yozuv butunlay olib tashlanmaydi, heshteglardan oldin kichik kursiv qator bo'lib qo'shiladi
       let html1 = html;
       if (!(ov && ov.credit) && face0) html1 = withCredit(html, await faceCredit(env, face0));
-      if (ov && ov.credit && !/Wikimedia Commons/i.test(html)) { const cl = "<i>⟦" + ov.credit + "⟧</i>"; html1 = /\n\s*#[^\n]*\s*$/.test(html) ? html.replace(/\s*\n\s*(#[^\n]*\s*)$/, "\n\n" + cl + "\n\n$1") : html + "\n\n" + cl; }
+      if (ov && ov.credit && !/Wikimedia Commons|, Flickr[⟧<]/i.test(html)) { const cl = "<i>⟦" + ov.credit + "⟧</i>"; html1 = /\n\s*#[^\n]*\s*$/.test(html) ? html.replace(/\s*\n\s*(#[^\n]*\s*)$/, "\n\n" + cl + "\n\n$1") : html + "\n\n" + cl; }
       const id = "n" + Date.now().toString(36) + "r";
       await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", leftLogo: await leftCrest(env, html, ci, idx), clubLogos, stat: /#Raqamlarda/i.test(html) ? statFromPost(html) : null, face: face0, wm: (ov && ov.wm) || "", sr: ov && ov.sr ? 1 : 0, po: own ? own.po : 0, legion: /#Legionerlar\b/i.test(html) ? await legionFromPost(env, html, idx) : null, scorers: /#Topurarlar\b/i.test(html) ? await scorersFromPost(env, html, idx) : null, chan: keepLatin(html1), rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 }); await repWatch(env, id, mid);
       await ghDispatch(env, "card.yml", { job: id });
@@ -1745,10 +1745,10 @@ async function faceUrl(env, post, pick) {
 // shu surat ishlatilgan post matniga heshteglardan oldin kichik kursiv qator bo'lib qo'shiladi (CC BY / BY-SA talabi; rasmga yozilmaydi)
 async function faceCredit(env, furl) {
   try { const f = decodeURIComponent((String(furl || "").match(/\/ph\/([^?]+)/) || [])[1] || ""); if (!f) return "";
-    const F = await kvGet(env, "faces", {}); for (const P of Object.values(F)) for (const p of P.ph || []) if (p.f === f) return p.c ? p.c + ", Wikimedia Commons" : ""; } catch (e) {}
+    const F = await kvGet(env, "faces", {}); for (const P of Object.values(F)) for (const p of P.ph || []) if (p.f === f) return p.c ? (/, Flickr$/.test(p.c) ? p.c : p.c + ", Wikimedia Commons") : ""; } catch (e) {}
   return "";
 }
-const withCredit = (html, credit) => { if (!credit || /Wikimedia Commons/i.test(html)) return html; const cl = "<i>⟦" + credit + "⟧</i>"; return /\n\s*#[^\n]*\s*$/.test(html) ? html.replace(/\s*\n\s*(#[^\n]*\s*)$/, "\n\n" + cl + "\n\n$1") : html + "\n\n" + cl; };
+const withCredit = (html, credit) => { if (!credit || /Wikimedia Commons|, Flickr[⟧<]/i.test(html)) return html; const cl = "<i>⟦" + credit + "⟧</i>"; return /\n\s*#[^\n]*\s*$/.test(html) ? html.replace(/\s*\n\s*(#[^\n]*\s*)$/, "\n\n" + cl + "\n\n$1") : html + "\n\n" + cl; };
 const phUrl = (p) => WURL + "/ph/" + encodeURIComponent(p.f) + (p.b ? "?b=" + p.b.join(",") + (p.x && p.x.length ? "&x=" + p.x.map((e) => e.join(",")).join(";") : "") : "");
 // POSTNING O'Z SURATI (kanal postidan bazaga o'tkazilgan, src = post raqami): post qayta chizilganda avval shu surat ishlatiladi;
 // sarlavhada shu odamning ismi bo'lmasa — sarlavhasiz suratli karta (po), surat ustiga boshqa mavzudagi sarlavha yozilmaydi

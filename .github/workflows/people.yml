@@ -2,8 +2,14 @@ name: people
 # Odamlar roboti: futbolchi va murabbiylarning erkin litsenziyali suratlarini (Wikimedia Commons) rasmlar kanaliga va bot bazasiga qo'shadi (people.py)
 # 2026-11-18: GitHub daqiqalarini tejash uchun ish MODAL'da bajariladi (bu workflow faqat ishga tushiradi, ~1 daqiqa); natija bot KV'siga (peopleLog) yoziladi —
 # o'qish: worker.yml action=holat keys=peopleLog. gh=1 — eski usul (shu yerda bajarish).
+# 2026-11-19 (Bahtiyor aka: "bazani tinimsiz, bir necha manbadan yangilab tur"): HAR KUNI 02:23 (Toshkent) da o'zi ishga tushadi — AUTO rejim, aylanma navbat,
+# GitHub'ning o'zida (ombor ochiq, daqiqalar bepul; Modal bepul limiti kichik). Natija bot KV'sida: worker.yml action=holat keys=peopleLog.
+# Har ishga tushishdan keyin yangi suratlar KO'ZDAN KECHIRILADI (nazorat vazifasi) va yaroqsizlari del bilan olib tashlanadi. gh=0 — Modal'da.
+# src_off — manbani o'chirish (vergul bilan): wiki, depicts, openverse.
 # only — faqat shu ismlar (vergul bilan); add — ro'yxatda yo'q yangi ismlar; per — bir odamga nechta; limit — jami; dry=1 — faqat hisobot; del/reg — JSON
 on:
+  schedule:
+    - cron: "23 21 * * *"
   workflow_dispatch:
     inputs:
       only:
@@ -25,7 +31,11 @@ on:
       maxsec:
         default: "2700"
       gh:
-        default: ""
+        default: "1"
+      auto:
+        default: "0"
+      src_off:
+        default: "openverse"
 permissions:
   contents: read
 concurrency:
@@ -33,21 +43,24 @@ concurrency:
   cancel-in-progress: false
 jobs:
   run:
-    runs-on: ${{ inputs.gh == '1' && 'ubuntu-latest' || 'ubuntu-slim' }}  # Modal'ga topshirish — arzon ishchi; gh=1 (og'ir ish) — oddiy ishchi
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
       BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
       ONLY: ${{ inputs.only }}
       ADD: ${{ inputs.add }}
-      PER: ${{ inputs.per }}
-      LIMIT: ${{ inputs.limit }}
-      MAXP: ${{ inputs.maxp }}
+      PER: ${{ inputs.per || '2' }}
+      LIMIT: ${{ inputs.limit || '30' }}
+      MAXP: ${{ github.event_name == 'schedule' && '8' || inputs.maxp }}
+      AUTO: ${{ github.event_name == 'schedule' && '1' || inputs.auto }}
+      SRC_OFF: ${{ github.event_name == 'schedule' && 'openverse' || inputs.src_off }}
+      REPORT: "1"
       DRY: ${{ inputs.dry }}
       DEL: ${{ inputs.del }}
       REG: ${{ inputs.reg }}
-      MAXSEC: ${{ inputs.maxsec }}
+      MAXSEC: ${{ inputs.maxsec || '2100' }}
     steps:
-      - if: ${{ inputs.gh != '1' }}
+      - if: ${{ inputs.gh == '0' }}
         run: |
           python3 - <<'PY'
           import hashlib, json, os, urllib.request
@@ -56,7 +69,7 @@ jobs:
           rq = urllib.request.Request("https://gcw808-svg--inter-jobs-dispatch.modal.run", data=json.dumps({"wf": "people.yml", "job": json.dumps(job, ensure_ascii=False)}).encode(), headers={"x-key": key, "content-type": "application/json"})
           print("modal:", urllib.request.urlopen(rq, timeout=60).read().decode()[:200])
           PY
-      - if: ${{ inputs.gh == '1' }}
+      - if: ${{ inputs.gh != '0' }}
         uses: actions/checkout@v4
-      - if: ${{ inputs.gh == '1' }}
+      - if: ${{ inputs.gh != '0' }}
         run: pip install -q requests pillow numpy onnxruntime && python3 people.py

@@ -25,10 +25,19 @@ API = f"https://api.telegram.org/bot{BOT}/"
 UA = {"user-agent": "InterFutbolBot/1.2 (https://t.me/Inter_Futbol_TV)"}
 H = {"x-key": KEY, "user-agent": "InterFutbolPeople", "content-type": "application/json"}
 OK_LIC = re.compile(r"^(CC0|Public domain|PD|CC BY(-SA)? \d(\.\d)?)", re.I)
-PER = int(os.environ.get("PER", "2"))        # bir odamga shu ishga tushishda nechta surat
-MAXP = int(os.environ.get("MAXP", "4"))      # bazada bir odamda shuncha surat bo'lsa — o'tkazib yuboriladi
-LIMIT = int(os.environ.get("LIMIT", "40"))   # bir ishga tushishda jami nechta surat
+PER = int(os.environ.get("PER") or "2")        # bir odamga shu ishga tushishda nechta surat
+MAXP = int(os.environ.get("MAXP") or "4")      # bazada bir odamda shuncha surat bo'lsa — o'tkazib yuboriladi
+LIMIT = int(os.environ.get("LIMIT") or "40")   # bir ishga tushishda jami nechta surat
 DRY = os.environ.get("DRY") == "1"
+# AVTOMATIK REJIM (2026-11-19, Bahtiyor aka: "bazani tinimsiz, bitta manbaga tayanmasdan, bir necha manbadan yangilab tur"): people.yml har kuni jadval bilan
+# ishga tushadi; ro'yxat har kuni boshqa joydan boshlanadi (aylanma navbat), shuning uchun bir necha kunda hamma odam qayta ko'riladi va manbalarda
+# paydo bo'lgan YANGI suratlar o'zi qo'shiladi. Manbalar: 1) Wikidata P18, 2) odamning Commons turkumi, 3) Commons qidiruvi, 4) Commons "depicts" (P180),
+# 5) Vikipediyaning 7 tildagi maqolasidagi asosiy surat, 6) Openverse/Flickr (faqat CC BY / CC BY-SA / CC0 / PD; sinovda futbolchilar uchun deyarli
+# hech narsa bermadi — suratlar kichik va kam, shuning uchun people.yml'da standart holatda O'CHIQ: SRC_OFF=openverse). Agentlik va yangilik saytlari suratlari baribir OLINMAYDI.
+AUTO = os.environ.get("AUTO") == "1"
+STEP = int(os.environ.get("STEP") or "110")  # avtomatik rejimda navbat har kuni shuncha odamga suriladi
+SRC_OFF = set(x.strip() for x in (os.environ.get("SRC_OFF") or "").split(",") if x.strip())  # manbani o'chirish: depicts, openverse
+BAD_T = r"signature|autograph|logo|shirt|jersey|maillot|camiseta|trikot|trophy|statue|mural|graffiti|wax|tussaud|figure|escultura|sculpture|estatua|eterno|painting|puppet|firma| fils |golf|stamp|cropped|boots|predator|poster|banner|tifo|parade|drawing|caricature|cartoon|fan ?art|ai[- ]generated|lookalike|cosplay|toy|lego|sticker|card|wallpaper|edit"
 
 # (kanalda yoziladigan ism, Wikidata qidiruv so'zi, qo'shimcha nomlar)
 PEOPLE = [
@@ -96,11 +105,11 @@ def clean(v):
 
 
 def files(q, names=()):
-    e = get("https://www.wikidata.org/w/api.php", {"format": "json", "action": "wbgetentities", "ids": q, "props": "claims"}).get("entities", {}).get(q, {})
+    e = get("https://www.wikidata.org/w/api.php", {"format": "json", "action": "wbgetentities", "ids": q, "props": "claims|sitelinks"}).get("entities", {}).get(q, {})
     cl = e.get("claims", {})
     val = lambda p: [c["mainsnak"]["datavalue"]["value"] for c in cl.get(p, []) if c.get("mainsnak", {}).get("datavalue")]
     out = {}
-    def add(pages, main=False, need=None):
+    def add(pages, main=False, need=None, lead=False):
         for pg in pages:
             ii = (pg.get("imageinfo") or [None])[0]
             if not ii or ii.get("mime") != "image/jpeg" or min(ii.get("width", 0), ii.get("height", 0)) < 900:
@@ -116,15 +125,29 @@ def files(q, names=()):
             if not OK_LIC.search(lic):
                 continue
             t = pg["title"]
-            if re.search(r"signature|autograph|logo|shirt|jersey|maillot|camiseta|trikot|trophy|statue|mural|graffiti|wax|tussaud|figure|escultura|sculpture|estatua|eterno|painting|puppet|firma| fils |golf|stamp|cropped|boots|predator|poster|banner|tifo|parade", t, re.I):
+            if re.search(BAD_T, t, re.I):
                 continue
             ym = re.search(r"(19|20)\d\d", clean((md.get("DateTimeOriginal") or {}).get("value")) or "")
             art = re.sub(r"^(User:)", "", clean((md.get("Artist") or {}).get("value")))[:70] or "noma'lum muallif"
-            out[t] = {"t": t, "url": ii.get("thumburl") or ii["url"], "lic": lic, "art": art, "y": int(ym.group(0)) if ym else 0, "main": main,
+            out[t] = {"t": t, "url": ii.get("thumburl") or ii["url"], "lic": lic, "art": art, "y": int(ym.group(0)) if ym else 0, "main": main, "lead": lead,
                       "d": clean((md.get("DateTimeOriginal") or {}).get("value"))[:10]}
     ip = {"format": "json", "action": "query", "prop": "imageinfo", "iiprop": "url|size|mime|extmetadata", "iiurlwidth": 1920}
     for f in val("P18")[:2]:
         add(get("https://commons.wikimedia.org/w/api.php", {**ip, "titles": "File:" + f}).get("query", {}).get("pages", {}).values(), True)
+    # 5-MANBA (2026-11-19): Vikipediyaning 7 tildagi maqolasida shu odamning ASOSIY surati (turli tillar turli surat qo'yadi). Faqat Commons'da turgan
+    # (erkin litsenziyali) fayl olinadi — Vikipediyaning o'zidagi "fair use" surat Commons'da bo'lmagani uchun o'zi tushib qoladi.
+    if "wiki" not in SRC_OFF:
+        lead_f = []
+        for w in ("en", "es", "de", "it", "fr", "ru", "uz"):
+            ti = (e.get("sitelinks", {}).get(w + "wiki") or {}).get("title")
+            if not ti:
+                continue
+            for x in get(f"https://{w}.wikipedia.org/w/api.php", {"format": "json", "action": "query", "prop": "pageimages", "piprop": "name", "titles": ti}, 2).get("query", {}).get("pages", {}).values():
+                if x.get("pageimage") and x["pageimage"] not in lead_f:
+                    lead_f.append(x["pageimage"])
+            time.sleep(0.15)
+        for f in lead_f[:6]:
+            add(get("https://commons.wikimedia.org/w/api.php", {**ip, "titles": "File:" + f.replace("_", " ")}).get("query", {}).get("pages", {}).values(), False, None, True)
     for c in val("P373")[:1]:
         cm = lambda title: get("https://commons.wikimedia.org/w/api.php", {**ip, "generator": "categorymembers", "gcmtitle": title, "gcmtype": "file", "gcmlimit": 120}).get("query", {}).get("pages", {}).values()
         add(cm("Category:" + c))
@@ -146,7 +169,49 @@ def files(q, names=()):
     for nm in names[:2]:
         add(get("https://commons.wikimedia.org/w/api.php", {**ip, "prop": "imageinfo|categories", "cllimit": 500, "generator": "search", "gsrsearch": '"' + nm + '"', "gsrnamespace": 6, "gsrlimit": 40}).get("query", {}).get("pages", {}).values(), False, need)
         time.sleep(0.25)
+    # 4-MANBA (2026-11-19): Commons tuzilgan ma'lumoti — "suratda tasvirlangan" (P180) aynan shu Wikidata elementi deb belgilangan fayllar
+    # (turkumga qo'yilmagan yangi yuklamalar ham chiqadi); kimligi nomdan emas, belgidan — lekin fayl nomida ismi bo'lishi sharti baribir qoladi
+    if "depicts" not in SRC_OFF:
+        add(get("https://commons.wikimedia.org/w/api.php", {**ip, "generator": "search", "gsrsearch": "haswbstatement:P180=" + q + " filetype:bitmap", "gsrnamespace": 6, "gsrlimit": 50, "gsrsort": "create_timestamp_desc"}).get("query", {}).get("pages", {}).values())
+        time.sleep(0.25)
     return sorted(out.values(), key=lambda x: (not x["main"], -x["y"]))
+
+
+OV_LIC = {"by": "CC BY", "by-sa": "CC BY-SA", "cc0": "CC0", "pdm": "Public domain"}
+OV_SRC = {"flickr": "Flickr"}
+_ov = {"n": 0, "off": False}
+
+
+def openverse(name):
+    # 6-MANBA (2026-11-19): Openverse — ochiq litsenziyali suratlar qidiruvi (asosan Flickr). Faqat CC BY / CC BY-SA / CC0 / PD (NC va ND olinmaydi:
+    # kanal daromad qiladi va surat kartaga qirqiladi). Wikimedia natijalari tashlab ketiladi (ular yuqoridagi manbalarda bor).
+    # Kimligi: sarlavhada odamning TO'LIQ ismi (hamma so'zi) bo'lishi shart; bir so'zli ismlar (Pedri, Rodri) bu manbadan olinmaydi.
+    # Kalitsiz so'rovlar cheklangan (kuniga ~200) — bir ishga tushishda 120 tadan ko'p so'ralmaydi; 401/403/429 kelsa manba shu ishda o'chadi.
+    words = [w for w in pn(name).split() if len(w) >= 3]
+    if "openverse" in SRC_OFF or _ov["off"] or _ov["n"] >= 120 or len(words) < 2:
+        return []
+    _ov["n"] += 1
+    try:
+        r = requests.get("https://api.openverse.org/v1/images/", params={"q": '"' + name + '"', "license": "by,by-sa,cc0,pdm", "page_size": 20, "mature": "false"}, headers=UA, timeout=40)
+    except Exception:
+        return []
+    if r.status_code in (401, 403, 429):
+        _ov["off"] = True; print("openverse cheklovi:", r.status_code, "— shu ishda boshqa so'ralmaydi"); return []
+    if r.status_code != 200:
+        return []
+    out = []
+    for it in r.json().get("results", []):
+        src = it.get("source") or it.get("provider") or ""
+        t = clean(it.get("title"))
+        if src not in OV_SRC or it.get("license") not in OV_LIC or (it.get("filetype") or "jpg").lower() not in ("jpg", "jpeg"):
+            continue
+        if min(it.get("width") or 0, it.get("height") or 0) < 900 or not all(w in pn(t).split() for w in words) or re.search(BAD_T, t, re.I):
+            continue
+        lic = OV_LIC[it["license"]] + (" " + it["license_version"] if it.get("license_version") and it["license"] in ("by", "by-sa") else "")
+        ym = re.search(r"(19|20)\d\d", t)
+        out.append({"t": "ov:" + it["id"], "title": t, "url": it["url"], "lic": lic, "art": (clean(it.get("creator")) or "noma'lum muallif")[:70], "y": int(ym.group(0)) if ym else 0,
+                    "main": False, "d": "", "src": OV_SRC[src], "page": it.get("foreign_landing_url") or ""})
+    return out
 
 
 def other(title, keys):
@@ -197,7 +262,14 @@ def main():
     def flush(force=False):  # bazaga bo'lib-bo'lib yoziladi — ish vaqt chegarasida uzilsa ham kanalga tushgan suratlar bazasiz qolmaydi
         if len(items) - st["done"] >= (1 if force else 40):
             print("baza:", requests.post(W + "/ub/faceaddm", headers=H, data=json.dumps({"items": items[st["done"]:]}), timeout=60).text[:120]); st["done"] = len(items)
-    for name, term, al in extra + PEOPLE:
+    plist = extra + PEOPLE
+    if AUTO and not only:  # aylanma navbat: har kuni boshqa joydan; avval bazada surati YO'Q odamlar, keyin kam suratlilar
+        off = (int(time.time() // 86400) * STEP) % len(plist)
+        plist = plist[off:] + plist[:off]
+        cnt = lambda p: len((have.get(pn(p[0])) or {}).get("ph", []))
+        plist = [p for p in plist[:STEP * 2] if cnt(p) == 0] + [p for p in plist[:STEP * 2] if cnt(p) > 0] + plist[STEP * 2:]
+        print("avtomatik navbat:", off, "dan,", plist[0][0], "…")
+    for name, term, al in plist:
         if total >= LIMIT:
             break
         if time.time() - t0 > float(os.environ.get("MAXSEC", "2700")):
@@ -216,8 +288,8 @@ def main():
             # turkumda boshqa odam nomi bilan atalgan suratlar ham uchraydi (sinovda Pochettino turkumidan "Jenny Taft ..." chiqqan)
             keys = [w for w in pn(term or name).split() + pn(name).split() if len(w) >= 4] or pn(name).split()
             keys = keys[-1:] + keys[:1] + [pn(a) for a in al if len(pn(a)) >= 4]
-            raw = [c for c in files(q, [x for x in dict.fromkeys([name, term or name])]) if c["t"] not in seen]
-            cand = [c for c in raw if c["main"] or any(k in pn(c["t"]) for k in keys)]
+            raw = [c for c in files(q, [x for x in dict.fromkeys([name, term or name])]) + openverse(term or name) if c["t"] not in seen]
+            cand = [c for c in raw if c["main"] or c.get("lead") or c.get("src") or any(k in pn(c["t"]) for k in keys)]
             print(" ", name, q, "nomzodlar:", len(raw), "→ ismi bor:", len(cand))
             got, days = 0, set()
             for c in cand[:18]:
@@ -227,10 +299,12 @@ def main():
                     continue
                 if not c["main"] and 0 < c["y"] < 2016 and name not in LEGENDS:
                     continue  # eskirgan surat (hozirgi murabbiy futbolchilik davrida va h.k.) — yangilikka mos emas
-                if not c["main"] and other(c["t"], keys):
+                if not c["main"] and other(c.get("title") or c["t"], keys):
                     continue  # fayl nomida boshqa odam ham bor (ikki futbolchi kurashi) — kim asosiy ekanini aniqlab bo'lmaydi
                 try:
                     im = Image.open(io.BytesIO(requests.get(c["url"], headers=UA, timeout=90).content)).convert("RGB")
+                    if max(im.size) > 2560:  # tashqi manbadagi asl surat juda katta bo'lishi mumkin
+                        im.thumbnail((2560, 2560), Image.LANCZOS)
                 except Exception:
                     continue
                 if min(im.size) < 900 or gray(im):
@@ -238,13 +312,14 @@ def main():
                 box, n, ex = persons.analyse(im)
                 if not box or n != 1 or (box[3] - box[1]) < 0.5 or (box[2] - box[0]) < 0.16 or (box[2] - box[0]) * (box[3] - box[1]) < 0.12:
                     continue
-                credit = f"Foto: {c['art']}, {c['lic']}"
-                print("+", name, "|", c["t"], c["y"], f"{im.width}x{im.height}", "|", credit)
+                src = c.get("src") or ""  # bo'sh — Wikimedia Commons (bot post matniga manba nomini o'zi qo'shadi); boshqa manba nomi muallif yozuvining ichida
+                credit = f"Foto: {c['art']}, {c['lic']}" + (", " + src if src else "")
+                print("+", name, "|", c.get("title") or c["t"], c["y"], f"{im.width}x{im.height}", "|", credit, "|", src or "Commons")
                 got += 1; total += 1; days.add(c["d"]); picked.append(c["t"])
                 if DRY:
                     continue
                 buf = io.BytesIO(); im.save(buf, "JPEG", quality=93, subsampling=0)
-                r = requests.post(API + "sendDocument", data={"chat_id": LIB, "caption": f"{name}\n{credit} (Wikimedia Commons)"[:1000], "disable_notification": True, "disable_content_type_detection": True},
+                r = requests.post(API + "sendDocument", data={"chat_id": LIB, "caption": (f"{name}\n{credit}\n{c.get('page', '')}" if src else f"{name}\n{credit} (Wikimedia Commons)")[:1000], "disable_notification": True, "disable_content_type_detection": True},
                                   files={"document": ("".join(ch if ch.isalnum() else "_" for ch in name)[:40] + ".jpg", buf.getvalue(), "image/jpeg")}, timeout=180).json()
                 if not r.get("ok"):
                     print("  yuborilmadi", r.get("description")); got -= 1; total -= 1; time.sleep(5); continue
@@ -258,7 +333,7 @@ def main():
         time.sleep(0.4)
     flush(True)
     print("ITEMS", json.dumps([{k: it[k] for k in ("name", "f", "uid", "m", "wt")} for it in items]))
-    print("qo'shildi:", len(items))
+    print("qo'shildi:", len(items), "| manbalar:", json.dumps({k: sum(1 for it in items if (it["c"].rsplit(", ", 1)[-1] if it["c"].endswith("Flickr") else "Commons") == k) for k in ("Commons", "Flickr")}), "| openverse so'rovlari:", _ov["n"])
     if not DRY:
         try:  # ko'rilgan fayllar KV'da (olib tashlanganlari qayta kelmasin)
             print("pseen:", requests.post(W + "/ub/pseen", headers=H, data=json.dumps({"add": sorted(seen | set(picked))}), timeout=60).text[:60])
