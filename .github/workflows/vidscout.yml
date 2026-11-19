@@ -1,0 +1,37 @@
+name: vidscout
+# Video roboti: erkin litsenziyali futbol videolarini (Wikimedia Commons) "Inter Futbol — Video Arxiv" kanaliga va bot bazasiga (D1) qo'shadi — har kuni.
+# Mualliflik huquqi ostidagi videolar yig'ilmaydi. Qo'lda: limit (nechta video), q (bitta qidiruv so'zi), dry=1 (faqat ro'yxat, yuklamaydi).
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        default: "6"
+      q:
+        default: ""
+      dry:
+        default: ""
+  schedule:
+    - cron: "23 1 * * *"
+  push:
+    branches: [main]
+    paths: ["vidscout.py", ".github/workflows/vidscout.yml"]
+concurrency:
+  group: vidscout
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          pip install -q requests
+          which ffmpeg >/dev/null 2>&1 || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg)
+      - env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          LIMIT: ${{ inputs.limit || (github.event_name == 'push' && '2') || '6' }}
+          Q: ${{ inputs.q }}
+          DRY: ${{ inputs.dry }}
+        run: python3 vidscout.py
