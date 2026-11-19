@@ -85,7 +85,7 @@ def main():
     with open("ds/metadata.csv", "w", encoding="utf-8") as f:
         f.write("audio_file|text\n")
         for p, t, d in rows:
-            f.write(f"wavs/{os.path.basename(p)}|{t}\n")
+            f.write(f"{os.path.abspath(p)}|{t}\n")
     # ---- F5-TTS uchun tayyorlash va o'qitish
     import f5_tts
     pkg = os.path.dirname(f5_tts.__file__) if getattr(f5_tts, "__file__", None) else list(f5_tts.__path__)[0]  # paket __init__siz bo'lishi mumkin
@@ -95,7 +95,7 @@ def main():
     pv = os.path.join(os.path.dirname(data_dir), "Emilia_ZH_EN_pinyin")  # tayyorlovchi "asl lug'at"ni shu yerdan qidiradi — o'zbekcha lug'atni qo'yamiz
     os.makedirs(pv, exist_ok=True)
     shutil.copy(vocab, os.path.join(pv, "vocab.txt"))
-    sh(f"python {pkg}/train/datasets/prepare_csv_wavs.py /kaggle/working/ds {data_dir}", True, 2500)
+    sh(f"python {pkg}/train/datasets/prepare_csv_wavs.py /kaggle/working/ds/metadata.csv {data_dir}", True, 2500)
     shutil.copy(vocab, os.path.join(data_dir, "vocab.txt"))  # o'zbekcha model lug'ati (asl inglizcha-xitoycha emas)
     print("tayyor baza:", os.listdir(data_dir), flush=True)
     ck_dir = os.path.abspath(os.path.join(pkg, "..", "..", "ckpts", "inter"))
