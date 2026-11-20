@@ -208,10 +208,13 @@ function addFlags(p) {
     for (const [cc, names] of COUNTRY_FLAGS) {
       const fl = cc.length === 2 ? FLAG(cc) : cc;
       const alts = [...new Set(names.split("|").flatMap((n) => [n, newAlpha(n)]))].sort((a, b) => b.length - a.length).map(rq).join("|");
-      FLAG_RE.push([new RegExp("(^|[^\\p{L}\\p{N}])(⟦?)(?<![\\u{1F1E6}-\\u{1F1FF}\\u{E007F}\\u0003]\\s?⟦?)(" + alts + ")(?=(?:lik|liklar|likni|ning|ni|ga|da|dan|dagi|day)?(?![\\p{L}\\p{N}]))", "iu"), fl]);
+      // 2026-11-20 (CPU limiti): regex faqat kerak bo'lganda yig'iladi — matnda nomning boshi bo'lmasa umuman tekshirilmaydi
+      const keys = [...new Set(names.split("|").flatMap((n) => [n, newAlpha(n)]))].map((n) => n.split("'")[0].toLowerCase());
+      FLAG_RE.push({ src: "(^|[^\\p{L}\\p{N}])(⟦?)(?<![\\u{1F1E6}-\\u{1F1FF}\\u{E007F}\\u0003]\\s?⟦?)(" + alts + ")(?=(?:lik|liklar|likni|ning|ni|ga|da|dan|dagi|day)?(?![\\p{L}\\p{N}]))", re: null, fl, keys: keys.some((k) => k.length < 2) ? null : keys });
     }
   }
-  for (const [re, fl] of FLAG_RE) p = p.replace(re, (m, a, b, c) => a + fl + " " + b + c);
+  const lc = p.toLowerCase();
+  for (const F of FLAG_RE) { if (F.keys && !F.keys.some((k) => lc.includes(k))) continue; if (!F.re) F.re = new RegExp(F.src, "iu"); p = p.replace(F.re, (m, a, b, c) => a + F.fl + " " + b + c); }
   return p;
 }
 function addLogosPart(t) {
@@ -219,15 +222,18 @@ function addLogosPart(t) {
     CLUB_RE = [];
     const ALLN = CLUB_EMOJI.flatMap(([i2, e2, ns]) => ns.map((x) => [i2, x]));
     const rq = (x) => x.replace(/[.*+?^${}()|[\]\\\/]/g, "\\$&");
-    for (const [id, em, names] of CLUB_EMOJI) for (const n of [...new Set([...names, ...names.map((x) => newAlpha(x))])]) { const pre = ALLN.filter(([i2, x]) => i2 !== id && x.length > n.length && x.endsWith(" " + n)).map(([, x]) => rq(x.slice(0, x.length - n.length))); CLUB_RE.push([new RegExp("(^|[^\\p{L}\\p{N}])(⟦?)" + (pre.length ? "(?<!(?:" + pre.join("|") + "))" : "") + "(" + rq(n).replace(/ /g, "⟧? ") + ")" + CLUB_SUF + "(?!\\s+(?:Futbol|Miami))", "u"), id, em, n.length]); }
+    // 2026-11-20 (CPU limiti — "sovuq" ishga tushishda 700+ regex yig'ilib, bot Cloudflare tomonidan to'xtatilar va post yo'qolar edi):
+    // regex faqat matnda shu nomning hamma so'zlari bor bo'lsa yig'iladi (bir marta) va keyin qayta ishlatiladi
+    for (const [id, em, names] of CLUB_EMOJI) for (const n of [...new Set([...names, ...names.map((x) => newAlpha(x))])]) { const mk = () => { const pre = ALLN.filter(([i2, x]) => i2 !== id && x.length > n.length && x.endsWith(" " + n)).map(([, x]) => rq(x.slice(0, x.length - n.length))); return new RegExp("(^|[^\\p{L}\\p{N}])(⟦?)" + (pre.length ? "(?<!(?:" + pre.join("|") + "))" : "") + "(" + rq(n).replace(/ /g, "⟧? ") + ")" + CLUB_SUF + "(?!\\s+(?:Futbol|Miami))", "gu"); }; CLUB_RE.push([{ mk, re: null, tok: n.split(" ") }, id, em, n.length]); }
     CLUB_RE.sort((a, b) => b[3] - a[3]);
   }
   const used = new Set(), keep = [];
   const out = t.split(/(<[^>]*>|https?:\/\/[^\s<]+|@\w+|#[\p{L}\p{N}_]+)/u).map((p, i) => {
     if (i % 2) return p;
     // har bir eslatishda logotip (Bahtiyor aka qoidasi); nom bir marta almashtirilgach qayta tekshirilmaydi — ikkitalik logotip bo'lmaydi
-    for (const [re0, id, em] of CLUB_RE) {
-      const re = new RegExp(re0.source, "gu");
+    for (const [R, id, em] of CLUB_RE) {
+      if (!R.tok.every((w) => p.includes(w))) continue;
+      const re = R.re || (R.re = R.mk()); re.lastIndex = 0;
       p = p.replace(re, (m, a, b, c) => { used.add(id); keep.push(`<tg-emoji emoji-id="${id}">${em}</tg-emoji> ${b}${c}`); return a + "\u0002" + (keep.length - 1) + "\u0003"; });
     }
     return addFlags(p);
@@ -951,6 +957,9 @@ if (item.video && (item.source !== "InterFutbol TV" || !(await fetch("https://ww
     }
 
     // ---------------- AVTOMATIK REJIM: yangiliklar va o'yin natijalari kanalga o'zi chiqadi ----------------
+// 2026-11-20: tejash rejimi faqat o'zi yoqilgan UTC kuni davomida amal qiladi — Cloudflare limiti har kuni UTC 00:00 da (Toshkent 05:00) yangilanadi.
+// (19-noyabr kechqurun limit oshgani uchun yoqilgan rejim 20-noyabr kuni bo'yi kanalni 8 ta yangilik bilan cheklab qo'ygan edi.)
+const ecoOn = async (env) => { if (!+(await kvGet(env, "ecoMode", 0))) return false; const l = await kvGet(env, "limLast", null); return !l || !l.t || new Date(l.t).toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10); };
 const AUTO_DAY_LIMIT = 15, AUTO_GAP_MIN = 60, ECO_DAY_LIMIT = 8; // ECO — tejash rejimida (bepul limit 85% dan oshganda) kunlik yangiliklar soni; // 2026-11-08 Bahtiyor aka qarori: kuniga 10 dan 15 taga, orasi 90 dan 60 daqiqaga
 const tashHour = () => (new Date().getUTCHours() + 5) % 24;
 // ---------------- SANA NAZORATI (2026-11-08) ----------------
@@ -1147,7 +1156,7 @@ async function resultDup(env, post) { const first = head1(post); if (!RES_RE.tes
   const h = tashHour(); if (!force && h >= 1 && h < 8) return "night";
   const day = tashDate(Date.now());
   const a = (await kvGet(env, "autoN", null)) || {}; if (a.d !== day) { a.d = day; a.n = 0; }
-  if (!force && a.n >= ((await kvGet(env, "ecoMode", 0)) ? ECO_DAY_LIMIT : AUTO_DAY_LIMIT)) return "limit";
+  if (!force && a.n >= ((await ecoOn(env)) ? ECO_DAY_LIMIT : AUTO_DAY_LIMIT)) return "limit";
   if (!force && Date.now() - (a.last || 0) < AUTO_GAP_MIN * 60e3) return "wait";
   const st = await kvGet(env, "st", null); if (!st || !st.queue?.length) return "empty";
   const admin = (await getAdmins(env))[0];
@@ -1702,7 +1711,7 @@ async function rasmRedo(env, chat, mid, quiet, ov) {
 // Telegram tahrir cheklovi uchun; tejash rejimida va oldingi almashtirish tugamaguncha kutadi. Yuklash: /ub/redoq (redoq.yml). Tugagach adminga hisobot.
 async function redoTick(env) {
   const Q = await kvGet(env, "redoQ", null); if (!Q || !Q.q || !Q.q.length) return;
-  if (+(await kvGet(env, "ecoMode", 0))) return;
+  if (await ecoOn(env)) return;
   // kunlik hisob KV limiti kuni bilan (UTC, Toshkentda 05:00) — Toshkent yarim tunida yangilansa 00:00–05:00 da limit oshib ketadi
   const day = new Date().toISOString().slice(0, 10);
   if (Q.day !== day) { if (!(Q.day > day)) Q.n = 0; Q.day = day; }
