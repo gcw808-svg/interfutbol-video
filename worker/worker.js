@@ -473,8 +473,9 @@ ${item.video ? `- Bu VIDEO (rasmiy YouTube kanalidan). Birinchi qatorni qalin sa
     .split(",").map((m) => m.trim()).filter(Boolean);
     for (const m of ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]) if (!models.includes(m)) models.push(m);
   if (lite) models.sort((a, b) => (/-lite$/.test(a) ? 0 : 1) - (/-lite$/.test(b) ? 0 : 1));
-    let lastErr = "";
+    let lastErr = "", touts = 0, giveUp = false;
     for (const model of models) {
+    if (giveUp) break;
     let useSearch = search && (env.GEMINI_SEARCH === "1" || !/^gemini-3/.test(model));
     for (let attempt = 0; attempt < 3; attempt++) {
     const body = {
@@ -491,7 +492,11 @@ ${item.video ? `- Bu VIDEO (rasmiy YouTube kanalidan). Birinchi qatorni qalin sa
     { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(Math.min(left - 1000, /-lite$/.test(model) ? (maxTokens > 2048 ? 20000 : 9000) : 30000)) }
     );
     j = await r.json().catch(() => ({}));
-    } catch (err) { lastErr = (lastErr + " || " + model + " timeout").slice(-900); if (deadline - Date.now() > 8000) break; try { await env.STATE.put("gerr", new Date().toISOString() + " " + lastErr); } catch (x) {} const e = new Error("vaqt tugadi"); e.busy = true; throw e; }
+    } catch (err) { lastErr = (lastErr + " || " + model + " timeout").slice(-900); touts++;
+      // 2026-11-20: Gemini osilib qolganda butun vaqt shu yerda tugab, zaxira modelga (DeepSeek) navbat yetmas edi — endi ikkinchi kutishdan keyin
+      // yoki vaqt 20 soniyadan kam qolsa, zaxiraga o'tiladi (zaxira o'chiq bo'lsa — avvalgidek "band")
+      if (touts < 2 && deadline - Date.now() > 20000) break;
+      giveUp = true; break; }
     const text = j?.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("").trim();
     if (text) return text.replace(/\[\d+(,\s*\d+)*\]/g, "");
     const code = j?.error?.code || r.status;
@@ -1154,7 +1159,8 @@ const cnUz = (n) => { const s = String(n || ""); return COUNTRY.reduce((x, [re, 
 async function resultDup(env, post) { const first = head1(post); if (!RES_RE.test(first.replace(/<[^>]+>/g, ""))) return false; { const nt = natTeams(first); if (nt.length >= 2 && !QUOTE_RE.test(natNorm(first))) { const rc = (await kvGet(env, "recentNews", [])).filter((x) => Date.now() - x.t < 48 * 3600e3); if (rc.some((x) => RES_RE.test(natNorm(x.h)) && !QUOTE_RE.test(natNorm(x.h)) && nt.filter((c) => natTeams(x.h).includes(c)).length >= 2)) return true; } } const names = newsNames(first); const recent = (await kvGet(env, "recentNews", [])).filter((x) => Date.now() - x.t < 48 * 3600e3); if (names.length >= 2 && recent.some((x) => names.filter((n) => x.n.includes(n)).length >= 2 && RES_RE.test(x.h))) return true; const hn = " " + norm(first.replace(/<[^>]+>/g, "").replace(/[⟦⟧]/g, "")) + " "; const GEN = new Set(["real", "city", "united", "inter", "sporting", "athletic", "manchester", "borussia", "olympique", "royal", "istanbul", "hotspur", "saint", "germain", "paris"]); const hitN = (n) => { const a = norm(cnUz(n)); if (a.length < 3) return false; if (hn.includes(" " + a + " ") || hn.includes(" " + a)) return true; const t = a.split(" ").filter((w) => w.length >= 4 && !GEN.has(w)); const k = t[0] || ""; return k.length >= 4 && hn.includes(" " + k); }; if (recent.some((x) => RES_RE.test(x.h) && (x.n || []).length >= 2 && (x.n || []).filter(hitN).length >= 2)) return true; /* 14-noyabr: "Uruguvga" imlo xatosi sarlavha tekshiruvini aldab, Argentina–Urugvay natijasi 2-marta chiqdi — endi post matnidagi ⟦nomlar⟧ ham eski natija sarlavhasidagi ikki jamoa bilan solishtiriladi */ const allN = newsNames(post); return recent.some((x) => { if (!RES_RE.test(x.h)) return false; const hh = " " + norm(x.h) + " "; const tm = (x.n || []).filter((n) => { const w = norm(cnUz(n)).split(" ").filter((v) => v.length >= 4 && !GEN.has(v))[0] || ""; return w.length >= 4 && hh.includes(" " + w); }); return tm.length >= 2 && tm.filter((n) => allN.includes(n)).length >= 2; }); } async function autoNews(env, force = false) {
   // ADMIN YUBORGAN HAVOLA (2026-11-20, Bahtiyor aka: "muharrirga tashladim, nega tahlil qilib avtomatik chop etmayapti"): navbat boshidagi
   // "manual" yangilik kunlik limit, oraliq, tun va mavzu filtrlarisiz ishlanadi; tekshiruvlar (fakt, takror, hisob) qoladi, chiqmasa sababi adminga yoziladi
-  { const st0 = await kvGet(env, "st", null); if (st0?.queue?.[0]?.manual) force = true; }
+  // yangiliklar yig'uvchisi navbatni mavzu og'irligi bo'yicha qayta tartiblaydi — shuning uchun "manual" yangilik navbatning istalgan joyidan topilib, boshiga qaytariladi
+  { const st0 = await kvGet(env, "st", null); const mi = (st0?.queue || []).findIndex((x) => x && x.manual); if (mi >= 0) { force = true; if (mi > 0) { const [it] = st0.queue.splice(mi, 1); st0.queue.unshift(it); await kvPut(env, "st", st0); } } }
   if (!force && !(await autoOn(env))) return "off";
   const h = tashHour(); if (!force && h >= 1 && h < 8) return "night";
   const day = tashDate(Date.now());
