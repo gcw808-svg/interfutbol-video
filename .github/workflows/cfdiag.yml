@@ -1,0 +1,42 @@
+name: cfdiag
+# Diagnostika (2026-11-20): bot ishga tushishlari qanday yakunlangani — soatlar bo'yicha holat (ok / exceededCpu / scriptThrewException ...) va CPU vaqti.
+on:
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "sana (YYYY-MM-DD, bo'sh — bugun UTC)"
+        default: ""
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    steps:
+      - name: holatlar
+        env:
+          CF: ${{ secrets.CF_API_TOKEN }}
+          ACC: 02978f487b30cf4acdedbfa8d728325f
+          DT: ${{ inputs.date }}
+        run: |
+          python3 - <<'PY'
+          import datetime as D, json, os, urllib.request
+          d = os.environ.get("DT") or D.datetime.now(D.timezone.utc).strftime("%Y-%m-%d")
+          q = """query($a:String!,$d:Date!){viewer{accounts(filter:{accountTag:$a}){
+            w:workersInvocationsAdaptive(limit:1000,filter:{date_geq:$d,date_leq:$d},orderBy:[datetimeHour_ASC]){sum{requests errors subrequests} quantiles{cpuTimeP50 cpuTimeP99} dimensions{scriptName status datetimeHour}}}}}"""
+          req = urllib.request.Request("https://api.cloudflare.com/client/v4/graphql", data=json.dumps({"query": q, "variables": {"a": os.environ["ACC"], "d": d}}).encode(), headers={"Authorization": "Bearer " + os.environ["CF"], "content-type": "application/json"})
+          j = json.loads(urllib.request.urlopen(req, timeout=60).read())
+          if j.get("errors"): print("ERR", json.dumps(j["errors"])[:600])
+          rows = (((j.get("data") or {}).get("viewer") or {}).get("accounts") or [{}])[0].get("w") or []
+          tot = {}
+          for x in rows:
+              dm = x["dimensions"]; k = (dm["scriptName"], dm["status"]); tot[k] = tot.get(k, 0) + x["sum"]["requests"]
+              if dm["status"] != "success":
+                  print(dm["datetimeHour"][11:16], dm["scriptName"], dm["status"], "n=", x["sum"]["requests"], "cpu50=", round(x["quantiles"]["cpuTimeP50"] / 1000), "ms cpu99=", round(x["quantiles"]["cpuTimeP99"] / 1000), "ms")
+          print("JAMI", d)
+          for k, v in sorted(tot.items()): print("  ", k, v)
+          cp = {}
+          for x in rows:
+              s = x["dimensions"]["scriptName"]; cp[s] = max(cp.get(s, 0), x["quantiles"]["cpuTimeP99"])
+          print("CPU p99 max (ms):", {k: round(v / 1000) for k, v in cp.items()})
+          PY
