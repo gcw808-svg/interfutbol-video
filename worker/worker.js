@@ -168,7 +168,8 @@ const FEEDS = [
     // yangi o'zbek lotin alifbosi (2026): O' → Ö, G' → Ğ, Sh → Ş, Ch → Ç. HTML teglar, havolalar, @nomlar, heshteglar,
 // ⟦…⟧ ichidagi original nomlar (klub, futbolchi, murabbiy) va chet tilidagi so'zlar o'zgarmaydi
 const NA_KEEP = /^(Christian|Christopher|Chris|Christensen|Achraf|Sanchez|Schmeichel|Pochettino|Chivu|Marchisio|Echeverri|Ochoa|Shaqiri|Fischer|Bochum|Mönchengladbach|Gladbach|Manchester|Michael|Mitchell|Richarlison|Sancho|Chiesa|Shaw|Ashley|Charlton|Chalobah|Chilwell|Kimmich|Fletcher|Richards|Rashford|Champions|Chiellini|Sheffield|Shakhtar|Chicharito|Shearer|Schick|Sesko|Eintracht|Gregoritsch)$/;
-const NA_FOREIGN = /^sch|c(?!h)|w|ea|ou|th|ph|ck|ee|oo|ae|[àáâãäåæèéêëìíîïñòóôõøùúûüýÿœß]/i;
+// 2026-11-21 (378-post sarlavhasi "Samuel Etöo"): "o'" dan keyin yana "o" kelsa — o'zbekcha emas, xorijiy ism (Eto'o)
+const NA_FOREIGN = /^sch|c(?!h)|w|ea|ou|th|ph|ck|ee|oo|ae|o['‘’ʻʼ`]o|[àáâãäåæèéêëìíîïñòóôõøùúûüýÿœß]/i;
 const naWord = (w) => (NA_FOREIGN.test(w) || NA_KEEP.test(w) ? w : w
   .replace(/O['‘’ʻʼ`]/g, "Ö").replace(/o['‘’ʻʼ`]/g, "ö")
   .replace(/G['‘’ʻʼ`]/g, "Ğ").replace(/g['‘’ʻʼ`]/g, "ğ")
@@ -187,6 +188,7 @@ const CLUB_EMOJI = [["5229225598886391482","🇪🇺",["UEFA Champions League","
 // klub logotiplari ("Football clubs" maxsus emoji to'plami). Telegram ularni kanalda bot nomidan ko'rsatmaydi,
 // shuning uchun faqat shaxsiy chatdagi qoralamalarga qo'yiladi
 let CLUB_RE = null;
+// 2026-11-21 (377-post: "Andrey ⚽ Santos"): logo roboti qo'shgan bir so'zli klub nomi (Santos kabi) ism-familiya ichida (oldida bosh harfli so'z) logotip olmaydi
 const CLUB_SUF = "(?=(?:['‘’ʻʼ`-]?(?:ning|ni|ga|ka|qa|dagi|dan|da|tan|ta|dek|day|lik|chilar|chi|lar|siz|mi|ham))?(?![\\p{L}\\p{N}]))";
 function addLogos(t) {
   if (typeof t !== "string" || !t) return t;
@@ -224,7 +226,7 @@ function addLogosPart(t) {
     const rq = (x) => x.replace(/[.*+?^${}()|[\]\\\/]/g, "\\$&");
     // 2026-11-20 (CPU limiti — "sovuq" ishga tushishda 700+ regex yig'ilib, bot Cloudflare tomonidan to'xtatilar va post yo'qolar edi):
     // regex faqat matnda shu nomning hamma so'zlari bor bo'lsa yig'iladi (bir marta) va keyin qayta ishlatiladi
-    for (const [id, em, names] of CLUB_EMOJI) for (const n of [...new Set([...names, ...names.map((x) => newAlpha(x))])]) { const mk = () => { const pre = ALLN.filter(([i2, x]) => i2 !== id && x.length > n.length && x.endsWith(" " + n)).map(([, x]) => rq(x.slice(0, x.length - n.length))); return new RegExp("(^|[^\\p{L}\\p{N}])(⟦?)" + (pre.length ? "(?<!(?:" + pre.join("|") + "))" : "") + "(" + rq(n).replace(/ /g, "⟧? ") + ")" + CLUB_SUF + "(?!\\s+(?:Futbol|Miami))", "gu"); }; CLUB_RE.push([{ mk, re: null, tok: n.split(" ") }, id, em, n.length]); }
+    for (const [id, em, names] of CLUB_EMOJI) for (const n of [...new Set([...names, ...names.map((x) => newAlpha(x))])]) { const mk = () => { const pre = ALLN.filter(([i2, x]) => i2 !== id && x.length > n.length && x.endsWith(" " + n)).map(([, x]) => rq(x.slice(0, x.length - n.length))); return new RegExp("(^|[^\\p{L}\\p{N}])(⟦?)" + (em === "⚽" && !n.includes(" ") ? "(?<!\\p{Lu}\\p{Ll}+ )" : "") + (pre.length ? "(?<!(?:" + pre.join("|") + "))" : "") + "(" + rq(n).replace(/ /g, "⟧? ") + ")" + CLUB_SUF + "(?!\\s+(?:Futbol|Miami))", "gu"); }; CLUB_RE.push([{ mk, re: null, tok: n.split(" ") }, id, em, n.length]); }
     CLUB_RE.sort((a, b) => b[3] - a[3]);
   }
   const used = new Set(), keep = [];
@@ -1147,9 +1149,9 @@ async function dupNews(env, post) {
     const shared = (x.n || []).filter((n) => names.includes(n) || names.some((m) => m.length >= 5 && n.length >= 5 && (m.includes(n) || n.includes(m))) || (norm(n).length >= 4 && lead.includes(" " + norm(n))));
     if (!(shared.length >= 2 || (shared.length >= 1 && Math.min(names.length, x.n.length) <= 2))) continue;
     try {
-      const a = await callGemini(env, "Quyidagi ikki futbol yangiligi AYNAN BITTA voqea yoki xabar haqidami (bir xil fakt, faqat boshqacha yozilgan)? Bir futbolchining bir klubga o'tishi haqidagi transfer mish-mishi (klub qiziqmoqda, futbolchi o'tishga tayyor, muzokara boshlandi) yangi aniq fakt (rasmiy kelishuv, summa, imzo) bo'lmasa — HA, bu bitta xabar. Bir klub yoki futbolchi haqidagi ikki xil voqea bo'lsa — YO'Q. Faqat HA yoki YO'Q deb javob ber.\n1) " + x.h + "\n2) " + head + "\n" + String(post).replace(/<[^>]+>/g, "").slice(0, 600), 0, Date.now() + 15000, 20, false, true);
+      const a = await callGemini(env, "Quyidagi ikki futbol yangiligi AYNAN BITTA voqea yoki xabar haqidami (bir xil fakt, faqat boshqacha yozilgan)? Bir futbolchining bir klubga o'tishi haqidagi transfer mish-mishi (klub qiziqmoqda, futbolchi o'tishga tayyor, muzokara boshlandi) yangi aniq fakt (rasmiy kelishuv, summa, imzo) bo'lmasa — HA, bu bitta xabar. Bir odamning bitta intervyusi yoki chiqishidagi gaplari (masalan bosh direktorning transferlar haqidagi fikri, tanqidga javobi) boshqacha sarlavha bilan berilsa ham — HA, bu bitta xabar (2026-11-21: Omar Berrada, 374 va 377-postlar). Bir klub yoki futbolchi haqidagi ikki xil voqea bo'lsa — YO'Q. Faqat HA yoki YO'Q deb javob ber.\n1) " + x.h + "\n2) " + head + "\n" + String(post).replace(/<[^>]+>/g, "").slice(0, 600), 0, Date.now() + 15000, 20, false, true);
       if (/^\s*HA\b/i.test(a)) return true;
-    } catch (e) { if (shared.length >= 3) return true; }
+    } catch (e) { if (shared.length >= 3 || (shared.length >= 2 && Date.now() - x.t < 12 * 3600e3 && norm(String(x.h || "")).split(" ")[0] === norm(String(head || "").replace(/[⟦⟧]/g, "")).split(" ")[0])) return true; }
   }
   return false;
 }
