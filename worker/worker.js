@@ -219,6 +219,8 @@ function addFlags(p) {
   for (const F of FLAG_RE) { if (F.keys && !F.keys.some((k) => lc.includes(k))) continue; if (!F.re) F.re = new RegExp(F.src, "iu"); p = p.replace(F.re, (m, a, b, c) => a + F.fl + " " + b + c); }
   return p;
 }
+// 2026-11-21 (387-post: "Osiyo [UEFA logo] Çempionlar ligasi Elitasi"): Osiyo/Afrika/CONCACAF Chempionlar ligasi oldiga UEFA logotipi qo'yilmaydi
+const NON_UEFA = "(?<!(?:Osiyo|AFC|CAF|Afrika|CONCACAF|KONKAKAF|OFC|Okeaniya|Arab)\\s⟦?)";
 function addLogosPart(t) {
   if (!CLUB_RE) {
     CLUB_RE = [];
@@ -226,7 +228,7 @@ function addLogosPart(t) {
     const rq = (x) => x.replace(/[.*+?^${}()|[\]\\\/]/g, "\\$&");
     // 2026-11-20 (CPU limiti — "sovuq" ishga tushishda 700+ regex yig'ilib, bot Cloudflare tomonidan to'xtatilar va post yo'qolar edi):
     // regex faqat matnda shu nomning hamma so'zlari bor bo'lsa yig'iladi (bir marta) va keyin qayta ishlatiladi
-    for (const [id, em, names] of CLUB_EMOJI) for (const n of [...new Set([...names, ...names.map((x) => newAlpha(x))])]) { const mk = () => { const pre = ALLN.filter(([i2, x]) => i2 !== id && x.length > n.length && x.endsWith(" " + n)).map(([, x]) => rq(x.slice(0, x.length - n.length))); return new RegExp("(^|[^\\p{L}\\p{N}])(⟦?)" + (em === "⚽" && !n.includes(" ") ? "(?<!\\p{Lu}\\p{Ll}+ )" : "") + (pre.length ? "(?<!(?:" + pre.join("|") + "))" : "") + "(" + rq(n).replace(/ /g, "⟧? ") + ")" + CLUB_SUF + "(?!\\s+(?:Futbol|Miami))", "gu"); }; CLUB_RE.push([{ mk, re: null, tok: n.split(" ") }, id, em, n.length]); }
+    for (const [id, em, names] of CLUB_EMOJI) for (const n of [...new Set([...names, ...names.map((x) => newAlpha(x))])]) { const mk = () => { const pre = ALLN.filter(([i2, x]) => i2 !== id && x.length > n.length && x.endsWith(" " + n)).map(([, x]) => rq(x.slice(0, x.length - n.length))); return new RegExp("(^|[^\\p{L}\\p{N}])(⟦?)" + (em === "⚽" && !n.includes(" ") ? "(?<!\\p{Lu}\\p{Ll}+ )" : "") + (pre.length ? "(?<!(?:" + pre.join("|") + "))" : "") + (/ampions League|empionlar ligasi/.test(n) && !/^(UEFA|AFC)/.test(n) ? NON_UEFA : "") + "(" + rq(n).replace(/ /g, "⟧? ") + ")" + CLUB_SUF + "(?!\\s+(?:Futbol|Miami))", "gu"); }; CLUB_RE.push([{ mk, re: null, tok: n.split(" ") }, id, em, n.length]); }
     CLUB_RE.sort((a, b) => b[3] - a[3]);
   }
   const used = new Set(), keep = [];
