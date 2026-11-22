@@ -2522,7 +2522,9 @@ async function emojiNeed(env, name, logo) {
     q.push({ n: name, u: logo, t: Date.now() }); await kvPut(env, "emojiNeed", q.slice(-60));
   } catch (e) {}
 }
-const EN_COUNTRY = (cc) => { try { return new Intl.DisplayNames(["en"], { type: "region" }).of(cc); } catch (e) { return ""; } };
+// 2026-11-22 (388, 256-postlar): Cloudflare muhitida Intl.DisplayNames ishonchsiz (bo'sh yoki kodning o'zini qaytaradi) — terma jamoa gerbi topilmay, umumiy iF kartasi chiqqan; endi inglizcha nomlar ro'yxati
+const EN_NAMES = { UZ: "Uzbekistan", RU: "Russia", TR: "Turkey", ES: "Spain", IT: "Italy", DE: "Germany", FR: "France", PT: "Portugal", NL: "Netherlands", BE: "Belgium", BR: "Brazil", AR: "Argentina", UY: "Uruguay", CO: "Colombia", MX: "Mexico", US: "United States men's", CA: "Canada men's", JP: "Japan", KR: "South Korea", KP: "North Korea", CN: "China", IR: "Iran", IQ: "Iraq", SA: "Saudi Arabia", AE: "United Arab Emirates", QA: "Qatar", KZ: "Kazakhstan", KG: "Kyrgyzstan", TJ: "Tajikistan", TM: "Turkmenistan", AF: "Afghanistan", AU: "Australia men's", EG: "Egypt", MA: "Morocco", DZ: "Algeria", TN: "Tunisia", SN: "Senegal", NG: "Nigeria", CM: "Cameroon", GH: "Ghana", CI: "Ivory Coast", HR: "Croatia", RS: "Serbia", PL: "Poland", CZ: "Czech Republic", CH: "Switzerland", AT: "Austria", DK: "Denmark", SE: "Sweden", NO: "Norway", FI: "Finland", GR: "Greece", UA: "Ukraine", VE: "Venezuela", CL: "Chile", PE: "Peru", EC: "Ecuador", PY: "Paraguay", BO: "Bolivia", IN: "India", ID: "Indonesia", TH: "Thailand", VN: "Vietnam", JO: "Jordan", SY: "Syria", AZ: "Azerbaijan", GE: "Georgia", AM: "Armenia", HU: "Hungary", RO: "Romania", BG: "Bulgaria", SI: "Slovenia", SK: "Slovakia", IE: "Republic of Ireland", IS: "Iceland", CD: "DR Congo", BH: "Bahrain", OM: "Oman", KW: "Kuwait", LB: "Lebanon", PS: "Palestine", IL: "Israel", CR: "Costa Rica", PA: "Panama", JM: "Jamaica", NZ: "New Zealand men's", ZA: "South Africa", ML: "Mali", BA: "Bosnia and Herzegovina", AL: "Albania", MK: "North Macedonia", ME: "Montenegro", CY: "Cyprus", LU: "Luxembourg", BY: "Belarus", MD: "Moldova", EE: "Estonia", LV: "Latvia", LT: "Lithuania" };
+const EN_COUNTRY = (cc) => { if (EN_NAMES[cc]) return EN_NAMES[cc]; try { const n = new Intl.DisplayNames(["en"], { type: "region" }).of(cc); return n && n.length > 2 ? n : ""; } catch (e) { return ""; } };
 async function natTeamNeeds(env, post) {
   // postdagi "X terma jamoasi" — logotipi bo'lmasa navbatga (O'zbekiston — UFA gerbi; boshqalar — federatsiya gerbi Vikipediyadan)
   const t = String(post || "").replace(/<[^>]+>|[⟦⟧]/g, "");
@@ -3007,7 +3009,8 @@ async function natCrest(plain) {
   }
   if (!best) return "";
   // 2026-11-22 (388, 256-postlar umumiy iF kartasi bilan chiqqan): Vikipediya botga javob bermasa, sahifa nomi karta chizuvchiga beriladi ("wikipage:") — gerbni u oladi
-  const pg = EN_COUNTRY(best.cc) + " national football team";
+  const SOCCER = { US: "United States men's national soccer team", CA: "Canada men's national soccer team", AU: "Australia men's national soccer team", NZ: "New Zealand men's national football team" };
+  const pg = SOCCER[best.cc] || EN_COUNTRY(best.cc) + " national football team";
   return (await wikiCrest(pg).catch(() => "")) || (EN_COUNTRY(best.cc) ? "wikipage:" + pg : "");
 }
 const leftCrest = async (env, post, ci, idx) => {
@@ -3290,7 +3293,7 @@ async function ubRoute(env, req, url) {
     if (!key || !isFaceName(name) || !b0.f || !b0.uid) return J({ ok: false });
     const F = await kvGet(env, "faces", {}); const P = (F[key] = F[key] || { n: name, al: [], ph: [], u: 0 });
     P.al = [...new Set([...(P.al || []), name])].slice(0, 12);
-    if (!P.ph.some((p) => p.uid === b0.uid || (b0.src && p.src === b0.src))) P.ph.push({ f: b0.f, uid: b0.uid, w: b0.w || 0, h: b0.h || 0, m: b0.m, low: b0.w && Math.min(b0.w, b0.h) < 500 ? 1 : 0, t: Date.now(), sr: 1, ...(b0.b ? { b: b0.b, x: b0.x || [], d: 1 } : {}), ...(b0.src ? { src: b0.src } : {}), ...(b0.c ? { c: String(b0.c).slice(0, 160) } : {}) });
+    if (!P.ph.some((p) => p.uid === b0.uid || (b0.src && p.src === b0.src))) P.ph.push({ f: b0.f, uid: b0.uid, w: b0.w || 0, h: b0.h || 0, m: b0.m, low: b0.w && Math.min(b0.w, b0.h) < 500 ? 1 : 0, t: Date.now(), sr: 1, ...(b0.b ? { b: b0.b, x: b0.x || [], d: 1 } : {}), ...(b0.src ? { src: b0.src } : {}), ...(b0.c ? { c: String(b0.c).slice(0, 160) } : {}), ...(+b0.y > 1900 ? { y: +b0.y } : {}) });
     if (Array.isArray(b0.al)) P.al = [...new Set([...P.al, ...b0.al.map((x) => String(x).trim()).filter(isFaceName)])].slice(0, 12);
     await kvPut(env, "faces", F); return J({ ok: true, n: P.ph.length });
   }

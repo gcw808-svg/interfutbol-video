@@ -1,0 +1,65 @@
+name: arxivdan
+# Arxiv kanalidagi ("Inter Futbol — Rasm generatsiya Arxiv") suratni post bazasiga ("Inter Futbol — Rasmlar") o'tkazish — 2026-11-22, 388-post.
+# Bahtiyor aka arxivga tashlagan suratni ko'rsatsa (t.me/c/3533987068/N): msg=N, name=Ism Familiya, year=surat yili (ixtiyoriy).
+on:
+  workflow_dispatch:
+    inputs:
+      msg:
+        required: true
+      name:
+        required: true
+      year:
+        default: ""
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: pip install -q pillow
+      - env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          MSG: ${{ inputs.msg }}
+          NAME: ${{ inputs.name }}
+          YEAR: ${{ inputs.year }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, io, json, os, urllib.request
+          from PIL import Image
+          T = os.environ["BOT_TOKEN"]; ARCH, BASE = -1003533987068, -1004498416461
+          def tg(m, **b):
+              rq = urllib.request.Request("https://api.telegram.org/bot" + T + "/" + m, data=json.dumps(b).encode(), headers={"content-type": "application/json"})
+              try:
+                  return json.loads(urllib.request.urlopen(rq, timeout=60).read())
+              except urllib.error.HTTPError as e:
+                  return json.loads(e.read() or b"{}")
+          name = " ".join(os.environ["NAME"].split()); year = os.environ.get("YEAR", "").strip()
+          fw = tg("forwardMessage", chat_id=BASE, from_chat_id=ARCH, message_id=int(os.environ["MSG"]), disable_notification=True)
+          if not fw.get("ok"):
+              print("::error::arxiv xabari olinmadi: " + str(fw.get("description"))[:150]); raise SystemExit(1)
+          m = fw["result"]; tg("deleteMessage", chat_id=BASE, message_id=m["message_id"])
+          doc = m.get("document"); ph = (m.get("photo") or [None])[-1]
+          if doc and not str(doc.get("mime_type", "")).startswith("image/"):
+              print("::error::bu xabar surat emas"); raise SystemExit(1)
+          if not doc and not ph:
+              print("::error::xabarda surat yo'q"); raise SystemExit(1)
+          cap = name + (" " + year if year else "")
+          r = tg("sendDocument", chat_id=BASE, document=doc["file_id"], caption=cap, disable_notification=True) if doc else tg("sendPhoto", chat_id=BASE, photo=ph["file_id"], caption=cap, disable_notification=True)
+          if not r.get("ok"):
+              print("::error::bazaga yuborilmadi: " + str(r.get("description"))[:150]); raise SystemExit(1)
+          n = r["result"]; f = n.get("document") or (n.get("photo") or [None])[-1]
+          w, h = f.get("width", 0), f.get("height", 0)
+          if not w:
+              try:
+                  gp = tg("getFile", file_id=f["file_id"])["result"]["file_path"]
+                  im = Image.open(io.BytesIO(urllib.request.urlopen("https://api.telegram.org/file/bot" + T + "/" + gp, timeout=120).read())); w, h = im.size
+              except Exception as e:
+                  print("o'lcham olinmadi", type(e).__name__)
+          key = hashlib.sha256(("ub-" + T).encode()).hexdigest()[:40]
+          body = {"name": name, "f": f["file_id"], "uid": f["file_unique_id"], "w": w, "h": h, "m": n["message_id"]}
+          if year.isdigit(): body["y"] = int(year)
+          rq = urllib.request.Request("https://inter-futbol-bot.gcw808.workers.dev/ub/faceadd", data=json.dumps(body).encode(), headers={"x-key": key, "content-type": "application/json", "user-agent": "InterFutbolArxiv"})
+          out = urllib.request.urlopen(rq, timeout=60).read().decode()[:200]
+          print("::notice::baza xabari " + str(n["message_id"]) + " " + str(w) + "x" + str(h) + " " + out)
+          PY
