@@ -91,7 +91,8 @@ def main():
             except Exception as e:
                 print("XATO odam topish", str(e)[:120]); box, pn, ex = None, 1, []
             det = {"b": box, "x": ex, "pn": pn} if box else {}
-            if min(w, h) >= MINSIDE or p.get("sr"):
+            # 2026-11-22: "sr" belgisi bor, lekin o'zi juda kichik (500 px dan kam — bazaga tayyor holda qo'shilgan) surat baribir kattalashtiriladi
+            if min(w, h) >= MINSIDE or (p.get("sr") and min(w, h) >= 500):
                 wpost("/ub/facesharp", {"dims": p["m"], "w": w, "h": h, **det})
                 print("yetarli", P["n"], p["m"], f"{w}x{h}", "ramka", box, "odam", pn, "chet", ex); skip += 1; continue
             t0 = time.time()
