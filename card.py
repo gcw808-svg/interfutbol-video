@@ -49,7 +49,7 @@ def mark_size(Wd):
     return int(round(Wd * MARK_K / 2) * 2)
 
 
-NO_MARK = False  # post rasmlarida iF belgisi yo'q (2026-11-22, Bahtiyor aka) — bot ishga "nomark" belgisini qo'yadi (KV wmMode); istoriya rasmlariga tegmaydi
+NO_MARK = True  # iF belgisi HECH QAYSI rasmga qo'yilmaydi: post, jadval va istoriya (2026-11-22, Bahtiyor aka: "istoriyadan ham iF logosini olib tashlaymiz"); qaytarish — bot KV wmMode="on"
 
 
 def paste_mark(im, pos="br", my=None):
@@ -1575,8 +1575,6 @@ def _story_meta(j):
 
 
 def render_story_result(j):
-    global NO_MARK
-    NO_MARK = False  # istoriya rasmida iF belgisi qoladi (qoida faqat post rasmlari uchun)
     Wd, Hd = 1080, 1920
     hl, al = crest(j.get("homeLogo"), 170, j.get("home")), crest(j.get("awayLogo"), 170, j.get("away"))
     # rangsiz (qora-oq) logotipda fon kulrang, chiziq oq bo'ladi
@@ -1668,7 +1666,7 @@ def _no_emoji(t):
 
 def render(j):
     global NO_MARK
-    NO_MARK = bool(j.get("nomark")) or j.get("wm") == "no"
+    NO_MARK = j.get("nomark") != 0 or j.get("wm") == "no"
     # sarlavhadagi bayroq va emoji belgilar (post matniga qo'yiladi) kartada shrift bo'lmagani uchun to'rtburchak bo'lib chiqadi — olib tashlanadi
     if isinstance(j.get("title"), str):
         j["title"] = _no_emoji(j["title"])
