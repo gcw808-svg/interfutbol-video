@@ -351,8 +351,8 @@ async function tg(env, method, body) {
         const gs = Math.max(36, Math.round(W * 132 / 1080)); // belgi eni; PNG atrofida soya uchun har tomondan gs/3 bo'sh joy bor
         const ow = Math.round(gs * 5 / 3), m = Math.max(0, Math.round(W * 44 / 1080 - gs / 3));
         let base = env.IMAGES.input(new Blob([im.buf]).stream()); if (im.W > 1920) base = base.transform({ width: 1920 });
-        const out = await base
-        .draw(env.IMAGES.input(new Blob([b64bytes(WM)]).stream()).transform({ width: ow }), { top: m, right: m })
+        // POST RASMLARIDA iF BELGISI YO'Q (2026-11-22, 415/416-postlar, Bahtiyor aka: "bundan keyin chiqadigan post rasmlarida iF logosi bo'lmasin"): KV wmMode — "off" (standart) | "on"
+        const out = await ((await kvGet(env, "wmMode", "off")) === "on" ? base.draw(env.IMAGES.input(new Blob([b64bytes(WM)]).stream()).transform({ width: ow }), { top: m, right: m }) : base)
         .output({ format: "image/jpeg", quality: 90 });
         const blob = await out.response().blob();
         return blob.size > 1000 ? blob : null;
@@ -3565,7 +3565,7 @@ async function ubRoute(env, req, url) {
     }
     if (tj) { const pid = "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); const tf = new FormData(); tf.append("chat_id", String(tj.chat)); if (tj.chan) { if (!tj.capSent && tj.cap) { tf.append("caption", newAlpha(noLogos(tj.cap))); tf.append("parse_mode", "HTML"); await kvPut(env, "tjob:" + tid, { ...tj, capSent: 1 }, { expirationTtl: 3600 }); } } else tf.append("reply_markup", JSON.stringify(spKb(pid))); tf.append("photo", new Blob([await req.arrayBuffer()], { type: "image/png" }), "jadval.png"); const pr = await (await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendPhoto`, { method: "POST", body: tf })).json(); if (pr.ok && tj.chan && tj.story && !tj.storySent) { await kvPut(env, "tjob:" + tid, { ...(await kvGet(env, "tjob:" + tid, tj)), storySent: 1 }, { expirationTtl: 3600 }); { const ad0 = (await getAdmins(env))[0]; if (ad0) await tg(env, "sendMessage", { chat_id: ad0, text: "Tik istoriya (jadval) chizilmadi yoki yuborilmadi. Eski yotiq rasm istoriyaga qo'yilmadi." }); } }
     if (pr.ok) await kvPut(env, "sp:" + pid, { kind: "photo", file: pr.result.photo[pr.result.photo.length - 1].file_id, cap: tj.cap || "", msgs: [pr.result.message_id], chat: tj.chat }, { expirationTtl: 3 * 86400 }); if (url.searchParams.get("last") === "1") await env.STATE.delete("tjob:" + tid); } return J({ ok: true }); }
-  if (url.pathname === "/ub/cjob") return J((await kvGet(env, "cjob:" + url.searchParams.get("id"), null)) || {});
+  if (url.pathname === "/ub/cjob") { const cj0 = (await kvGet(env, "cjob:" + url.searchParams.get("id"), null)) || {}; return J(cj0.title || cj0.home || cj0.face ? { ...cj0, nomark: (await kvGet(env, "wmMode", "off")) === "on" && cj0.wm !== "no" ? 0 : 1 } : cj0); }
   if (url.pathname === "/ub/card" && req.method === "POST") { await cardDone(env, url.searchParams.get("id"), await req.arrayBuffer()); const miss = url.searchParams.get("miss"); if (miss) { try { const ad = (await getAdmins(env))[0]; if (ad) await tg(env, "sendMessage", { chat_id: ad, text: "⚠️ Nazorat: kartochkada logotip yuklanmadi — " + miss + ". Bo'sh joy qolmasligi uchun bosh harfli zaxira belgi qo'yildi. Claude logotipni tuzatib, /kartaqayta bilan rasmni yangilaydi." }); } catch (e) {} } return J({ ok: true }); }
   if (url.pathname === "/ub/pw") {
     const pw = await kvGet(env, "upw", null);
