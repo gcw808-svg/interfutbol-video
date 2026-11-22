@@ -1,0 +1,36 @@
+name: postrasm
+# Postga bazadagi ANIQ BITTA suratni qo'yish — 2026-11-22 (Bahtiyor aka: "shu joydagi rasmga shu rasmni qo'y").
+# post — kanal posti raqami; msg — "Inter Futbol — Rasmlar" kanalidagi surat xabari raqami (arxivdagi surat avval arxivdan.yml bilan o'tkaziladi);
+# wm=tr — iF tepa o'ng burchakda; wide=1 — yotiq (1600x900) karta.
+on:
+  workflow_dispatch:
+    inputs:
+      post:
+        required: true
+      msg:
+        required: true
+      wm:
+        default: ""
+      wide:
+        default: ""
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-slim
+    timeout-minutes: 3
+    steps:
+      - env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          POST: ${{ inputs.post }}
+          MSG: ${{ inputs.msg }}
+          WM: ${{ inputs.wm }}
+          WIDE: ${{ inputs.wide }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, urllib.request
+          key = hashlib.sha256(("ub-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:40]
+          body = {"id": int(os.environ["POST"]), "m": int(os.environ["MSG"]), "wm": os.environ.get("WM", ""), "wide": 1 if os.environ.get("WIDE") else 0}
+          rq = urllib.request.Request("https://inter-futbol-bot.gcw808.workers.dev/ub/rasm", data=json.dumps(body).encode(), headers={"x-key": key, "content-type": "application/json", "user-agent": "InterFutbolRasm"})
+          print("::notice::" + urllib.request.urlopen(rq, timeout=60).read().decode()[:200])
+          PY
