@@ -189,6 +189,20 @@ def alt_logo(name, size):
 def get_logo(url, size):
     if not url:
         return None
+    if str(url).startswith("wikipage:"):
+        # 2026-11-22 (388-post): bot Vikipediyadan terma jamoa gerbini ola olmasa, sahifa nomini beradi — gerb shu yerda (GitHub/Modal) olinadi
+        try:
+            import json as _j, re as _re, urllib.parse as _up
+            rq = urllib.request.Request("https://en.wikipedia.org/api/rest_v1/page/summary/" + _up.quote(str(url)[9:].replace(" ", "_")), headers={"user-agent": "InterFutbolBot/1.1 (https://t.me/Inter_Futbol_TV)"})
+            with urllib.request.urlopen(rq, timeout=30) as r:
+                sm = _j.loads(r.read())
+            url = ((sm.get("thumbnail") or {}).get("source") or (sm.get("originalimage") or {}).get("source") or "")
+            if not url or "Flag_of" in url:
+                return None
+            url = _re.sub(r"/\d+px-", "/330px-", url)  # Vikipediya faqat standart o'lchamlarni beradi
+        except Exception as e:
+            print("wikipage", e)
+            return None
     try:
         # 3 marta urinish: logotip yuklanmay qolsa kartochka xunuk chiqmasin
         for k in range(3):

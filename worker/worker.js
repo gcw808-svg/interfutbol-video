@@ -3005,7 +3005,10 @@ async function natCrest(plain) {
     const re = new RegExp("(" + [...new Set(names.split("|").flatMap((n) => [n, newAlpha(n)]))].map((x) => x.replace(/[.*+?^${}()|[\]\\\/]/g, "\\$&").replace(/'/g, "['‘’ʻʼ`]?")).join("|") + ")\\s+(?:milliy\\s+)?(?:futbol\\s+)?terma\\s+jamoa", "iu");
     const m = re.exec(plain); if (m && (!best || m.index < best.i)) best = { i: m.index, cc };
   }
-  return best ? await wikiCrest(EN_COUNTRY(best.cc) + " national football team") : "";
+  if (!best) return "";
+  // 2026-11-22 (388, 256-postlar umumiy iF kartasi bilan chiqqan): Vikipediya botga javob bermasa, sahifa nomi karta chizuvchiga beriladi ("wikipage:") — gerbni u oladi
+  const pg = EN_COUNTRY(best.cc) + " national football team";
+  return (await wikiCrest(pg).catch(() => "")) || (EN_COUNTRY(best.cc) ? "wikipage:" + pg : "");
 }
 const leftCrest = async (env, post, ci, idx) => {
   const plain = String(post || "").replace(/<[^>]+>/g, "");
