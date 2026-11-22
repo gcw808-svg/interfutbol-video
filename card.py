@@ -1366,9 +1366,9 @@ def render_photo_v(j):
     face = get_photo(j.get("face"))
     if not face:
         return render_news_v({**j, "po": 0, "face": ""})
-    if "wide=1" in str(j.get("face")) and face.width >= face.height * 1.3:
-        # ikki kishilik (juftlik) surat — yotiq karta: tik qirqilsa ikkala odam ham kesiladi (414-post, 2026-11-22)
-        Wd, Hd = 1600, 900
+    if "wide=1" in str(j.get("face")) and face.width >= face.height * 0.9:
+        # ikki kishilik (juftlik) surat — yotiq karta: tik qirqilsa ikkala odam ham kesiladi (414-post, 2026-11-22); kvadratga yaqin surat — kvadrat karta (412-post)
+        Wd, Hd = (1600, 900) if face.width >= face.height * 1.3 else (1080, 1080)
         face.info["box"] = None
     im = (_grade(_sharp_cover(face, Wd, Hd, 0.12), (10, 14, 22), GREEN, grain=False) if j.get("sr") else _grade(_cover(face, Wd, Hd, 0.12), (10, 14, 22), GREEN)).convert("RGB")
     # 2026-11-16: sarlavhasiz suratda past va tepa qoraytirilmaydi; 2026-11-17: iF belgisi to'q kvadratsiz, yagona o'lchamda
