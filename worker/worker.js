@@ -995,13 +995,14 @@ async function dateCheck(env, post, item) {
   { const WD = ["yakshanba", "dushanba", "seshanba", "chorshanba", "payshanba", "juma", "shanba"]; const AP = "['ʻ’‘ʼ`]";
     const FUT = new RegExp("(adigan|ydigan|moqda|kutil|rejalashtir|niyat|bo" + AP + "lib o" + AP + "tadi|o" + AP + "tkaziladi|o" + AP + "ynaydi|uchrashadi|bo" + AP + "ladi)", "iu");
     const PAST = new RegExp("(bo" + AP + "lib o" + AP + "td|o" + AP + "tkazild|o" + AP + "ynad|kechgan|yakunland|g" + AP + "alaba qozond|mag" + AP + "lub bo" + AP + "ld|yutd|yutqazd)", "iu");
-    const WRE = /(?<![\p{L}])(dushanba|seshanba|chorshanba|payshanba|juma|shanba|yakshanba)(\s+)(kuni|oqshomi|kechqurun|ertalab|kechasi)(?![\p{L}])/iu;
+    const WRE = /(?<![\p{L}])(dushanba|seshanba|chorshanba|payshanba|juma|shanba|yakshanba)(\s+)(kuni|kungi|oqshomi|kechqurun|ertalab|kechasi)(?![\p{L}])/iu;
     const parts = text.split(/(?<=[.!?])(\s+)/);
     for (let i = 0; i < parts.length; i++) { const sn = parts[i]; const m = sn.match(WRE); if (!m) continue;
       const before = sn.slice(0, m.index); if (/\d{1,2}-(yanvar|fevral|mart|aprel|may|iyun|iyul|avgust|sentabr|oktabr|noyabr|dekabr)\S*\s*,?\s*$/i.test(before)) continue;
       if (DATE_RE.test(sn)) { DATE_RE.lastIndex = 0; continue; } DATE_RE.lastIndex = 0;
-      if (!FUT.test(sn) || PAST.test(sn)) continue;
-      const wd = WD.indexOf(m[1].toLowerCase()); const base = new Date(now); const k = (wd - base.getUTCDay() + 7) % 7; const t = new Date(now + k * 86400e3);
+      // 2026-11-22 (De Zerbi posti "shanba kungi bahsda ... kechgan uchrashuv"): o'tgan zamondagi gapda — shu kun yoki oldingi 6 kundagi shu hafta kuni.
+      const fut = FUT.test(sn), past = PAST.test(sn); if (fut === past) continue; if (/o['ʻ’‘ʼ`]tgan\s+hafta|kelasi\s+hafta|keyingi\s+hafta/iu.test(sn)) continue;
+      const wd = WD.indexOf(m[1].toLowerCase()); const base = new Date(now); const k = fut ? (wd - base.getUTCDay() + 7) % 7 : -((base.getUTCDay() - wd + 7) % 7); const t = new Date(now + k * 86400e3);
       const ds = t.getUTCFullYear() + "-yil " + t.getUTCDate() + "-" + UZ_MON[t.getUTCMonth()];
       parts[i] = sn.slice(0, m.index) + ds + ", " + m[0].toLowerCase() + sn.slice(m.index + m[0].length); fixes.push(m[0] + " → " + ds + " (hafta kuni)"); }
     text = parts.join(""); }
