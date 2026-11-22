@@ -3144,6 +3144,37 @@ async function logoFix(env, chat, ids, opt = {}) {
   await tg(env, "sendMessage", { chat_id: chat, text: "✅ " + edits.length + " ta post tayyorlandi, hisobingiz orqali tahrirlanmoqda (2–3 daqiqa)." + (bad.length ? "\nO'tkazib yuborildi: " + bad.join(", ") : "") });
 }
 // /kartaqayta XABAR_ID: kanaldagi natija posti noto'g'ri rasm bilan chiqqan bo'lsa, rasmini natija kartochkasiga almashtiradi (matn va logotiplar saqlanadi, klub nomlari rasmiy shaklga keltiriladi)
+// TARKIB KARTASINI QAYTA CHIZISH (2026-11-22, 416-post: Bahtiyor aka "rasmdagi iF logosiz qilib ko'r, qolgan joyi qolsin"): post matni o'zgarmaydi,
+// tarkib (raqamlar bilan) ESPN'dan qayta olinadi; wm "no" — karta iF belgisisiz chiziladi
+async function luRedo(env, chat, mid, wm) {
+  const fw = await tg(env, "forwardMessage", { chat_id: chat, from_chat_id: env.CHANNEL, message_id: mid, disable_notification: true }); const m0 = fw && fw.result;
+  if (!m0) return { ok: false, why: "post topilmadi" };
+  await tg(env, "deleteMessage", { chat_id: chat, message_id: m0.message_id }).catch(() => null);
+  const t0 = m0.caption != null ? m0.caption : m0.text; const e0 = m0.caption != null ? m0.caption_entities : m0.entities;
+  let html = hashFix(entHtmlNoLogo(t0 || "", e0));
+  const plain = html.replace(/<[^>]+>/g, "").split("\n").map((l) => l.trim());
+  const tm0 = (plain[0] || "").match(/^(.+?)\s+[–-]\s+(.+?):\s*asosiy tarkiblar/i); if (!tm0) return { ok: false, why: "bu tarkib posti emas" };
+  const H = tm0[1].trim(), A = tm0[2].trim();
+  const info = plain.find((l, i) => i > 0 && l) || ""; const time = (info.match(/soat (\d{1,2}:\d{2})/) || [])[1] || ""; const date = (info.split(",")[0] || "").trim();
+  const fmOf = (n) => { const l = plain.find((x, i) => i > 0 && x.startsWith(n)) || ""; return (l.slice(n.length).match(/^\s*\(([\d-]+)\)/) || [])[1] || ""; };
+  const today = tashDate(Date.now()); let ms = []; for (const d of [today, addDays(today, -1)]) { try { ms = ms.concat(await fdMatchesOn(env, d, null)); } catch (e) {} }
+  const m = ms.find((x) => teamName(x.homeTeam) === H && teamName(x.awayTeam) === A); if (!m) return { ok: false, why: "o'yin topilmadi" };
+  const E = await espnMatch(m, H, A).catch(() => null); if (!E?.eid) return { ok: false, why: "ESPN o'yini topilmadi" };
+  const sm = await (await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${E.lg}/summary?event=${E.eid}`)).json();
+  const RS = sm.rosters || []; const st = (r) => lineupOrder((r?.roster || []).filter((p) => p.starter).map((p) => [String(p.jersey || ""), canonFix(p.athlete?.displayName || ""), p.position?.abbreviation || ""]));
+  const hl = st(RS.find((r) => r.homeAway === "home")), al = st(RS.find((r) => r.homeAway === "away"));
+  if (hl.length !== 11 || al.length !== 11) return { ok: false, why: "tarkib olinmadi" };
+  // ismlar va klub nomlari alifbo o'girishidan himoyalanadi
+  for (const n of [H, A, ...hl.map((p) => p[1]), ...al.map((p) => p[1])]) if (n) html = html.split(/(⟦[^⟧]*⟧|<[^>]*>|#[\p{L}\p{N}_]+)/u).map((p, i) => (i % 2 ? p : p.split(n).join("⟦" + n + "⟧"))).join("");
+  html = keepLatin(html);
+  const id = "r" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); const idx = await kvGet(env, "lgidx", {});
+  const lgName = compLogoName(m.competition?.code); const crest = (n) => ESPN_CREST[n] || "";
+  let [homeLogo, awayLogo, leagueLogo] = await Promise.all([logoUrl(env, H, idx), logoUrl(env, A, idx), logoUrl(env, lgName, idx)]);
+  homeLogo = homeLogo || crest(H) || (await natTeamLogo(env, H)); awayLogo = awayLogo || crest(A) || (await natTeamLogo(env, A)); leagueLogo = leagueLogo || espnLgLogo(lgName) || "";
+  await kvPut(env, "cjob:" + id, { title: plain[0], home: cardNm(H), away: cardNm(A), score: "", league: newAlpha(lgName || ""), homeLogo, awayLogo, leagueLogo, lineup: 1, hl, al, hf: fmOf(H), af: fmOf(A), time, date, wm: wm === "no" ? "no" : "", chan: html, rep: mid, kind: "lu", story: 0 }, { expirationTtl: 7 * 3600 });
+  await repWatch(env, id, mid); await ghDispatch(env, "card.yml", { job: id });
+  return { ok: true, id, n: hl.length + al.length };
+}
 async function resRedo(env, chat, mid, quiet) {
   const esc = (x) => String(x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const fw = await tg(env, "forwardMessage", { chat_id: chat, from_chat_id: env.CHANNEL, message_id: mid, disable_notification: true });
@@ -3417,6 +3448,7 @@ async function ubRoute(env, req, url) {
   }
   if (url.pathname === "/ub/afsona" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); let r; try { r = await afsonaRun(env, b0.chan ? null : admin, b0.name || ""); } catch (e) { r = "xato: " + e.message; } return J({ r: String(r) }); }
   // /ub/tahrir (2026-11-22): "/tahrir ID" bilan bir xil ish — Telegram Web ochiq bo'lmaganda GitHub'dagi tahrir.yml orqali (kalit bilan) chaqiriladi
+  if (url.pathname === "/ub/luredo" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); return J(await luRedo(env, admin, +b0.id, String(b0.wm || "")).catch((e) => ({ ok: false, why: String(e.message || e).slice(0, 150) }))); }
   if (url.pathname === "/ub/tahrir" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); const tx = String(b0.text || "").trim(); if (!(+b0.id > 0) || tx.length < 20) return J({ ok: false, why: "id yoki matn yo'q" }); return J(await tahrirDo(env, admin, +b0.id, tx)); }
   if (url.pathname === "/ub/rasm" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); return J({ ok: await rasmRedo(env, admin, +b0.id, true, b0.face || b0.credit || b0.wm || b0.sr ? { face: b0.face ? String(b0.face) : "", credit: String(b0.credit || "").slice(0, 90), wm: b0.wm === "tr" ? "tr" : "", sr: b0.sr ? 1 : 0 } : null) }); }
   if (url.pathname === "/ub/facesharp" && req.method === "POST") {

@@ -1,0 +1,29 @@
+name: luredo
+# Tarkib ("asosiy tarkiblar") posti kartasini qayta chizish; wm=no — iF belgisisiz (2026-11-22, 416-post). Matn o'zgarmaydi.
+on:
+  workflow_dispatch:
+    inputs:
+      post:
+        required: true
+      wm:
+        default: ""
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-slim
+    timeout-minutes: 3
+    steps:
+      - env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          POST: ${{ inputs.post }}
+          WM: ${{ inputs.wm }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, urllib.request
+          key = hashlib.sha256(("ub-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:40]
+          body = {"id": int(os.environ["POST"]), "wm": os.environ.get("WM", "")}
+          rq = urllib.request.Request("https://inter-futbol-bot.gcw808.workers.dev/ub/luredo", data=json.dumps(body).encode(), headers={"x-key": key, "content-type": "application/json", "user-agent": "InterFutbolLu"})
+          r = urllib.request.urlopen(rq, timeout=60).read().decode()[:300]
+          print("::notice::" + r)
+          PY

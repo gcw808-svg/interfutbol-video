@@ -649,7 +649,8 @@ def render_lineup(j):
         d.text((Wd // 2, 420), "Toşkent vaqti", font=font("bold", 20), fill=(220, 226, 232), anchor="mm")
     if j.get("date"):
         d.text((Wd // 2, 456), j["date"], font=font("bold", 20), fill=(220, 226, 232), anchor="mm")
-    paste_mark(im, "bc", 36)
+    if j.get("wm") != "no":  # 416-post (2026-11-22): Bahtiyor aka sinovi — tarkib kartasi iF belgisisiz
+        paste_mark(im, "bc", 36)
     for bx, lg_, name, col, L, fm in ((boxes[0], hl, j["home"], c1, j.get("hl") or [], j.get("hf")), (boxes[1], al, j["away"], c2, j.get("al") or [], j.get("af"))):
         cx = (bx[0] + bx[2]) // 2
         if lg_:
