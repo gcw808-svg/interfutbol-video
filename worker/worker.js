@@ -1789,7 +1789,8 @@ async function faceUrl(env, post, pick) {
     const ev = pick ? null : eventYears(post);
     if (ev) { L = L.filter((p) => { const y = photoYear(p); return y && y >= ev[0] - 1 && y <= ev[1] + 1; }); if (!L.length) { try { const ad = (await getAdmins(env))[0]; const yy = ev[0] === ev[1] ? ev[0] : ev[0] + "–" + ev[1]; if (ad) await tg(env, "sendMessage", { chat_id: ad, text: "📷 " + F[k].n + ": " + yy + "-yilgi surat bazada yo'q — post surati gerbli karta bilan chizildi. Shu davrdagi suratini «" + F[k].n + " " + ev[1] + "» izohi bilan rasmlar kanaliga tashlasangiz, bunday postlarga o'sha qo'yiladi." }); } catch (e) {} return ""; } }
     const p = pick ? L[(pick - 1) % L.length] : L[Math.floor(Date.now() / 3600e3) % L.length];
-    return phUrl(p);
+    // IKKI KISHILIK SURAT (2026-11-22, 414-post): "Lionel Messi va Cristiano Ronaldo" kabi juftlik kaliti — karta yotiq (1600x900) chiziladi, tik qirqilsa ikkalasi ham kesilib qoladi
+    const u = phUrl(p); return / (va|and|&) /i.test(F[k].n || "") ? u + (u.includes("?") ? "&" : "?") + "wide=1" : u;
   } catch (e) { return ""; }
 }
 // ERKIN LITSENZIYALI SURAT MUALLIFI (2026-11-17, odamlar roboti — people.py): bazadagi suratda "c" (Foto: muallif, litsenziya) bo'lsa,
@@ -1987,7 +1988,9 @@ ${item.text}`;
 async function histRun(env, toAdmin, test = false) {
   const admin = (await getAdmins(env))[0];
   const h = await histMake(env, Date.now() + 60000); if (!h) return "none"; if (h.bad) return "err nazoratdan otmadi";
-  const pb = await pickBranded(env, h.item, Date.now() + 30000).catch(() => null); if (!pb && !toAdmin) { await resultJob(env, h.post, null, { kind: "news" }); if (!test) { const u0 = await kvGet(env, "histUsed", []); u0.push(h.key); await kvPut(env, "histUsed", u0.slice(-400)); } return "ok"; }
+  // BAZADAGI SURAT BIRINCHI (2026-11-22, 414-post: Messi va Ronaldo haqidagi faktga manbadagi boshqa futbolchilar surati tushgan): sarlavhadagi odam bazada bo'lsa — manba rasmi olinmaydi
+  const fk0 = toAdmin ? null : faceFor(await kvGet(env, "faces", {}), h.post);
+  const pb = fk0 ? null : await pickBranded(env, h.item, Date.now() + 30000).catch(() => null); if (!pb && !toAdmin) { await resultJob(env, h.post, null, { kind: "news" }); if (!test) { const u0 = await kvGet(env, "histUsed", []); u0.push(h.key); await kvPut(env, "histUsed", u0.slice(-400)); } return "ok"; }
   const img = pb || (await kvGet(env, "defImg", null));
   const body = h.post;
   let r;
@@ -2030,7 +2033,9 @@ ${chunk}`;
 async function factRun(env, toAdmin, pageHint, test = false) {
   const admin = (await getAdmins(env))[0];
   const f = await factMake(env, Date.now() + 110000, pageHint); if (!f) return "none";
-  const pb = await pickBranded(env, f.item, Date.now() + 30000).catch(() => null); if (!pb && !toAdmin) { await resultJob(env, f.post, null, { kind: "news" }); if (!test) { const u0 = await kvGet(env, "factUsed", []); u0.push({ p: f.page, t: Date.now() }); await kvPut(env, "factUsed", u0.slice(-100)); } return "ok-card " + f.page; }
+  // BAZADAGI SURAT BIRINCHI (2026-11-22, 414-post: Messi va Ronaldo haqidagi faktga manbadagi boshqa futbolchilar surati tushgan): sarlavhadagi odam bazada bo'lsa — manba rasmi olinmaydi
+  const fk0 = toAdmin ? null : faceFor(await kvGet(env, "faces", {}), f.post);
+  const pb = fk0 ? null : await pickBranded(env, f.item, Date.now() + 30000).catch(() => null); if (!pb && !toAdmin) { await resultJob(env, f.post, null, { kind: "news" }); if (!test) { const u0 = await kvGet(env, "factUsed", []); u0.push({ p: f.page, t: Date.now() }); await kvPut(env, "factUsed", u0.slice(-100)); } return "ok-card " + f.page; }
   const img = pb || (await kvGet(env, "defImg", null));
   let r;
   if (toAdmin) r = await sendRich(env, admin, "🧪 Qiziqarli fakt namunasi — kanalga chiqmaydi\n🛡 Nazoratchi: " + esc(f.fixed.length ? "tuzatdi — " + f.fixed.join("; ").slice(0, 120) : "manbaga mos ✅") + " | <a href=\"" + esc(f.item.link) + "\">manba</a>\n━━━━━━━━━━━━\n" + f.post, img, undefined);
