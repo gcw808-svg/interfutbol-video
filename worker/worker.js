@@ -1704,6 +1704,17 @@ Example: {"name":"","from":"","club":"","number":"","people":1,"main":[120,300,1
   return { w: iw, h: ih, err: (img ? "" : "surat o'qilmadi; ") + err };
 }
 // "/rasm ID" ishi: kanal postining rasmini tasdiqlangan dizayndagi kartochkaga almashtirish (matn va tugma saqlanadi); /ub/rasm ham shuni chaqiradi
+// kanal postini to'liq yangi matn bilan tahrirlash (logotiplar, rasmiy nomlar, yangi alifbo avtomatik; tugma va rasm saqlanadi) — /tahrir buyrug'i va /ub/tahrir
+async function tahrirDo(env, chat, mid, body) {
+  const q = await qcCheck(env, body, true).catch(() => ({ fatal: [], warn: [] }));
+  if (q.fatal.length) { await tg(env, "sendMessage", { chat_id: chat, text: "🛑 Tahrir to'xtatildi: " + q.fatal.join("; ") }); return { ok: false, why: q.fatal.join("; ") }; }
+  CLUB_RE = null; const html = newAlpha(addLogos(hashFix(canonFix(body))));
+  const uid = "T" + Date.now().toString(36);
+  await kvPut(env, "ujob:" + uid, { html: "batch", html2: "batch", edit: "batch", edits: [{ id: mid, html }], chat, photo: null, video: null, raw: { text: "", img: null, url: null, video: null } }, { expirationTtl: 86400 });
+  await ghDispatch(env, "ubpost.yml", { job: uid });
+  await tg(env, "sendMessage", { chat_id: chat, text: "✏️ " + mid + "-post yangi matn bilan tahrirlanmoqda (2–3 daqiqa)." + (q.warn.length ? "\nEslatma: " + q.warn.join("; ") : "") });
+  return { ok: true, warn: q.warn };
+}
 async function rasmRedo(env, chat, mid, quiet, ov) {
       const fw = await tg(env, "forwardMessage", { chat_id: chat, from_chat_id: env.CHANNEL, message_id: mid, disable_notification: true }); const m = fw && fw.result;
       if (!m) { await tg(env, "sendMessage", { chat_id: chat, text: "Kanalda bu raqamli post topilmadi." }); return false; }
@@ -3397,6 +3408,8 @@ async function ubRoute(env, req, url) {
     return J({ ok: true });
   }
   if (url.pathname === "/ub/afsona" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); let r; try { r = await afsonaRun(env, b0.chan ? null : admin, b0.name || ""); } catch (e) { r = "xato: " + e.message; } return J({ r: String(r) }); }
+  // /ub/tahrir (2026-11-22): "/tahrir ID" bilan bir xil ish — Telegram Web ochiq bo'lmaganda GitHub'dagi tahrir.yml orqali (kalit bilan) chaqiriladi
+  if (url.pathname === "/ub/tahrir" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); const tx = String(b0.text || "").trim(); if (!(+b0.id > 0) || tx.length < 20) return J({ ok: false, why: "id yoki matn yo'q" }); return J(await tahrirDo(env, admin, +b0.id, tx)); }
   if (url.pathname === "/ub/rasm" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); return J({ ok: await rasmRedo(env, admin, +b0.id, true, b0.face || b0.credit || b0.wm || b0.sr ? { face: b0.face ? String(b0.face) : "", credit: String(b0.credit || "").slice(0, 90), wm: b0.wm === "tr" ? "tr" : "", sr: b0.sr ? 1 : 0 } : null) }); }
   if (url.pathname === "/ub/facesharp" && req.method === "POST") {
     const b0 = await req.json().catch(() => ({})); const F = await kvGet(env, "faces", {}); let hit = 0;
@@ -3799,13 +3812,7 @@ return;
     } else if (/^\/tahrir\s+\d+\s*\n/.test(text)) {
       // kanal postini to'liq yangi matn bilan tahrirlash (logotiplar, rasmiy nomlar, yangi alifbo avtomatik; tugma va rasm saqlanadi)
       const mid = +text.match(/^\/tahrir\s+(\d+)/)[1]; const body = text.replace(/^\/tahrir\s+\d+\s*\n/, "").trim();
-      const q = await qcCheck(env, body, true).catch(() => ({ fatal: [], warn: [] }));
-      if (q.fatal.length) { await tg(env, "sendMessage", { chat_id: chat, text: "🛑 Tahrir to'xtatildi: " + q.fatal.join("; ") }); return; }
-      CLUB_RE = null; const html = newAlpha(addLogos(hashFix(canonFix(body))));
-      const uid = "T" + Date.now().toString(36);
-      await kvPut(env, "ujob:" + uid, { html: "batch", html2: "batch", edit: "batch", edits: [{ id: mid, html }], chat, photo: null, video: null, raw: { text: "", img: null, url: null, video: null } }, { expirationTtl: 86400 });
-      await ghDispatch(env, "ubpost.yml", { job: uid });
-      await tg(env, "sendMessage", { chat_id: chat, text: "✏️ " + mid + "-post yangi matn bilan tahrirlanmoqda (2–3 daqiqa)." + (q.warn.length ? "\nEslatma: " + q.warn.join("; ") : "") });
+      await tahrirDo(env, chat, mid, body);
     } else if (/^\/tugma\s+\d+\s+\S+$/.test(text)) {
       // "Batafsil o'qish" tugmasini almashtirish yoki olib tashlash: /tugma ID https://telegra.ph/... | /tugma ID olib
       const [, id, arg] = text.split(/\s+/); const rm = /^(olib|yo'q|-)$/i.test(arg);

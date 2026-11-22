@@ -1,0 +1,30 @@
+name: tahrir
+# Kanal postini to'liq yangi matn bilan tahrirlash ("/tahrir ID" bilan bir xil; Telegram Web ochiq bo'lmaganda) — 2026-11-22, 388-post.
+# text: 1-xatboshi <b>sarlavha</b>; xorijiy ismlar ⟦…⟧ ichida; qator tashlash — haqiqiy yangi qator yoki "\n".
+on:
+  workflow_dispatch:
+    inputs:
+      post:
+        required: true
+      text:
+        required: true
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-slim
+    timeout-minutes: 3
+    steps:
+      - env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          POST: ${{ inputs.post }}
+          TXT: ${{ inputs.text }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, urllib.request
+          key = hashlib.sha256(("ub-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:40]
+          body = {"id": int(os.environ["POST"]), "text": os.environ["TXT"].replace("\\n", "\n")}
+          rq = urllib.request.Request("https://inter-futbol-bot.gcw808.workers.dev/ub/tahrir", data=json.dumps(body).encode(), headers={"x-key": key, "content-type": "application/json", "user-agent": "InterFutbolTahrir"})
+          r = urllib.request.urlopen(rq, timeout=60).read().decode()[:300]
+          print("::notice::" + r)
+          PY
