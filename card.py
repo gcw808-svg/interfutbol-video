@@ -1139,6 +1139,31 @@ def render_news_v(j):
         y = _title_v(d, j.get("title") or "Inter Futbol", 60, 930, Wd - 120, 300, 64, 40)
         d.rectangle([60, y + 16, 190, y + 22], fill=tuple(acc))
         yend = y + 30
+    elif crest_ and j.get("leftLogo2") and get_logo(j.get("leftLogo2"), 460):
+        # O'YIN OLDIDAN — IKKI KLUB GERBI YONMA-YON (2026-11-22, 412-post): fon chapdan o'ngga ikki klub rangida, o'rtada ingichka chiziq
+        c2_ = get_logo(j.get("leftLogo2"), 460)
+        pal2 = club_palette(c2_)
+        base2 = pal2[0] if pal2 else (10, 14, 22)
+        l1, l2 = sc(base, 62) if pal else (22, 28, 40), sc(base2, 62) if pal2 else (22, 28, 40)
+        px = im.load()
+        for x in range(Wd):
+            t = min(1.0, max(0.0, (x / Wd - 0.3) / 0.4))
+            cx_ = tuple(l1[i] + (l2[i] - l1[i]) * t for i in range(3))
+            for y in range(Hd):
+                k = 1 - 0.72 * y / Hd
+                px[x, y] = tuple(int(v * k) for v in cx_)
+        _stripes(im, acc)
+        for mk, cx in ((crest_, Wd // 4 + 20), (c2_, Wd * 3 // 4 - 20)):
+            gl = Image.new("RGBA", (Wd, Hd), (0, 0, 0, 0))
+            ImageDraw.Draw(gl).ellipse([cx - 230, 400 - 230, cx + 230, 400 + 230], fill=(228, 232, 240, 80 if (blends(mk) or is_dark(mk, 50)) else 40))
+            gl = gl.filter(ImageFilter.GaussianBlur(90))
+            im.paste(gl, (0, 0), gl)
+            m2 = mk.copy(); m2.thumbnail((360, 360), Image.LANCZOS)
+            _shadow_paste(im, m2, cx - m2.width // 2, 400 - m2.height // 2, 20)
+        d = ImageDraw.Draw(im, "RGBA")
+        d.line([Wd // 2, 290, Wd // 2, 510], fill=(255, 255, 255, 70), width=3)
+        d.rectangle([60, 720, 190, 728], fill=tuple(acc))
+        yend = _title_v(d, j.get("title") or "Inter Futbol", 60, 760, Wd - 120, 420, 76, 44)
     else:
         _stripes(im, acc)
         if mark:
