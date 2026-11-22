@@ -3014,7 +3014,8 @@ const leftCrest = async (env, post, ci, idx) => {
   // liga ham bo'lmasa va matnda "X terma jamoasi" bo'lsa — chapda o'sha terma jamoa gerbi (qaysi jamoa haqida gap ketsa — o'shaniki)
   if (!(ci && ci.subj && ci.subj.t === "club")) {
     const tl = plain.split("\n").find((l) => l.trim()) || "";
-    if (!/\blig|league|kubog|[cç]empionat|chempionat|\bcup\b/i.test(tl)) { const nc = await natCrest(plain).catch(() => ""); if (nc) return nc; }
+    // 2026-11-22 (388-post): jahon/Yevropa chempionati, mundial, Osiyo kubogi — terma jamoalar turniri; sarlavhada shular bo'lsa ham terma jamoa gerbi qo'yiladi
+    if (!/\blig|league|kubog|[cç]empionat|chempionat|\bcup\b/i.test(tl) || /jahon\s+(?:ch|ç)empionat|mundial|yevropa\s+(?:ch|ç)empionat|osiyo\s+kubog|world\s+cup/i.test(tl)) { const nc = await natCrest(plain).catch(() => ""); if (nc) return nc; }
   }
   if (ci && ci.subj && ci.subj.t === "club") { const n = ci.subj.n; return (await logoUrl(env, n, idx || {})) || ESPN_CREST[n] || ESPN_CREST[Object.keys(ESPN_CREST).find((k) => norm(k) === norm(n))] || (await findCrest(env, n, idx)); }
   if (ci && ci.subj) return ""; // mavzu liga bo'lsa — chapda liga logotipi (avvalgidek)
