@@ -75,7 +75,7 @@ def main():
     done = skip = fail = 0
     for P in F.values():
         for p in P.get("ph", []):
-            if (only and p["m"] not in only) or (p.get("sr") and p.get("d")):
+            if (only and p["m"] not in only) or (p.get("sr") and p.get("d") and min(p.get("w") or 9999, p.get("h") or 9999) >= 500):
                 continue
             try:
                 f = tg("getFile", data={"file_id": p["f"]})
