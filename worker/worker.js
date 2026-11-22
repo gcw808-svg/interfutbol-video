@@ -1629,6 +1629,9 @@ async function libIndex(env, m, edited) {
   let cap = String(m.caption || "").trim();
   if (!cap && m.media_group_id) cap = (await kvGet(env, "fgrp:" + m.media_group_id, "")) || "";
   else if (cap && m.media_group_id && !edited) await kvPut(env, "fgrp:" + m.media_group_id, cap, { expirationTtl: 900 });
+  // SURAT YILI (2026-11-22, 388-post: 2018-yilgi jahon chempionati haqidagi faktga 2026-yilgi surat tushgan): izohda ismdan keyin yil yozilsa
+  // ("Cristiano Ronaldo 2018") — yil suratga yoziladi (y) va ismdan olib tashlanadi; o'tgan yillar voqeasi haqidagi postga faqat o'sha davr surati qo'yiladi
+  let capY = 0; { const L0 = cap.split("\n"); const mY = (L0[0] || "").match(/^(.*?)[\s,(]+((?:19|20)\d\d)(?:-?\s?yil)?\)?\s*(\|.*)?$/); if (mY && isFaceName(mY[1].split("|")[0])) { capY = +mY[2]; L0[0] = (mY[1] + (mY[3] ? " " + mY[3] : "")).trim(); cap = L0.join("\n"); } }
   let how = "";
   const needName = !cap || !isFaceName(cap.split("\n")[0].split("|")[0]) || cap.split("\n").length > 2;
   if (needName && edited && !m.__guess) return;
@@ -1668,7 +1671,7 @@ async function libIndex(env, m, edited) {
   const P = (F[key] = F[key] || { n: name, al: [], ph: [], u: 0 });
   const na = (x) => (String(x || "").match(/[^\x00-\x7f]/g) || []).length;
   P.n = P.n && pnorm(P.n) === key && na(P.n) > na(name) ? P.n : name; P.al = [...new Set([...(P.al || []), ...al])].slice(0, 12);
-  const rec = { f: ph.file_id, uid: ph.file_unique_id, w: ph.width || 0, h: ph.height || 0, m: m.message_id, low: small ? 1 : 0, t: Date.now(), ...(box ? { b: box } : {}) };
+  const rec = { f: ph.file_id, uid: ph.file_unique_id, w: ph.width || 0, h: ph.height || 0, m: m.message_id, low: small ? 1 : 0, t: Date.now(), ...(box ? { b: box } : {}), ...(capY ? { y: capY } : {}) };
   const ix = P.ph.findIndex((p) => p.uid === ph.file_unique_id);
   if (ix < 0) P.ph.push(rec); else P.ph[ix] = { ...P.ph[ix], ...rec, t: P.ph[ix].t || rec.t };
   await kvPut(env, "faces", F);
@@ -1761,10 +1764,18 @@ async function squadByNumber(club, num) {
   } catch (e) { return ""; }
 }
 // kartochka uchun bazadagi surat (Rasmlar bazasi): post kim haqida bo'lsa — o'sha odamning surati (bir nechta bo'lsa — navbat bilan)
+// SURAT DAVRI MOS BO'LISHI SHART (2026-11-22, Bahtiyor aka, 388-post: "rasmi mavzuga tushmagan... kelgusida shunday muammo bo'lmasligi kerak" —
+// 2018-yilgi jahon chempionati haqidagi faktga 2026-yilgi formadagi surat qo'yilgan): sarlavhada o'tgan yil(lar) voqeasi bo'lsa (joriy yildan kamida 2 yil oldin;
+// tug'ilgan/vafot etgan kun postlari bundan mustasno), faqat yili ma'lum va shu davrga (±1 yil) to'g'ri keladigan surat olinadi; bunday surat bo'lmasa
+// surat qo'yilmaydi (gerbli karta chiziladi) va adminga qaysi yil surati kerakligi yoziladi. Surat yili: y (izohdagi yil) yoki wt (Commons fayl nomidagi yil).
+const photoYear = (p) => +(p && p.y) || +((String((p && p.wt) || "").match(/(?<!\d)((?:19|20)\d\d)(?!\d)/) || [])[1] || 0);
+const eventYears = (post) => { const h = String(post || "").replace(/<[^>]+>/g, " ").split("\n").slice(0, 2).join(" "); if (/tavallud|tu[gğ]['ʻ‘’]?il|vafot|olamdan/i.test(h)) return null; const ys = [...h.matchAll(/(?<!\d)((?:19|20)\d\d)(?!\d)/g)].map((m) => +m[1]); const cy = new Date().getUTCFullYear(); if (!ys.length || ys.some((y) => y > cy - 2)) return null; return [Math.min(...ys), Math.max(...ys)]; };
 async function faceUrl(env, post, pick) {
   try {
     const F = await kvGet(env, "faces", {}); const k = faceFor(F, post); if (!k) return "";
-    const ph = (F[k].ph || []).filter((p) => !p.low); const L = ph.length ? ph : F[k].ph || []; if (!L.length) return "";
+    const ph = (F[k].ph || []).filter((p) => !p.low); let L = ph.length ? ph : F[k].ph || []; if (!L.length) return "";
+    const ev = pick ? null : eventYears(post);
+    if (ev) { L = L.filter((p) => { const y = photoYear(p); return y && y >= ev[0] - 1 && y <= ev[1] + 1; }); if (!L.length) { try { const ad = (await getAdmins(env))[0]; const yy = ev[0] === ev[1] ? ev[0] : ev[0] + "–" + ev[1]; if (ad) await tg(env, "sendMessage", { chat_id: ad, text: "📷 " + F[k].n + ": " + yy + "-yilgi surat bazada yo'q — post surati gerbli karta bilan chizildi. Shu davrdagi suratini «" + F[k].n + " " + ev[1] + "» izohi bilan rasmlar kanaliga tashlasangiz, bunday postlarga o'sha qo'yiladi." }); } catch (e) {} return ""; } }
     const p = pick ? L[(pick - 1) % L.length] : L[Math.floor(Date.now() / 3600e3) % L.length];
     return phUrl(p);
   } catch (e) { return ""; }
