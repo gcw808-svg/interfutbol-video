@@ -1797,6 +1797,9 @@ async function faceUrl(env, post, pick) {
     const ph = (F[k].ph || []).filter((p) => !p.low); let L = ph.length ? ph : F[k].ph || []; if (!L.length) return "";
     const ev = pick ? null : eventYears(post);
     if (ev) { L = L.filter((p) => { const y = photoYear(p); return y && y >= ev[0] - 1 && y <= ev[1] + 1; }); if (!L.length) { try { const ad = (await getAdmins(env))[0]; const yy = ev[0] === ev[1] ? ev[0] : ev[0] + "–" + ev[1]; if (ad) await tg(env, "sendMessage", { chat_id: ad, text: "📷 " + F[k].n + ": " + yy + "-yilgi surat bazada yo'q — post surati gerbli karta bilan chizildi. Shu davrdagi suratini «" + F[k].n + " " + ev[1] + "» izohi bilan rasmlar kanaliga tashlasangiz, bunday postlarga o'sha qo'yiladi." }); } catch (e) {} return ""; } }
+    // FORMA (2026-11-22, 417-post — Real Madrid haqidagi yangilikka terma jamoa formasidagi surat tushgan): suratda klub belgisi (cl) bo'lsa va post matnida shu klub tilga olinsa —
+    // faqat o'sha formadagi suratlar olinadi; matnda yo'q klub formasidagi surat esa (boshqa surat bor bo'lsa) olinmaydi
+    if (!pick) { const pt = " " + pnorm(String(post).replace(/<[^>]+>/g, " ")) + " "; const hit = L.filter((p) => p.cl && pt.includes(" " + pnorm(p.cl) + " ")); if (hit.length) L = hit; else { const free = L.filter((p) => !p.cl); if (free.length) L = free; } }
     const p = pick ? L[(pick - 1) % L.length] : L[Math.floor(Date.now() / 3600e3) % L.length];
     // IKKI KISHILIK SURAT (2026-11-22, 414-post): "Lionel Messi va Cristiano Ronaldo" kabi juftlik kaliti — karta yotiq (1600x900) chiziladi, tik qirqilsa ikkalasi ham kesilib qoladi
     const u = phUrl(p); return / (va|and|&) /i.test(F[k].n || "") ? u + (u.includes("?") ? "&" : "?") + "wide=1" : u;
@@ -3339,9 +3342,15 @@ async function ubRoute(env, req, url) {
     if (!key || !isFaceName(name) || !b0.f || !b0.uid) return J({ ok: false });
     const F = await kvGet(env, "faces", {}); const P = (F[key] = F[key] || { n: name, al: [], ph: [], u: 0 });
     P.al = [...new Set([...(P.al || []), name])].slice(0, 12);
-    if (!P.ph.some((p) => p.uid === b0.uid || (b0.src && p.src === b0.src))) P.ph.push({ f: b0.f, uid: b0.uid, w: b0.w || 0, h: b0.h || 0, m: b0.m, low: b0.w && Math.min(b0.w, b0.h) < 500 ? 1 : 0, t: Date.now(), sr: 1, ...(b0.b ? { b: b0.b, x: b0.x || [], d: 1 } : {}), ...(b0.src ? { src: b0.src } : {}), ...(b0.c ? { c: String(b0.c).slice(0, 160) } : {}), ...(+b0.y > 1900 ? { y: +b0.y } : {}) });
+    if (!P.ph.some((p) => p.uid === b0.uid || (b0.src && p.src === b0.src))) P.ph.push({ f: b0.f, uid: b0.uid, w: b0.w || 0, h: b0.h || 0, m: b0.m, low: b0.w && Math.min(b0.w, b0.h) < 500 ? 1 : 0, t: Date.now(), sr: 1, ...(b0.b ? { b: b0.b, x: b0.x || [], d: 1 } : {}), ...(b0.src ? { src: b0.src } : {}), ...(b0.c ? { c: String(b0.c).slice(0, 160) } : {}), ...(+b0.y > 1900 ? { y: +b0.y } : {}), ...(b0.cl ? { cl: String(b0.cl).slice(0, 40) } : {}) });
     if (Array.isArray(b0.al)) P.al = [...new Set([...P.al, ...b0.al.map((x) => String(x).trim()).filter(isFaceName)])].slice(0, 12);
     await kvPut(env, "faces", F); return J({ ok: true, n: P.ph.length });
+  }
+  // SURATDAGI FORMA (2026-11-22, 417-post, Bahtiyor aka: "Real formasidagisini qo'y, bundan keyin formalarga ham e'tibor ber"): suratga klub (cl) va yil (y) belgisi qo'yish — {m: baza xabari, cl: "Real Madrid" | "-" (olib tashlash), y}
+  if (url.pathname === "/ub/facetag" && req.method === "POST") {
+    const b0 = await req.json().catch(() => ({})); const F = await kvGet(env, "faces", {}); let hit = 0;
+    for (const P of Object.values(F)) for (const p of P.ph || []) if (p.m === +b0.m) { if (b0.cl === "-") delete p.cl; else if (b0.cl) p.cl = String(b0.cl).slice(0, 40); if (+b0.y > 1900) p.y = +b0.y; hit++; }
+    if (hit) await kvPut(env, "faces", F); return J({ ok: !!hit, hit });
   }
   // bir nechta suratni BITTA KV yozuvi bilan qo'shish (people.py — odamlar roboti): {items: [{name, al, f, uid, w, h, m, b, x, c}]}
   if (url.pathname === "/ub/faceaddm" && req.method === "POST") {

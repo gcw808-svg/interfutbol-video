@@ -10,6 +10,9 @@ on:
         required: true
       year:
         default: ""
+      club:
+        description: "suratdagi forma klubi (ixtiyoriy): Real Madrid"
+        default: ""
 permissions:
   contents: read
 jobs:
@@ -23,6 +26,7 @@ jobs:
           MSG: ${{ inputs.msg }}
           NAME: ${{ inputs.name }}
           YEAR: ${{ inputs.year }}
+          CLUB: ${{ inputs.club }}
         run: |
           python3 - <<'PY'
           import hashlib, io, json, os, urllib.request
@@ -59,6 +63,7 @@ jobs:
           key = hashlib.sha256(("ub-" + T).encode()).hexdigest()[:40]
           body = {"name": name, "f": f["file_id"], "uid": f["file_unique_id"], "w": w, "h": h, "m": n["message_id"]}
           if year.isdigit(): body["y"] = int(year)
+          if os.environ.get("CLUB", "").strip(): body["cl"] = os.environ["CLUB"].strip()
           rq = urllib.request.Request("https://inter-futbol-bot.gcw808.workers.dev/ub/faceadd", data=json.dumps(body).encode(), headers={"x-key": key, "content-type": "application/json", "user-agent": "InterFutbolArxiv"})
           out = urllib.request.urlopen(rq, timeout=60).read().decode()[:200]
           print("::notice::baza xabari " + str(n["message_id"]) + " " + str(w) + "x" + str(h) + " " + out)

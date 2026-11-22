@@ -1,0 +1,33 @@
+name: facetag
+# Bazadagi suratga forma klubi (cl) va yil (y) belgisi qo'yish — 2026-11-22, 417-post: post qaysi klub haqida bo'lsa, o'sha formadagi surat olinadi.
+# msg — "Inter Futbol — Rasmlar" kanalidagi xabar raqami; club — "Real Madrid" ("-" — belgini olib tashlash); year — ixtiyoriy.
+on:
+  workflow_dispatch:
+    inputs:
+      msg:
+        required: true
+      club:
+        default: ""
+      year:
+        default: ""
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-slim
+    timeout-minutes: 3
+    steps:
+      - env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          MSG: ${{ inputs.msg }}
+          CLUB: ${{ inputs.club }}
+          YEAR: ${{ inputs.year }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, urllib.request
+          key = hashlib.sha256(("ub-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:40]
+          body = {"m": int(os.environ["MSG"]), "cl": os.environ.get("CLUB", "").strip()}
+          if os.environ.get("YEAR", "").strip().isdigit(): body["y"] = int(os.environ["YEAR"])
+          rq = urllib.request.Request("https://inter-futbol-bot.gcw808.workers.dev/ub/facetag", data=json.dumps(body).encode(), headers={"x-key": key, "content-type": "application/json", "user-agent": "InterFutbolTag"})
+          print("::notice::" + urllib.request.urlopen(rq, timeout=60).read().decode()[:200])
+          PY
