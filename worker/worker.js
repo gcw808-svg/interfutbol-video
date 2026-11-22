@@ -1343,7 +1343,8 @@ async function lineupsAuto(env) {
     const hf = rh.formation || "", af = ra.formation || "";
     const tag = (x) => "#" + String(x).replace(/[^\p{L}\p{N}]/gu, "");
     const nm = (L) => L.map((p) => "⟦" + p[1] + "⟧").join(", ");
-    const post = `<b>⟦${H}⟧ – ⟦${A}⟧: asosiy tarkiblar</b>\n\n${dt}, ${comp}${stage ? ", " + stage : ""}. Uchrashuv Toshkent vaqti bilan soat ${tm} da boshlanadi.\n\n<b>⟦${H}⟧</b>${hf ? " (" + hf + ")" : ""}: ${nm(hl)}.\n\n<b>⟦${A}⟧</b>${af ? " (" + af + ")" : ""}: ${nm(al)}.\n\n#Tarkib ${tag(H)} ${tag(A)}`;
+    // 2026-11-22 (416-post, Bahtiyor aka: "sostav joyini o'chirib yubordim, chunki rasmda sostav bor — bundan keyin shu ko'rinishda"): matnda futbolchilar ro'yxati YOZILMAYDI — tarkib faqat rasmda
+    const post = `<b>⟦${H}⟧ – ⟦${A}⟧: asosiy tarkiblar</b>\n\n${dt}, ${comp}${stage ? ", " + stage : ""}. Uchrashuv Toshkent vaqti bilan soat ${tm} da boshlanadi.\n\n#Tarkib ${tag(H)} ${tag(A)}`;
     await resultJob(env, post, null, { kind: "lu", league: compLogoName(m.competition?.code), goals: { lineup: 1, hl, al, hf, af, time: tm, date: newAlpha(dt) } });
     n++;
   }
@@ -3175,7 +3176,7 @@ async function luRedo(env, chat, mid, wm) {
   const E = await espnMatch(m, H, A).catch(() => null); if (!E?.eid) return { ok: false, why: "ESPN o'yini topilmadi" };
   const sm = await (await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${E.lg}/summary?event=${E.eid}`)).json();
   const RS = sm.rosters || []; const st = (r) => lineupOrder((r?.roster || []).filter((p) => p.starter).map((p) => [String(p.jersey || ""), canonFix(p.athlete?.displayName || ""), p.position?.abbreviation || ""]));
-  const hl = st(RS.find((r) => r.homeAway === "home")), al = st(RS.find((r) => r.homeAway === "away"));
+  const rH = RS.find((r) => r.homeAway === "home"), rA = RS.find((r) => r.homeAway === "away"); const hl = st(rH), al = st(rA);
   if (hl.length !== 11 || al.length !== 11) return { ok: false, why: "tarkib olinmadi" };
   // ismlar va klub nomlari alifbo o'girishidan himoyalanadi
   for (const n of [H, A, ...hl.map((p) => p[1]), ...al.map((p) => p[1])]) if (n) html = html.split(/(⟦[^⟧]*⟧|<[^>]*>|#[\p{L}\p{N}_]+)/u).map((p, i) => (i % 2 ? p : p.split(n).join("⟦" + n + "⟧"))).join("");
@@ -3184,7 +3185,7 @@ async function luRedo(env, chat, mid, wm) {
   const lgName = compLogoName(m.competition?.code); const crest = (n) => ESPN_CREST[n] || "";
   let [homeLogo, awayLogo, leagueLogo] = await Promise.all([logoUrl(env, H, idx), logoUrl(env, A, idx), logoUrl(env, lgName, idx)]);
   homeLogo = homeLogo || crest(H) || (await natTeamLogo(env, H)); awayLogo = awayLogo || crest(A) || (await natTeamLogo(env, A)); leagueLogo = leagueLogo || espnLgLogo(lgName) || "";
-  await kvPut(env, "cjob:" + id, { title: plain[0], home: cardNm(H), away: cardNm(A), score: "", league: newAlpha(lgName || ""), homeLogo, awayLogo, leagueLogo, lineup: 1, hl, al, hf: fmOf(H), af: fmOf(A), time, date, wm: wm === "no" ? "no" : "", chan: html, rep: mid, kind: "lu", story: 0 }, { expirationTtl: 7 * 3600 });
+  await kvPut(env, "cjob:" + id, { title: plain[0], home: cardNm(H), away: cardNm(A), score: "", league: newAlpha(lgName || ""), homeLogo, awayLogo, leagueLogo, lineup: 1, hl, al, hf: fmOf(H) || rH?.formation || "", af: fmOf(A) || rA?.formation || "", time, date, wm: wm === "no" ? "no" : "", chan: html, rep: mid, kind: "lu", story: 0 }, { expirationTtl: 7 * 3600 });
   await repWatch(env, id, mid); await ghDispatch(env, "card.yml", { job: id });
   return { ok: true, id, n: hl.length + al.length };
 }
