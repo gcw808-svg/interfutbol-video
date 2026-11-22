@@ -1,0 +1,45 @@
+name: kanalkor
+# Yopiq kanaldagi (rasmlar bazasi / arxiv) oxirgi xabarlar ro'yxati — 2026-11-22, 414-post: Bahtiyor aka tashlagan surat qaysi kanalda va
+# qaysi raqamda ekanini Telegram Web'siz topish uchun. Faqat raqam, vaqt, tur, o'lcham va izoh chiqadi (surat yuklanmaydi).
+on:
+  workflow_dispatch:
+    inputs:
+      chat:
+        description: "baza | arxiv"
+        default: "baza"
+      n:
+        default: "25"
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: pip install -q telethon
+      - env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+          CHAT: ${{ inputs.chat }}
+          N: ${{ inputs.n }}
+        run: |
+          python3 - <<'PY'
+          import asyncio, hashlib, json, os, urllib.request
+          from telethon import TelegramClient
+          from telethon.sessions import StringSession
+          key = hashlib.sha256(("ub-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:40]
+          j = json.loads(urllib.request.urlopen(urllib.request.Request("https://inter-futbol-bot.gcw808.workers.dev/ub/dksweep", headers={"x-key": key, "user-agent": "kanalkor"}), timeout=120).read())
+          cid = {"baza": -1004498416461, "arxiv": -1003533987068}[os.environ["CHAT"]]
+          async def main():
+              c = TelegramClient(StringSession(j["session"]), int(os.environ["TG_API_ID"]), os.environ["TG_API_HASH"])
+              await c.connect()
+              await c.get_dialogs(limit=300)
+              async for m in c.iter_messages(cid, limit=int(os.environ["N"])):
+                  f = m.file
+                  kind = "surat" if m.photo else ("fayl " + str(f.mime_type) if f else "matn")
+                  size = (str(f.width) + "x" + str(f.height)) if f and f.width else ""
+                  print(m.id, m.date.strftime("%m-%d %H:%M"), kind, size, "alb" if m.grouped_id else "", "| " + " ".join((m.message or "").split())[:90], "| javob:" + str(m.reply_to.reply_to_msg_id) if m.reply_to else "")
+              await c.disconnect()
+          asyncio.run(main())
+          PY
