@@ -1730,7 +1730,8 @@ async function rasmRedo(env, chat, mid, quiet, ov) {
       if (!m) { await tg(env, "sendMessage", { chat_id: chat, text: "Kanalda bu raqamli post topilmadi." }); return false; }
       await tg(env, "deleteMessage", { chat_id: chat, message_id: m.message_id }).catch(() => null);
       const t0 = m.caption != null ? m.caption : m.text; const e0 = m.caption != null ? m.caption_entities : m.entities;
-      const html = hashFix(CANON.reduce((a, [re, v]) => a.replace(re, v), entHtmlNoLogo(t0 || "", e0)));
+      // eski surat muallifi qatori olib tashlanadi — yangi suratga mos qator (bo'lsa) qaytadan qo'yiladi (2026-11-22, 417-post: surat almashgach "Foto: Bryan Berlin" qolib ketgan)
+      const html = hashFix(CANON.reduce((a, [re, v]) => a.replace(re, v), entHtmlNoLogo(t0 || "", e0))).replace(/\n*<i>\s*⟦?Foto:[^\n<]*(?:Wikimedia Commons|Flickr)⟧?\s*<\/i>/gi, "");
       const idx = await kvGet(env, "lgidx", {}); const ci = cardInfo(html, idx);
       const [leagueLogo0, ...cls] = await Promise.all([leagueLogoUrl(env, ci.league, idx), ...(ci.clubs || []).map((n) => logoUrl(env, n, idx))]);
       const clubLogos = cls.map((u, k) => u || ESPN_CREST[ci.clubs[k]] || "").filter(Boolean).slice(0, 4);
