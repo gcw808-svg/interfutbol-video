@@ -2519,7 +2519,10 @@ ${item.text}`;
   if (!new RegExp(pnorm(s0.name).split(" ").pop()).test(pnorm(post.split("\n")[0]))) return { bad: 1, why: "sarlavhada ism yo'q" };
   const fc = await factCheck(env, item, post, deadline);
   if (fc.bad.length) return { bad: 1, why: "nazoratdan o'tmadi" };
-  return { post: fc.text, name: s0.name, legend: { name: s0.name, sub: subOk ? sub : "", tiles } };
+  // IZOH CHEGARASI (2026-11-23: 378, 403, 432-postlar oxiri kesilib chiqqan — "#Samu", "...sifatida e'"): rasm izohi 1024 belgidan oshsa Telegram kesadi.
+  // Matn (surat muallifi qatori uchun joy bilan) 880 belgidan uzun bo'lsa, oxirgi xatboshilar olib tashlanadi; heshteglar saqlanadi.
+  const fitCap = (h) => { const P = String(h).split(/\n\s*\n/); const tags = /^\s*#/.test(P[P.length - 1]) ? P.pop() : ""; const len = () => P.join("\n\n").replace(/<[^>]+>|[⟦⟧]/g, "").length + tags.length + 2; while (P.length > 2 && len() > 880) P.pop(); return P.join("\n\n") + (tags ? "\n\n" + tags : ""); };
+  return { post: fitCap(fc.text), name: s0.name, legend: { name: s0.name, sub: subOk ? sub : "", tiles } };
 }
 async function afsonaRun(env, to, pick) {
   const f = await afsonaMake(env, Date.now() + 110000, pick); if (!f) return "none (bazada surati bor, ishlatilmagan afsona qolmadi yoki Vikipediya javob bermadi)"; if (f.bad) return "err " + f.why;
