@@ -1,0 +1,30 @@
+name: maqola
+# "Batafsil o'qish" (Telegraph) maqolasini tuzatish ("/maqola URL" bilan bir xil; Telegram Web ochiq bo'lmaganda) — 2026-11-23.
+# text: 1-qator "# Sarlavha" (ixtiyoriy), keyin xatboshilar (har qator — bitta xatboshi; "## " — kichik sarlavha). Rasm va oxirgi havola saqlanadi.
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        required: true
+      text:
+        required: true
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-slim
+    timeout-minutes: 3
+    steps:
+      - env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          URL: ${{ inputs.url }}
+          TXT: ${{ inputs.text }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, urllib.request
+          key = hashlib.sha256(("ub-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:40]
+          body = {"url": os.environ["URL"], "text": os.environ["TXT"].replace("\\n", "\n")}
+          rq = urllib.request.Request("https://inter-futbol-bot.gcw808.workers.dev/ub/maqola", data=json.dumps(body).encode(), headers={"x-key": key, "content-type": "application/json", "user-agent": "InterFutbolMaqola"})
+          r = urllib.request.urlopen(rq, timeout=60).read().decode()[:300]
+          print("::notice::" + r)
+          PY
