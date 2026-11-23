@@ -7,6 +7,13 @@ import card
 from PIL import Image, ImageDraw, ImageFilter
 
 Wd, Hd = 1080, 1350
+# TASDIQLANGAN USLUB (Bahtiyor aka, 2026-11-23: "Afisha iFsiz 1 — shu variant ma'qul; bundan keyin shunga o'xshash ma'lumotli yangiliklar shu uslubda chiqsin"):
+# yomg'irli tungi stadion, darvoza to'ri ichidan ko'rinish, burchakda to'p, chapda orqadan ko'ringan futbolchi; iF belgisisiz. "prompt" berilmasa shu sahna,
+# "shirt" — forma rangi (masalan "plain red shirt and white shorts").
+STYLE = ("Vertical poster background, rainy night football stadium under bright floodlights. Foreground: view from inside the goal through a wet white goal net with raindrops, "
+         "the net strings crossing the edges of the frame. A muddy white football rests in the net in the bottom right corner, large and close. On the far left side of the frame, "
+         "in the middle distance, a dejected footballer seen from behind stands alone with hands on hips, wearing a {shirt}. The entire upper right and centre of the image is empty "
+         "dark night sky with falling rain, nothing there. Blurred crowd stands low in the background, wet dark green grass, moody dark tones.")
 NEG = " Photorealistic sports photography, cinematic, dramatic floodlights. Absolutely no text, no letters, no numbers, no logos, no watermarks, no scoreboard. No visible faces."
 
 
@@ -134,7 +141,7 @@ def compose(bg, j):
             if k < len(foot) - 1:
                 d.ellipse([x + gap - dot, y - dot, x + gap + dot, y + dot], fill=acc); x += 2 * gap + 2 * dot
     out = im.convert("RGB")
-    if j.get("mark", 1):  # "mark": 0 — iF belgisisiz (Bahtiyor aka, 2026-11-23: "burchakdagi iF logoni olib tashla")
+    if j.get("mark", 0):  # odatda iF belgisisiz; "mark": 1 — belgi bilan (Bahtiyor aka, 2026-11-23: "burchakdagi iF logoni olib tashla")
         card.NO_MARK = False
         card.paste_mark(out, "tr")
     return out
@@ -149,7 +156,7 @@ if __name__ == "__main__":
         raw = None
         for g in (gen_gemini, gen_hf, gen_poll):
             try:
-                raw = g(j["prompt"] + NEG, int(j.get("seed") or 100) + v * 7); break
+                raw = g((j.get("prompt") or STYLE.format(shirt=j.get("shirt") or "plain dark shirt and white shorts")) + NEG, int(j.get("seed") or 100) + v * 7); break
             except Exception as e:
                 print("  -", g.__name__, str(e)[:200])
         if not raw:
