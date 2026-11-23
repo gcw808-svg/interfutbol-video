@@ -167,9 +167,6 @@ const FEEDS = [
 
     // yangi o'zbek lotin alifbosi (2026): O' → Ö, G' → Ğ, Sh → Ş, Ch → Ç. HTML teglar, havolalar, @nomlar, heshteglar,
 // ⟦…⟧ ichidagi original nomlar (klub, futbolchi, murabbiy) va chet tilidagi so'zlar o'zgarmaydi
-// FAKTLAR KANALGA CHIQMAYDI (Bahtiyor aka, 2026-11-24: "faktlarni chiqarmaymiz, faktlar kerak emas"): 10:00 tarixiy fakt (#FutbolTarixi),
-// 15:00 o'zbek futboli fakti va 20:00 qiziqarli fakt (#QiziqarliFakt) jadvaldan butunlay o'chirildi — KV dagi histMode/factMode/uzfMode qiymatidan qat'i nazar
-const FACTS_OFF = true;
 const NA_KEEP = /^(Christian|Christopher|Chris|Christensen|Achraf|Sanchez|Schmeichel|Pochettino|Chivu|Marchisio|Echeverri|Ochoa|Shaqiri|Fischer|Bochum|Mönchengladbach|Gladbach|Manchester|Michael|Mitchell|Richarlison|Sancho|Chiesa|Shaw|Ashley|Charlton|Chalobah|Chilwell|Kimmich|Fletcher|Richards|Rashford|Champions|Chiellini|Sheffield|Shakhtar|Chicharito|Shearer|Schick|Sesko|Eintracht|Gregoritsch)$/;
 // 2026-11-21 (378-post sarlavhasi "Samuel Etöo"): "o'" dan keyin yana "o" kelsa — o'zbekcha emas, xorijiy ism (Eto'o)
 const NA_FOREIGN = /^sch|c(?!h)|w|ea|ou|th|ph|ck|ee|oo|ae|o['‘’ʻʼ`]o|[àáâãäåæèéêëìíîïñòóôõøùúûüýÿœß]/i;
@@ -1982,109 +1979,9 @@ async function fixturesRun(env, toAdmin) {
   return "ok " + ms.length;
 }
 
-// ---------------- «BUGUN TARIXDA» RUKNI (manba: Vikipediya "On this day") ----------------
-const HIST_CLUBS = /Manchester United|Manchester City|Liverpool F|Arsenal F|Chelsea F|Real Madrid|FC Barcelona|Barcelona|Atl[eé]tico Madrid|Inter Milan|Internazionale|AC Milan|Juventus|Bayern Munich|Bayern München|Borussia Dortmund|Paris Saint-Germain|Al[- ]Nassr|Inter Miami|Uzbekistan/gi;
-async function wikiJson(us) { for (let i = 0; i < 4; i++) { try { const r = await fetch(us[i % us.length], { headers: { "user-agent": "InterFutbolBot/1.1 (https://t.me/Inter_Futbol_TV)", "api-user-agent": "InterFutbolBot/1.1 (https://t.me/Inter_Futbol_TV)" } }); if (r.ok) { const j = await r.json().catch(() => null); if (j) return j; } } catch (e) {} await new Promise((s) => setTimeout(s, 2000 * (i + 1))); } throw new Error("Vikipediya javob bermadi"); } async function opsReport(env, d) { const L = (await kvGet(env, "cronLog", [])).filter((x) => tashDate(x.t) === d); const a = (await kvGet(env, "autoN", null)) || {}; const NM = { collect: "manbalarni yig'ish", send: "yangiliklar", res: "natijalar", lu: "tarkiblar", hook: "Telegram aloqasi", audit: "tekshiruv", fix: "o'yinlar jadvali", fact: "qiziqarli fakt", hist: "tarixiy fakt", tbl: "turnir jadvallari", resfb: "natija kartochkasi", usweep: "hisob orqali chiqarish", sendv: "video", fill: "maqolalar", watch: "nazorat" }; const s = "\n\n⚙️ Ish holati: avtomatik yangiliklar " + (a.d === d ? a.n : 0) + " ta."; if (!L.length) return s + " Nosozlik qayd etilmadi."; const g = {}; for (const x of L) (g[x.k] = g[x.k] || []).push(x); return s + "\nNosozliklar (bot o'zi qayta urindi):\n" + Object.entries(g).map(([k, v]) => "• " + (NM[k] || k) + ": " + v.length + " marta, oxirgisi " + tashTime(new Date(v[v.length - 1].t).toISOString()) + " — " + String(v[v.length - 1].e).split("\n")[0].slice(0, 90)).join("\n"); } async function newsWatch(env) { if (tashHour() < 13 || !(await autoOn(env))) return; const a = (await kvGet(env, "autoN", null)) || {}; if (Date.now() - (a.last || 0) < 5 * 3600e3) return; if (a.d === tashDate(Date.now()) && a.n >= ((await kvGet(env, "ecoMode", 0)) ? ECO_DAY_LIMIT : AUTO_DAY_LIMIT)) return; /* kunlik limit to'lgan bo'lsa sukunat — xato emas (2026-11-11) */ if (Date.now() - (await kvGet(env, "quietWarn", 0)) < 6 * 3600e3) return; await kvPut(env, "quietWarn", Date.now(), { expirationTtl: 86400 }); const st = await kvGet(env, "st", null); const ge = String((await env.STATE.get("gerr")) || "").slice(0, 200); const admin = (await getAdmins(env))[0]; if (admin) await tg(env, "sendMessage", { chat_id: admin, text: "⚠️ 5 soatdan beri kanalga avtomatik yangilik chiqmadi.\nNavbatda: " + (st?.queue?.length || 0) + " ta yangilik.\nOxirgi Gemini xatosi: " + (ge || "yo'q") + "\nBot urinishda davom etmoqda." }); } async function histPick(env) {
-  const [y, mo, dd] = tashDate(Date.now()).split("-");
-  const j = await wikiJson(["https://en.wikipedia.org/api/rest_v1/feed/onthisday/all/" + mo + "/" + dd, "https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/all/" + mo + "/" + dd]);
-  const used = await kvGet(env, "histUsed", []);
-  let best = null;
-  for (const k of ["selected", "events", "births", "deaths"]) for (const e of j[k] || []) {
-    const ex = (e.pages || []).map((p) => p.extract || "").join("\n");
-    if (!/footballer|soccer|association football|football club|FIFA|UEFA|Ballon/i.test(e.text + " " + ex.slice(0, 600))) continue;
-    if (/American football|rugby|cricket|Australian rules|Gaelic|Canadian football/i.test(e.text)) continue;
-    const clubs = new Set((ex.match(HIST_CLUBS) || []).map((x) => x.toLowerCase())).size;
-    if (!clubs) continue;
-    const key = mo + dd + e.year + String(e.text).slice(0, 30);
-    if (used.includes(key)) continue;
-    const sc = clubs * 10 + (k === "events" || k === "selected" ? 15 : 0) + Math.min(ex.length / 200, 5);
-    if (!best || sc > best.sc) best = { sc, k, e, ex, key, page: (e.pages || [])[0] };
-  }
-  return best;
-}
-async function histMake(env, deadline) {
-  const b = await histPick(env); if (!b) return null;
-  const day = uzDay(tashDate(Date.now())).split(",")[0];
-  const kind = b.k === "births" ? "tug'ilgan kun" : b.k === "deaths" ? "vafot etgan kun" : "voqea";
-  const item = { title: `${b.e.year}: ${b.e.text}`, desc: "", text: b.ex.slice(0, 5000), link: b.page?.content_urls?.desktop?.page || "https://en.wikipedia.org", source: "Wikipedia", img: b.page?.originalimage?.source || b.page?.thumbnail?.source || null, date: Date.now() };
-  const prompt = `Sen o'zbek tilidagi "Inter Futbol" Telegram kanalining muharririsan. "Bugun tarixda" rukni uchun qisqa post yoz (o'zbek tili, lotin yozuvi).
-Sana: ${day} (shu kunga to'g'ri kelgan voqea). Voqea turi: ${kind}. Yil: ${b.e.year}.
-- "Bugun", "kecha", "shu kuni" kabi nisbiy so'zlarni ISHLATMA — post bir necha hafta keyin o'qilsa ham tushunarli bo'lsin: har doim aniq sana yoz (masalan "1972-yil 4-noyabrda").
-Qoidalar:
-- FAQAT quyidagi manbadagi faktlarni yoz. O'zingdan sana, raqam, klub, sovrin qo'shma. Shubhali narsani yozma.
-- Tuzilishi: 1-qator: <b>qisqa sarlavha</b> aniq sana bilan (masalan "<b>4-noyabr, 1972-yil: Luís Figo tavallud topdi</b>"). Bo'sh qator. 2–4 gap: kim/nima, nega futbol tarixida muhim (klublar, eng katta yutuqlar — faqat manbada bo'lsa). Bo'sh qator. 2–3 heshteg: #FutbolTarixi va klub/futbolchi nomi.
-- Futbolchi va klub nomlarini ORIGINAL rasmiy lotin yozuvida yoz va har birini ⟦ ⟧ ichiga ol: ⟦Luís Figo⟧, ⟦Real Madrid⟧. Heshteglarda qavssiz.
-- Terma jamoa va davlat nomlarini o'zbekcha yoz: "Portugaliya terma jamoasi", "Angliya terma jamoasi" (inglizcha "national team" yozma). Hamma gap tabiiy, ravon o'zbek tilida bo'lsin, inglizcha so'z qoldirma.
-- Boshlanishi tabiiy bo'lsin: "Bugun ... tavallud topgan kun" kabi g'aliz iboralar emas, masalan "1972-yil 4-noyabrda Portugaliyada ... dunyoga kelgan".
-- Emoji ishlatma. Faqat <b> tegi. 600 belgidan oshmasin.
-Manba (Vikipediya):
-${item.title}
-${item.text}`;
-  const raw = await callGemini(env, prompt, 0.4, deadline, 2048, false, true);
-  let post = postClean(raw, false); const fc0 = await factCheck(env, item, post, deadline); if (fc0.bad.length) { const u = await kvGet(env, "histUsed", []); u.push(b.key); await kvPut(env, "histUsed", u.slice(-400)); return { bad: 1 }; } return { post: fc0.text, fixed: fc0.fixed, item, key: b.key };
-  const fc = await factCheck(env, item, post, deadline);
-  if (fc.bad.length) return null;
-  return { post: fc.text, fixed: fc.fixed, item, key: b.key };
-}
-async function histRun(env, toAdmin, test = false) {
-  const admin = (await getAdmins(env))[0];
-  const h = await histMake(env, Date.now() + 60000); if (!h) return "none"; if (h.bad) return "err nazoratdan otmadi";
-  // BAZADAGI SURAT BIRINCHI (2026-11-22, 414-post: Messi va Ronaldo haqidagi faktga manbadagi boshqa futbolchilar surati tushgan): sarlavhadagi odam bazada bo'lsa — manba rasmi olinmaydi
-  const fk0 = toAdmin ? null : faceFor(await kvGet(env, "faces", {}), h.post);
-  const pb = fk0 ? null : await pickBranded(env, h.item, Date.now() + 30000).catch(() => null); if (!pb && !toAdmin) { await resultJob(env, h.post, null, { kind: "news" }); if (!test) { const u0 = await kvGet(env, "histUsed", []); u0.push(h.key); await kvPut(env, "histUsed", u0.slice(-400)); } return "ok"; }
-  const img = pb || (await kvGet(env, "defImg", null));
-  const body = h.post;
-  let r;
-  if (toAdmin) r = await sendRich(env, admin, "🧪 «Bugun tarixda» namunasi — kanalga chiqmaydi\n🛡 Nazoratchi: " + esc(h.fixed.length ? "tuzatdi — " + h.fixed.join("; ").slice(0, 120) : "manbaga mos ✅") + " | <a href=\"" + esc(h.item.link) + "\">manba</a>\n━━━━━━━━━━━━\n" + body, img, undefined);
-  else r = (await userPublish(env, body, img, null, null, admin).catch(() => null)) || (await publish(env, body, img, undefined, null));
-  if (r?.ok && !toAdmin && !test) { const u = await kvGet(env, "histUsed", []); u.push(h.key); await kvPut(env, "histUsed", u.slice(-400)); }
-  return r?.ok ? "ok" : "err " + (r?.description || "");
-}
-
-// ---------------- QIZIQARLI FAKTLAR (manba: Vikipediya maqolalari) ----------------
-const FACT_PAGES = ["Manchester United F.C.", "Manchester City F.C.", "Liverpool F.C.", "Arsenal F.C.", "Chelsea F.C.", "Real Madrid CF", "FC Barcelona", "Atlético Madrid", "Inter Milan", "AC Milan", "Juventus FC", "FC Bayern Munich", "Borussia Dortmund", "Paris Saint-Germain FC", "Al Nassr FC", "Inter Miami CF", "UEFA Champions League", "FIFA World Cup", "UEFA European Championship", "Uzbekistan national football team", "Cristiano Ronaldo", "Lionel Messi", "El Clásico", "Derby della Madonnina", "North West Derby", "Der Klassiker", "Ballon d'Or"];
-async function factMake(env, deadline, pageHint) {
-  const used = await kvGet(env, "factUsed", []);
-  const recent = used.slice(-12).map((u) => u.p);
-  const pool = FACT_PAGES.filter((p) => !recent.includes(p));
-  const page = pageHint || pool[Math.floor(Math.random() * pool.length)];
-  const j = await wikiJson(["https://en.wikipedia.org/w/api.php?action=query&prop=extracts|pageimages&explaintext=1&piprop=original&format=json&redirects=1&titles=" + encodeURIComponent(page)]);
-  const pg = Object.values(j.query?.pages || {})[0] || {};
-  const full = String(pg.extract || "");
-  const parts = full.split(/\n(?===+ )/).filter((x) => x.length > 600 && !/^== (See also|References|External links|Notes|Further reading|Bibliography|Players|Current squad|Kit|Sponsorship)/i.test(x));
-  if (!parts.length) return null;
-  const chunk = parts[Math.floor(Math.random() * parts.length)].slice(0, 5000);
-  const item = { title: pg.title || page, desc: "", text: chunk, link: "https://en.wikipedia.org/wiki/" + encodeURIComponent(String(pg.title || page).replace(/ /g, "_")), source: "Wikipedia", img: pg.original?.source || null, date: Date.now() };
-  const prompt = `Sen o'zbek tilidagi "Inter Futbol" Telegram kanalining muharririsan. Quyidagi Vikipediya parchasidan BITTA eng qiziqarli, ko'pchilik bilmaydigan faktni top va u haqida qisqa post yoz (o'zbek tili, lotin yozuvi).
-Qoidalar:
-- FAQAT parchadagi faktlarni yoz. O'zingdan raqam, sana, ism qo'shma.
-- Tarixda qotib qolgan faktni tanla (bir marta bo'lib o'tgan voqea, rekord, kelib chiqish tarixi). "Hozirgi", "eng ko'p" kabi vaqt o'tib o'zgarishi mumkin bo'lgan faktlardan qoch; agar shunday bo'lsa, qaysi yil holatiga ko'ra ekanini yoz.
-- "Bugun", "kecha", "hozir" so'zlarini ishlatma; sana bo'lsa aniq yili bilan yoz.
-- Tuzilishi: 1-qator: <b>qiziqtiruvchi qisqa sarlavha</b> (faktning o'zi, masalan "<b>Barcelona logotipi 1910-yilda tanlov orqali tanlangan</b>"). Bo'sh qator. 2–3 gap: tafsilot va nega qiziq. Bo'sh qator. 2–3 heshteg: #QiziqarliFakt va klub/futbolchi nomi.
-- Futbolchi va klub nomlarini ORIGINAL rasmiy lotin yozuvida yoz, har birini ⟦ ⟧ ichiga ol. Terma jamoa va davlat nomlari o'zbekcha. Inglizcha so'z qoldirma. Emoji ishlatma. Faqat <b> tegi. 550 belgidan oshmasin.
-Manba: ${item.title}
-${chunk}`;
-  const raw = await callGemini(env, prompt, 0.6, deadline, 2048, false, true);
-  const post = postClean(raw, false);
-  const fc = await factCheck(env, item, post, deadline);
-  if (fc.bad.length) return null;
-  let ftx = String(fc.text || ""); if (!/#QiziqarliFakt/i.test(ftx)) ftx = ftx.replace(/\s+$/, "") + "\n\n#QiziqarliFakt"; // 2026-11-12: 241-post heshtegsiz chiqdi (nazoratchi matnni qayta yozganda tushib qolgan)
-  return { post: ftx, fixed: fc.fixed, item, page };
-}
-async function factRun(env, toAdmin, pageHint, test = false) {
-  const admin = (await getAdmins(env))[0];
-  const f = await factMake(env, Date.now() + 110000, pageHint); if (!f) return "none";
-  // BAZADAGI SURAT BIRINCHI (2026-11-22, 414-post: Messi va Ronaldo haqidagi faktga manbadagi boshqa futbolchilar surati tushgan): sarlavhadagi odam bazada bo'lsa — manba rasmi olinmaydi
-  const fk0 = toAdmin ? null : faceFor(await kvGet(env, "faces", {}), f.post);
-  const pb = fk0 ? null : await pickBranded(env, f.item, Date.now() + 30000).catch(() => null); if (!pb && !toAdmin) { await resultJob(env, f.post, null, { kind: "news" }); if (!test) { const u0 = await kvGet(env, "factUsed", []); u0.push({ p: f.page, t: Date.now() }); await kvPut(env, "factUsed", u0.slice(-100)); } return "ok-card " + f.page; }
-  const img = pb || (await kvGet(env, "defImg", null));
-  let r;
-  if (toAdmin) r = await sendRich(env, admin, "🧪 Qiziqarli fakt namunasi — kanalga chiqmaydi\n🛡 Nazoratchi: " + esc(f.fixed.length ? "tuzatdi — " + f.fixed.join("; ").slice(0, 120) : "manbaga mos ✅") + " | <a href=\"" + esc(f.item.link) + "\">manba</a>\n━━━━━━━━━━━━\n" + f.post, img, undefined);
-  else r = (await userPublish(env, f.post, img, null, null, admin).catch(() => null)) || (await publish(env, f.post, img, undefined, null));
-  if (r?.ok && !toAdmin && !test) { const u = await kvGet(env, "factUsed", []); u.push({ p: f.page, t: Date.now() }); await kvPut(env, "factUsed", u.slice(-100)); }
-  return r?.ok ? "ok " + f.page : "err " + (r?.description || "");
-}
-
+// FAKTLAR O'CHIRILDI (Bahtiyor aka, 2026-11-24: "faktlarni chiqarmaymiz, faktlar kerak emas"): 10:00 tarixiy fakt, 15:00 o'zbek futboli fakti va 20:00 qiziqarli fakt
+// kodi butunlay olib tashlandi (histRun, factRun, uzFactRun va yordamchilari, /ozfakt). wikiJson afsona postlari uchun qoldi.
+async function wikiJson(us) { for (let i = 0; i < 4; i++) { try { const r = await fetch(us[i % us.length], { headers: { "user-agent": "InterFutbolBot/1.1 (https://t.me/Inter_Futbol_TV)", "api-user-agent": "InterFutbolBot/1.1 (https://t.me/Inter_Futbol_TV)" } }); if (r.ok) { const j = await r.json().catch(() => null); if (j) return j; } } catch (e) {} await new Promise((s) => setTimeout(s, 2000 * (i + 1))); } throw new Error("Vikipediya javob bermadi"); } async function opsReport(env, d) { const L = (await kvGet(env, "cronLog", [])).filter((x) => tashDate(x.t) === d); const a = (await kvGet(env, "autoN", null)) || {}; const NM = { collect: "manbalarni yig'ish", send: "yangiliklar", res: "natijalar", lu: "tarkiblar", hook: "Telegram aloqasi", audit: "tekshiruv", fix: "o'yinlar jadvali", fact: "qiziqarli fakt", hist: "tarixiy fakt", tbl: "turnir jadvallari", resfb: "natija kartochkasi", usweep: "hisob orqali chiqarish", sendv: "video", fill: "maqolalar", watch: "nazorat" }; const s = "\n\n⚙️ Ish holati: avtomatik yangiliklar " + (a.d === d ? a.n : 0) + " ta."; if (!L.length) return s + " Nosozlik qayd etilmadi."; const g = {}; for (const x of L) (g[x.k] = g[x.k] || []).push(x); return s + "\nNosozliklar (bot o'zi qayta urindi):\n" + Object.entries(g).map(([k, v]) => "• " + (NM[k] || k) + ": " + v.length + " marta, oxirgisi " + tashTime(new Date(v[v.length - 1].t).toISOString()) + " — " + String(v[v.length - 1].e).split("\n")[0].slice(0, 90)).join("\n"); } async function newsWatch(env) { if (tashHour() < 13 || !(await autoOn(env))) return; const a = (await kvGet(env, "autoN", null)) || {}; if (Date.now() - (a.last || 0) < 5 * 3600e3) return; if (a.d === tashDate(Date.now()) && a.n >= ((await kvGet(env, "ecoMode", 0)) ? ECO_DAY_LIMIT : AUTO_DAY_LIMIT)) return; /* kunlik limit to'lgan bo'lsa sukunat — xato emas (2026-11-11) */ if (Date.now() - (await kvGet(env, "quietWarn", 0)) < 6 * 3600e3) return; await kvPut(env, "quietWarn", Date.now(), { expirationTtl: 86400 }); const st = await kvGet(env, "st", null); const ge = String((await env.STATE.get("gerr")) || "").slice(0, 200); const admin = (await getAdmins(env))[0]; if (admin) await tg(env, "sendMessage", { chat_id: admin, text: "⚠️ 5 soatdan beri kanalga avtomatik yangilik chiqmadi.\nNavbatda: " + (st?.queue?.length || 0) + " ta yangilik.\nOxirgi Gemini xatosi: " + (ge || "yo'q") + "\nBot urinishda davom etmoqda." }); } 
 // ---------------- YANGI POST TURLARI VA O'ZINI O'ZI RIVOJLANTIRISH (2026-11-08) ----------------
 // Mavzular: yangilik manbasi sarlavhasi (ingliz/rus/o'zbek) va kanal posti (o'zbek) uchun bir xil teglar
 const TOPICS = [
@@ -2200,67 +2097,6 @@ async function legionWeekly(env, force, to) {
   const tot = L.reduce((s, x) => s + x.min, 0), goals = L.reduce((s, x) => s + x.g, 0); if (!tot && !force) return "noplay"; // 2026-11-09: hech kim o'ynamagan hafta — "jami 0 daqiqa" posti chiqmaydi
   const post = `<b>O'zbek legionerlari: hafta yakunlari</b>\n\n${uzDay(addDays(d, -7)).split(",")[0]} — ${uzDay(addDays(d, -1)).split(",")[0]}, ${d.slice(0, 4)}-yil.${tot ? ` Legionerlarimiz jami ${tot} daqiqa maydonda bo'ldi${goals ? ", " + goals + " ta gol urdi" : ""}.` : ""}\n\n${blocks}\n\n#Legionerlar #Ozbekiston`;
   await resultJob(env, post, to || null, { kind: "news" }); return "ok";
-}
-
-// ---------------- O'ZBEK FUTBOLI FAKTLARI (Bahtiyor aka tanlovi, 2026-11-08): har kuni 15:00 ----------------
-// Manbalar ko'p: Vikipediya (ingliz, rus, o'zbek) — terma jamoa, klublar, chempionat, afsonalar, turnirlar; FotMob — legionerlar karyerasi, sovrinlari, mavsum statistikasi.
-// Har bir post nazoratchidan (factCheck) o'tadi; rasm — doim brend kartochka (haqiqiy futbolchi surati qo'yilmaydi).
-const UZF_WIKI = [
-  ["en", "Uzbekistan national football team"], ["en", "Pakhtakor Tashkent FK"], ["en", "FC Bunyodkor"], ["en", "FC Nasaf"], ["en", "Navbahor Namangan"], ["en", "FC AGMK"],
-  ["en", "Neftchi Fergana"], ["en", "Uzbekistan Super League"], ["en", "Uzbekistan national under-23 football team"], ["en", "Uzbekistan national under-20 football team"],
-  ["en", "Uzbekistan Football Association"], ["en", "Server Djeparov"], ["en", "Mirjalol Qosimov"], ["en", "Maksim Shatskikh"], ["en", "Odil Ahmedov"], ["en", "Timur Kapadze"],
-  ["en", "Ignatiy Nesterov"], ["en", "Milliy Stadium"], ["en", "Uzbekistan Cup"], ["en", "2011 AFC Asian Cup"], ["en", "2018 AFC U-23 Championship"], ["en", "2023 AFC U-20 Asian Cup"],
-  ["en", "Eldor Shomurodov"], ["en", "Abdukodir Khusanov"], ["en", "Jaloliddin Masharipov"], ["en", "Abbosbek Fayzullaev"],
-  ["ru", "Сборная Узбекистана по футболу"], ["ru", "Пахтакор (футбольный клуб)"], ["ru", "Чемпионат Узбекистана по футболу"], ["ru", "Шацких, Максим Александрович"],
-  ["ru", "Джепаров, Сервер Ризаевич"], ["ru", "Касымов, Мирджалол Мирзаевич"], ["ru", "Бунёдкор"], ["ru", "Насаф (футбольный клуб)"], ["ru", "Кубок Узбекистана по футболу"],
-  ["uz", "Oʻzbekiston milliy futbol terma jamoasi"], ["uz", "Paxtakor (futbol klubi)"],
-];
-async function uzfSource(env) {
-  const used = (await kvGet(env, "uzfUsed", [])).filter((u) => Date.now() - u.t < 20 * 86400e3).map((u) => u.k);
-  for (let tries = 0; tries < 4; tries++) {
-    if (Math.random() < 0.4) { // FotMob: legioner karyerasi
-      const P = FOCUS_PLAYERS.filter((p) => p.fm && !p.star && !used.includes("fm" + p.fm)); if (!P.length) continue; const p = P[Math.floor(Math.random() * P.length)];
-      let j; try { j = await (await fetch("https://www.fotmob.com/api/data/playerData?id=" + p.fm, { headers: { "user-agent": "Mozilla/5.0 InterFutbolBot" } })).json(); } catch (e) { continue; }
-      const ce = j.careerHistory?.careerItems || {}; const yr = (d) => (d ? String(d).slice(0, 4) : "hozirgacha");
-      const row = (x) => `${x.team} (${yr(x.startDate)}–${x.endDate ? yr(x.endDate) : "hozirgacha"}${x.transferType?.text ? ", " + x.transferType.text : ""}): ${x.appearances || "?"} matches, ${x.goals || 0} goals${x.assists ? ", " + x.assists + " assists" : ""}`;
-      const senior = (ce.senior?.teamEntries || []).map(row).join("\n"), nat = (ce["national team"]?.teamEntries || []).map(row).join("\n");
-      const tro = (j.trophies?.playerTrophies || []).flatMap((t) => (t.tournaments || []).map((x) => `${t.teamName}: ${x.leagueName} — ${(x.seasonsWon || []).join(", ")}`)).join("\n");
-      const ml = j.mainLeague ? `${j.mainLeague.leagueName} ${j.mainLeague.season}: ` + (j.mainLeague.stats || []).map((x) => x.title + " " + x.value).join(", ") : "";
-      const text = `Player: ${j.name}. Born: ${String(j.birthDate?.utcTime || "").slice(0, 10)}. Position: ${j.positionDescription?.primaryPosition?.label || ""}. Current club: ${j.primaryTeam?.teamName || ""}.\nClub career (senior):\n${senior}\nNational team:\n${nat}\nTrophies:\n${tro}\nCurrent season: ${ml}`;
-      if (!senior) continue;
-      return { key: "fm" + p.fm, uzName: p.n.replace(/[⟦⟧]/g, ""), item: { title: j.name + " — karyera (FotMob)", desc: "", text, link: "https://www.fotmob.com/players/" + p.fm, source: "FotMob", img: null, date: Date.now() } };
-    }
-    const W = UZF_WIKI.filter(([l, t]) => !used.includes(l + ":" + t)); if (!W.length) continue; const [lang, title] = W[Math.floor(Math.random() * W.length)];
-    let j; try { j = await wikiJson([`https://${lang}.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&format=json&redirects=1&titles=` + encodeURIComponent(title)]); } catch (e) { continue; }
-    const pg = Object.values(j.query?.pages || {})[0] || {}; const full = String(pg.extract || ""); if (full.length < 800) continue;
-    const parts = full.split(/\n(?===+ )/).filter((x) => x.length > 500 && !/^== ?(See also|References|External links|Notes|Literature|Ссылки|Примечания|См\. также|Литература|Manbalar|Havolalar|Current squad|Состав)/i.test(x));
-    if (!parts.length) continue; const chunk = parts[Math.floor(Math.random() * parts.length)].slice(0, 5000);
-    return { key: lang + ":" + title, item: { title: pg.title || title, desc: "", text: chunk, link: `https://${lang}.wikipedia.org/wiki/` + encodeURIComponent(String(pg.title || title).replace(/ /g, "_")), source: "Wikipedia", img: null, date: Date.now() } };
-  }
-  return null;
-}
-async function uzFactMake(env, deadline) {
-  const s0 = await uzfSource(env); if (!s0) return null; const item = s0.item;
-  const prompt = `Sen o'zbek tilidagi "Inter Futbol" Telegram kanalining muharririsan. "O'zbek futboli" rukni uchun quyidagi manbadan BITTA eng qiziqarli, ko'pchilik bilmaydigan faktni top va u haqida qisqa post yoz (o'zbek tili, lotin yozuvi). Manba ingliz, rus yoki o'zbek tilida bo'lishi mumkin.
-Qoidalar:
-- FAQAT manbadagi faktlarni yoz. O'zingdan raqam, sana, ism, klub, sovrin qo'shma. Shubhali narsani yozma.
-- Qiziqarli bo'lsin: rekord, birinchi marta bo'lgan voqea, kutilmagan karyera burilishi, katta g'alaba, sovrin, raqamlar (o'yinlar, gollar). Quruq ma'lumotnoma emas, hikoya kabi.
-- "Bugun", "kecha", "hozir" so'zlarini ishlatma; vaqt o'tib o'zgaradigan raqam bo'lsa, qaysi yil yoki mavsum holatiga ko'ra ekanini yoz.
-- Tuzilishi: 1-qator: <b>qiziqtiruvchi qisqa sarlavha</b> (faktning o'zi). Bo'sh qator. 2–4 gap: tafsilot va nega qiziq. Bo'sh qator. 2–3 heshteg: #OzbekFutboli #QiziqarliFakt va futbolchi/klub nomi.
-- O'zbek futbolchilari va o'zbek klublari nomini o'zbekcha lotin yozuvida yoz (${s0.uzName ? s0.uzName + ", " : ""}Abduqodir Husanov, Eldor Shomurodov, Mirjalol Qosimov, Server Djeparov, Odil Ahmedov, Paxtakor, Bunyodkor, Nasaf). Xorijiy klub va futbolchilar nomini ORIGINAL rasmiy lotin yozuvida yoz va ⟦ ⟧ ichiga ol: ⟦Roma⟧, ⟦Manchester City⟧. Terma jamoa va davlat nomlari o'zbekcha ("O'zbekiston terma jamoasi", "Osiyo kubogi"). Inglizcha yoki ruscha so'z qoldirma.
-- Emoji ishlatma. Faqat <b> tegi. 600 belgidan oshmasin.
-Manba (${item.source}): ${item.title}
-${item.text}`;
-  const raw = await callGemini(env, prompt, 0.6, deadline, 2048, false, true);
-  const post = postClean(raw, false); const fc = await factCheck(env, item, post, deadline);
-  if (fc.bad.length) { const u = await kvGet(env, "uzfUsed", []); u.push({ k: s0.key, t: Date.now() }); await kvPut(env, "uzfUsed", u.slice(-80)); return { bad: 1 }; }
-  return { post: fc.text, fixed: fc.fixed, item, key: s0.key };
-}
-async function uzFactRun(env, to) {
-  const f = await uzFactMake(env, Date.now() + 110000); if (!f) return "none"; if (f.bad) return "err nazoratdan o'tmadi";
-  await resultJob(env, f.post, to || null, { kind: "news" });
-  if (!to) { const u = await kvGet(env, "uzfUsed", []); u.push({ k: f.key, t: Date.now() }); await kvPut(env, "uzfUsed", u.slice(-80)); }
-  return "ok " + f.key;
 }
 
 // ---------------- INTER DIKTOR — ALOHIDA BOT (2026-11-18, Bahtiyor aka: "diktorni alohida botga o'tkazamiz, bazasi rasmlar bazasiga o'xshasin") ----------------
@@ -3926,7 +3762,6 @@ return;
     } else if (/^\/nazorat\s/.test(text)) { const r = await qcCheck(env, text.replace(/^\/nazorat\s+/, ""), false).catch((e) => ({ fatal: ["tekshiruv xatosi: " + e.message], warn: [] })); await tg(env, "sendMessage", { chat_id: chat, text: "🔎 Nazoratchi (sinov, kanalga chiqmaydi):\n" + (r.fatal.length ? "🛑 To'xtatiladi:\n• " + r.fatal.join("\n• ") + "\n" : "✅ Jiddiy xato yo'q\n") + (r.warn.length ? "⚠️ Kamchilik:\n• " + r.warn.join("\n• ") : "Kamchilik yo'q") });
     } else if (/^\/raqam\b/.test(text)) { const nm = text.replace(/^\/raqam\s*/, ""); ctx.waitUntil((async () => { let r; try { r = await statsPost(env, chat, nm || null); } catch (e) { r = "xato: " + e.message; } await tg(env, "sendMessage", { chat_id: chat, text: "🧪 Raqamlarda namunasi (kanalga chiqmaydi): " + r + (/^ok/.test(r) ? " — kartochka 1–3 daqiqada keladi." : "") }); })());
     } else if (text === "/afsona" || text.startsWith("/afsona ")) { const a = text.slice(8).trim(); if (a === "on" || a === "off") { await kvPut(env, "legMode", a); await tg(env, "sendMessage", { chat_id: chat, text: "Afsonalar turkumi: " + (a === "on" ? "yoqildi (har kuni 12:00)" : "o'chirildi") }); } else { await tg(env, "sendMessage", { chat_id: chat, text: "🧪 Afsona posti tayyorlanmoqda (1–3 daqiqa). Kanalga chiqmaydi." }); ctx.waitUntil((async () => { let r; try { r = await afsonaRun(env, chat, a); } catch (e) { r = "xato: " + e.message; } if (!/^ok/.test(String(r))) await tg(env, "sendMessage", { chat_id: chat, text: "Natija: " + r }); })()); }
-    } else if (text === "/ozfakt") { await tg(env, "sendMessage", { chat_id: chat, text: "🧪 O'zbek futboli fakti tayyorlanmoqda (manba tanlanadi, nazoratchidan o'tadi, kartochka chiziladi — 1–3 daqiqa). Kanalga chiqmaydi." }); ctx.waitUntil((async () => { let r; try { r = await uzFactRun(env, chat); } catch (e) { r = "xato: " + e.message; } if (!/^ok/.test(String(r))) await tg(env, "sendMessage", { chat_id: chat, text: "Natija: " + r + " — qayta /ozfakt yozing." }); })());
     } else if (/^\/tahrir\s+\d+\s*\n/.test(text)) {
       // kanal postini to'liq yangi matn bilan tahrirlash (logotiplar, rasmiy nomlar, yangi alifbo avtomatik; tugma va rasm saqlanadi)
       const mid = +text.match(/^\/tahrir\s+(\d+)/)[1]; const body = text.replace(/^\/tahrir\s+\d+\s*\n/, "").trim();
@@ -4694,9 +4529,6 @@ if (url.pathname === "/hook" && req.method === "POST") {
     if (on("B")) try { await lineupsAuto(env); } catch (e) { await err("lu", e); } if (on("B")) try { await hookWatch(env); } catch (e) { await err("hook", e); } if (on("C")) try { const ad = tashDate(Date.now()); if (tashHour() === 23 && (await kvGet(env, "auditDay", "")) !== ad) { await kvPut(env, "auditDay", ad, { expirationTtl: 3 * 86400 }); await dailyAudit(env); } } catch (e) { await err("audit", e); }
     if (on("C")) try { const xm = await kvGet(env, "fixMode", "off"); const xd = tashDate(Date.now()); if (xm !== "off" && (tashHour() === 9 || tashHour() === 10) && (await kvGet(env, "fixDay", "")) !== xd && (await autoOn(env))) { await kvPut(env, "fixDay", xd, { expirationTtl: 3 * 86400 }); try { await fixturesRun(env, xm !== "on"); } catch (e) { const ft = (await kvGet(env, "fixTry", {}))[xd] || 0; if (ft < 5) { await kvPut(env, "fixTry", { [xd]: ft + 1 }, { expirationTtl: 86400 }); await kvPut(env, "fixDay", "", { expirationTtl: 3 * 86400 }); } throw e; } } } catch (e) { await err("fix", e); }
     if (on("C")) try { const ld = tashDate(Date.now()), lh = tashHour(); if ((lh === 12 || lh === 13) && (await kvGet(env, "legMode", "on")) !== "off" && (await kvGet(env, "legDay", "")) !== ld && (await autoOn(env))) { await kvPut(env, "legDay", ld, { expirationTtl: 3 * 86400 }); let r; try { r = await afsonaRun(env); } catch (e) { r = e; } if (!/^ok/.test(String(r))) { const t = (await kvGet(env, "legTry", {}))[ld] || 0; if (t < 4) { await kvPut(env, "legTry", { [ld]: t + 1 }, { expirationTtl: 86400 }); await kvPut(env, "legDay", "", { expirationTtl: 3 * 86400 }); } if (r instanceof Error) throw r; } } } catch (e) { await err("afsona", e); }
-    if (on("C")) try { const ud = tashDate(Date.now()), uh = tashHour(); if (!FACTS_OFF && (uh === 15 || uh === 16) && (await kvGet(env, "uzfMode", "on")) !== "off" && (await kvGet(env, "uzfDay", "")) !== ud && (await autoOn(env))) { await kvPut(env, "uzfDay", ud, { expirationTtl: 3 * 86400 }); let r; try { r = await uzFactRun(env); } catch (e) { r = e; } if (!/^ok/.test(String(r))) { const t = (await kvGet(env, "uzfTry", {}))[ud] || 0; if (t < 5) { await kvPut(env, "uzfTry", { [ud]: t + 1 }, { expirationTtl: 86400 }); await kvPut(env, "uzfDay", "", { expirationTtl: 3 * 86400 }); } if (r instanceof Error) throw r; } } } catch (e) { await err("uzfact", e); }
-    if (on("C")) try { const fm = await kvGet(env, "factMode", "off"); const fdy = tashDate(Date.now()); if (!FACTS_OFF && fm !== "off" && (tashHour() === 20 || tashHour() === 21) && (await kvGet(env, "factDay", "")) !== fdy && (await autoOn(env))) { await kvPut(env, "factDay", fdy, { expirationTtl: 3 * 86400 }); let fr; try { fr = await factRun(env, fm !== "on"); } catch (e) { fr = e; } if (fr === "none" || fr instanceof Error) { const ft = (await kvGet(env, "factTry", {}))[fdy] || 0; if (ft < 5) { await kvPut(env, "factTry", { [fdy]: ft + 1 }, { expirationTtl: 86400 }); await kvPut(env, "factDay", "", { expirationTtl: 3 * 86400 }); } if (fr instanceof Error) throw fr; } } } catch (e) { await err("fact", e); }
-    if (on("C")) try { const hm = await kvGet(env, "histMode", "off"); const hd = tashDate(Date.now()); if (!FACTS_OFF && hm !== "off" && (tashHour() === 10 || tashHour() === 11) && (await kvGet(env, "histDay", "")) !== hd && (await autoOn(env))) { await kvPut(env, "histDay", hd, { expirationTtl: 3 * 86400 }); let hr; try { hr = await histRun(env, hm !== "on"); } catch (e) { hr = e; } if (hr instanceof Error || /^err/.test(String(hr))) { const ht = (await kvGet(env, "histTry", {}))[hd] || 0; if (ht < 5) { await kvPut(env, "histTry", { [hd]: ht + 1 }, { expirationTtl: 86400 }); await kvPut(env, "histDay", "", { expirationTtl: 3 * 86400 }); } if (hr instanceof Error) throw hr; } } } catch (e) { await err("hist", e); }
     if (on("C")) try { const tdy = tashDate(Date.now()); if ((await kvGet(env, "tblMode", "on")) !== "off" && tashHour() === 11 && (await kvGet(env, "tblDay", "")) !== tdy && (await autoOn(env))) { await kvPut(env, "tblDay", tdy, { expirationTtl: 3 * 86400 }); await tablesAuto(env); } } catch (e) { await err("tbl", e); }
     if (on("C") && new Date().getUTCMinutes() % 30 < 10) try { if (await autoOn(env)) await previewAuto(env); } catch (e) { await err("preview", e); } // yarim soatda bir — football-data so'rov chegarasini tejash
     if (on("C")) try { const xd = tashDate(Date.now()), hh = tashHour(); if (await autoOn(env)) {
