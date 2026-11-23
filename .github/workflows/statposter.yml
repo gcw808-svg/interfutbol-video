@@ -1,0 +1,25 @@
+name: statposter
+# Raqamli afisha (statposter.py): AI fon + gerb + yirik raqam. job — JSON; natija "Inter Futbol — Rasm generatsiya Arxiv" kanaliga fayl bo'lib tushadi,
+# keyin archpost.yml (m=<arxiv xabari>, post=<kanal posti>) bilan postga qo'yiladi.
+on:
+  workflow_dispatch:
+    inputs:
+      job:
+        required: true
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: (sudo apt-get update -qq > /dev/null 2>&1; sudo apt-get install -y -qq fonts-inter > /dev/null 2>&1 || true) && pip install -q pillow requests gradio_client
+      - name: Inter shrifti
+        run: find /usr/share/fonts -iname 'Inter*Black*' | grep -q . || (curl -sSL --retry 3 -o /tmp/inter.zip https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip && sudo mkdir -p /usr/share/fonts/truetype/inter-dl && sudo unzip -o -j -q /tmp/inter.zip extras/ttf/Inter-Black.ttf extras/ttf/Inter-ExtraBold.ttf extras/ttf/Inter-Bold.ttf extras/ttf/Inter-Medium.ttf extras/ttf/Inter-Regular.ttf -d /usr/share/fonts/truetype/inter-dl) || true
+      - env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          GEMINI_KEY: ${{ secrets.GEMINI_KEY }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          JOB: ${{ inputs.job }}
+        run: python3 statposter.py
