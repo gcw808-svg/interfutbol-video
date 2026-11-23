@@ -55,7 +55,8 @@ jobs:
               import hashlib, json
               W = "https://inter-futbol-bot.gcw808.workers.dev"
               key = hashlib.sha256(("ub-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:40]
-              print("post:", requests.post(W + "/ub/rasm", headers={"x-key": key, "content-type": "application/json", "user-agent": "InterFutbolStadium"}, data=json.dumps({"id": int(os.environ["POST"]), "face": W + "/ph/" + fid, "wm": "tr" if os.environ.get("WM") == "tr" else "", "sr": 1 if os.environ.get("SHARP") else 0}), timeout=60).text[:120])
+              print("post:", requests.post(W + "/ub/rasm", headers={"x-key": key, "content-type": "application/json", "user-agent": "InterFutbolStadium"}, data=json.dumps({"id": int(os.environ["POST"]), "face": W + "/ph/" + fid + "?wide=1",  # wide=1: surat o'z shaklida qoladi (yotiq — yotiq, kvadrat — kvadrat, tik — tik), chetlari kesilmaydi (414-post)
+                 "wm": "tr" if os.environ.get("WM") == "tr" else "", "sr": 1 if os.environ.get("SHARP") else 0}), timeout=60).text[:120])
               sys.exit(0)
           sys.exit(subprocess.run([sys.executable, "rasmfile.py"], env={**os.environ, "FILE": cap[1].strip()}).returncode)
           PY
