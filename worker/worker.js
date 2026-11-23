@@ -1249,7 +1249,8 @@ async function resultDup(env, post) { const first = head1(post); if (!RES_RE.tes
 const ESPN_LG = { CL: "uefa.champions", PL: "eng.1", PD: "esp.1", SA: "ita.1", BL1: "ger.1", FL1: "fra.1", DED: "ned.1", PPL: "por.1", ELC: "eng.2", BSA: "bra.1", WC: "fifa.world", EC: "uefa.euro", EL: "uefa.europa", ECL: "uefa.europa.conf" };
 // umumiy so'zlar (Real, City, United...) bo'yicha jamoalar adashmasligi uchun ular hisobga olinmaydi
 const ESPN_STOP = new Set(["real", "club", "city", "united", "sporting", "athletic", "deportivo", "olympique", "calcio", "football", "town", "rovers", "wanderers"]);
-const espnTok = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 4 && !ESPN_STOP.has(w));
+/* 2026-11-24: "Al Ain" kabi faqat qisqa so'zli nomlarda token qolmasdi — ESPN o'yini topilmay, Al Ain 1:1 Esteghlal natijasi (Ashurmatov, Masharipov o'ynagan) chiqmay qoldi. Endi 4+ harfli so'z bo'lmasa 3 harflilar olinadi. */
+const espnTok = (s) => { const ws = String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().split(/[^a-z0-9]+/); const t = ws.filter((w) => w.length >= 4 && !ESPN_STOP.has(w)); return t.length ? t : ws.filter((w) => w.length === 3 && !["the", "afc", "sfk", "cfc"].includes(w)); };
 // ikkinchi manba — ESPN ochiq tablosi: o'yin tugaganini tez ko'rsatadi, hisobni tasdiqlaydi, gol urganlar va daqiqalarni beradi (football-data bepul tarifida yo'q)
 async function espnMatch(m, H, A) {
   const lg = ESPN_LG[m.competition?.code] || (ESPN_FIX[m.competition?.code] || [])[0]; if (!lg) return null;
@@ -1577,7 +1578,6 @@ async function autoResults(env) {
     const friendly = m.competition?.code === "FR"; /* 2026-11-12: o'rtoqlik o'yinida tur bo'lmaydi — O'zbekiston–Rossiya natijasi tur kutib 170 daqiqa ushlanib qolgan edi */
     const stage = friendly ? "" : await matchRound(env, m, H, A, F);
     if (!stage && !friendly && age < 170 * 60e3) continue; /* tur hali aniqlanmadi — keyingi aylanishda yana urinamiz */
-    if (!stage && !friendly) await tg(env, "sendMessage", { chat_id: (await getAdmins(env))[0], text: "⚠️ Natija posti turisiz chiqdi (tur hech bir manbada topilmadi): " + H + " – " + A + ". /tur XABAR_ID N bilan qo'shing." });
     done.push(m.id);
     const comp = FD_COMPS[m.competition?.code] || m.competition?.name || "";
     let line;
@@ -1592,6 +1592,7 @@ async function autoResults(env) {
       const played = PF && (PF.rows || []).some((r) => !r.star && ["full", "off", "in"].includes(r.st));
       if (!played) { if (PF && PF.rows && PF.rows.some((r) => !r.star)) { try { const L = await kvGet(env, "pfLog", []); for (const r of PF.rows.filter((r) => !r.star)) L.push({ t: Date.now(), d: tashDate(m.utcDate), ...r, H, A, sc: ft.home + ":" + ft.away, comp }); await kvPut(env, "pfLog", L.slice(-120), { expirationTtl: 30 * 86400 }); } catch (e) {} } continue; }
     }
+    /* 2026-11-24: ogohlantirish legioner filtridan KEYIN — chiqmagan post uchun "chiqdi" deyilmasin */ if (!stage && !friendly) await tg(env, "sendMessage", { chat_id: (await getAdmins(env))[0], text: "⚠️ Natija posti turisiz chiqdi (tur hech bir manbada topilmadi): " + H + " – " + A + ". /tur XABAR_ID N bilan qo'shing." });
     const scoreLine = `<b>⟦${H}⟧ ${ft.home}:${ft.away} ⟦${A}⟧</b>`;
     const post = `${PF && PF.focusHead ? "<b>" + PF.headline + "</b>\n\n" + scoreLine + "\n" : scoreLine + "\n\n"}${dt}, ${comp}${stage ? ", " + stage : ""}. ${line}${PF ? PF.block : ""}${pens ? "" : goalsBlock(E, H, A)}${redBlock(E, H, A)}\n\n#Natija ${tag(H)} ${tag(A)}`;
     const cg = cardGoals(E); if (pens) { delete cg.hg; delete cg.ag; }
