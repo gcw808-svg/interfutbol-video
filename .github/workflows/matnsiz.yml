@@ -1,0 +1,19 @@
+name: matnsiz
+# Kanal postining matnini (izohini) butunlay olib tashlash — faqat rasm qoladi (2026-11-23, 431-post: rasmning o'zida ma'lumot bor).
+on:
+  workflow_dispatch:
+    inputs:
+      post:
+        required: true
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          POST: ${{ inputs.post }}
+        run: |
+          curl -sS "https://api.telegram.org/bot$BOT_TOKEN/editMessageCaption" -d chat_id=@Inter_Futbol_TV -d message_id="$POST" -d caption= | python3 -c "import sys,json; r=json.load(sys.stdin); print('::notice::', r.get('ok'), r.get('description') or '')"
