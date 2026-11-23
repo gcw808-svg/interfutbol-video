@@ -43,9 +43,19 @@ jobs:
           requests.post(api + "deleteMessage", data={"chat_id": ARCH, "message_id": r["message_id"]}, timeout=60)
           cap = (r.get("caption") or "").split("\n")
           print("izoh:", " | ".join(cap)[:400])
-          if len(cap) < 2 or not cap[1].strip():
-              print("- izohda fayl nomi yo'q"); sys.exit(1)
+          d = r.get("document") or (r.get("photo") or [None])[-1]
+          fid = d and d["file_id"]
+          print("fayl:", fid, d and (d.get("file_size"), d.get("width"), d.get("height")))
           if os.environ.get("DRY"):
+              sys.exit(0)
+          if len(cap) < 2 or not cap[1].strip():
+              # qo'lda tashlangan surat (izohda Commons fayl nomi yo'q) — arxivdagi faylning o'zi qo'yiladi, muallif yozuvisiz
+              if not fid:
+                  print("- xabarda surat yo'q"); sys.exit(1)
+              import hashlib, json
+              W = "https://inter-futbol-bot.gcw808.workers.dev"
+              key = hashlib.sha256(("ub-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:40]
+              print("post:", requests.post(W + "/ub/rasm", headers={"x-key": key, "content-type": "application/json", "user-agent": "InterFutbolStadium"}, data=json.dumps({"id": int(os.environ["POST"]), "face": W + "/ph/" + fid, "wm": "tr" if os.environ.get("WM") == "tr" else "", "sr": 1 if os.environ.get("SHARP") else 0}), timeout=60).text[:120])
               sys.exit(0)
           sys.exit(subprocess.run([sys.executable, "rasmfile.py"], env={**os.environ, "FILE": cap[1].strip()}).returncode)
           PY
