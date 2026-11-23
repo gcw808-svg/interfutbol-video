@@ -559,7 +559,7 @@ async function factCheck(env, item, text, deadline = Infinity, kind = "post") {
 Vazifa: quyidagi ${kind === "article" ? "maqola" : "post"}dagi HAR BIR aniq faktni MANBA bilan solishtir: o'yin hisobi, kim yutgani/yutqazgani, gol urganlar, sana va hafta kuni, turnir va tur, raqamlar va statistika, ismlar, klublar, lavozimlar, transfer summalari.
 - Manbaga zid fakt bo'lsa — manbaga moslab tuzat. Manbada umuman yo'q va shubhali aniq fakt bo'lsa — o'sha gapni olib tashla yoki umumiyroq qilib yoz.
 - Futbolchi, murabbiy va klub nomlari ASL RASMIY lotin yozuvida bo'lishi shart (Hansi Flick, Kylian Mbappé, Bayern München). O'zbekchalashtirilgan yoki buzilgan yozuv bo'lsa (Flik, Mbappe → Mbappé, Diter) — asl rasmiy shaklga tuzat; nom ⟦ ⟧ ichida bo'lmasa — ⟦ ⟧ ichiga ol.
-- "Bugun", "kecha", "ertaga" yoki faqat hafta kuni ("chorshanba oqshomi") kabi nisbiy ifodalar bo'lsa — aniq sana yili bilan almashtir (masalan "2026-yil 4-noyabr kuni kechqurun").
+- "Bugun", "kecha", "ertaga" yoki faqat hafta kuni ("chorshanba oqshomi") kabi nisbiy ifodalar bo'lsa — aniq sana yili bilan almashtir (masalan "2026-yil 4-noyabr kuni kechqurun"). Voqea o'tgan zamonda bo'lsa (bo'ldi, o'tdi, qildi) hafta kuni — manba e'lon qilingan sanadan OLDINGI eng yaqin shu kun; o'tgan voqeaga hech qachon kelajak sana yozma.
 - Imlo, grammatika va uslub xatolarini ham tuzat (qo'shimchalar, kelishiklar, tinish belgilari, g'aliz yoki tarjimaga o'xshash jumlalar) — ma'noni o'zgartirmasdan, ravon adabiy o'zbek tilida.
 - Yilni hozirgi sanaga nisbatan hisobla: manbada yil yozilmagan bo'lsa ham, sanadan aniq kelib chiqadigan yilni xato dema (masalan noyabrda aytilgan "yanvar" — keyingi yil yanvari; 2026-yil noyabrida bu 2027-yil yanvari).
 - HAR BIR SANANI ALOHIDA TEKSHIR (2026-11-08, LaLiga xatosidan keyin): kun, oy va YIL manbadagi bilan aynan bir xil bo'lsin. Manbada aniq sana emas oraliq ("2–4-dekabr", "dekabrning birinchi haftasi") yoki "hali tasdiqlanmagan" deyilgan bo'lsa — matnda ham oraliqni va "aniq sana hali rasman tasdiqlanmagan" degan izohni qoldir, bitta sanani o'ylab topma. "Yil boshi/oxiri" kabi noaniq ifoda o'rniga manbadagi aniq oy yozilsin ("2027-yil fevralidagi"). Manbada "rasman" deyilmagan bo'lsa "rasman e'lon qildi" yozma. Bir voqeaning sanasi bilan boshqasinikini aralashtirma.
@@ -1016,6 +1016,16 @@ async function dateCheck(env, post, item) {
       for (let i = 0; i < parts.length; i++) { const sn = parts[i]; if (!FUT2.test(sn) || PAST2.test(sn)) continue;
         parts[i] = sn.replace(MRE, (m, mo) => { const k = UZ_MON.indexOf(mo.toLowerCase()); if (k < 0 || k > 2) return m; fixes.push(m + " → " + (y0 + 1) + "-yil"); return (y0 + 1) + "-yil " + mo; }); }
       text = parts.join(""); } }
+  // 2026-11-23 (424-post, Emegha): nazoratchi "shanba oqshomi"ni KELASI shanbaga (2026-yil 28-noyabr) aylantirgan, holbuki gap o'tgan zamonda ("qurboni bo'ldi").
+  // O'tgan zamondagi gapda Toshkent bo'yicha bugundan 1–7 kun keyingi aniq sana — bir hafta oldingi sanaga tuzatiladi; kelasi zamon belgisi bo'lsa tegilmaydi.
+  { const AP = "['ʻ’‘ʼ`]"; const tk = new Date(now + 5 * 3600e3); const today = Date.UTC(tk.getUTCFullYear(), tk.getUTCMonth(), tk.getUTCDate());
+    const FUT3 = new RegExp("(adigan|ydigan|moqda|kutil|rejalashtir|niyat|moqchi|o" + AP + "tkaziladi|o" + AP + "ynaydi|uchrashadi|bo" + AP + "ladi|boshlanadi|gacha)", "iu");
+    const PAST3 = new RegExp("(bo" + AP + "ldi|qildi|etdi|oldi|berdi|keldi|ketdi|tasdiqladi|o" + AP + "tkazild|o" + AP + "ynad|yakunland|qozond|yutqazd|ganidan keyin|gandan keyin|gan edi)", "iu");
+    const parts = text.split(/(?<=[.!?])(\s+)/);
+    for (let i = 0; i < parts.length; i++) { const sn = parts[i]; if (!PAST3.test(sn) || FUT3.test(sn)) continue;
+      parts[i] = sn.replace(DATE_RE, (m0, ys, ds, ms) => { const mo = UZ_MON.indexOf(ms.toLowerCase()); const D = Date.UTC(+ys, mo, +ds); const k = (D - today) / 86400e3;
+        if (!(k >= 1 && k <= 7)) return m0; const t = new Date(D - 7 * 86400e3); const good = t.getUTCFullYear() + "-yil " + t.getUTCDate() + "-" + UZ_MON[t.getUTCMonth()]; fixes.push(m0 + " → " + good + " (o'tgan zamon, kelajak sana)"); return good; }); }
+    text = parts.join(""); }
   // o'yin sanasi: gaplarga bo'lib, har gapda sana + klublar
   const names = [...new Set(CLUB_EMOJI.flatMap(([, , ns]) => ns))].filter((n) => n.length >= 4).sort((a, b) => b.length - a.length);
   const plain = text.replace(/<[^>]+>/g, "").replace(/[⟦⟧]/g, "");
