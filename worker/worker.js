@@ -686,6 +686,14 @@ async function tgphSetImg(env, url, imgUrl, onlyDefault) {
   const r = await (await fetch("https://api.telegra.ph/editPage/" + encodeURIComponent(path), { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ access_token: token, title: g.result.title, author_name: g.result.author_name || "Inter Futbol", author_url: g.result.author_url || "https://t.me/" + ch, content: JSON.stringify(C), return_content: "false" }) })).json();
   return r.ok ? "ok" : "xato: " + r.error;
 }
+// POST RASMI ALMASHSA — "BATAFSIL O'QISH" MAQOLASI RASMI HAM BIRGA ALMASHADI (Bahtiyor aka, 2026-11-23: "rasmni o'zgartir desam batafsildagi rasmni ham birdaniga o'zgartirasan").
+// Postning maqola havolasi kanalning ochiq sahifasidan (t.me/s/<kanal>/<post>) olinadi — tugma havolasi bot API'da uzatilgan xabarda ko'rinmaydi.
+async function postArtUrl(env, mid) {
+  const ch = String(env.CHANNEL || "").replace("@", ""); if (!ch || !(+mid > 0)) return "";
+  const h = await (await fetch(`https://t.me/s/${ch}/${+mid}`, { headers: { "user-agent": "Mozilla/5.0 InterFutbolBot" } })).text();
+  const b = h.split('data-post="').find((x) => x.startsWith(ch + "/" + +mid + '"')); if (!b) return "";
+  const m = b.match(/href="(https?:\/\/telegra\.ph\/[^"]+)"/); return m ? m[1].replace(/&amp;/g, "&") : "";
+}
 async function tgphCardImg(env, url, png, id) {
   // kartochka JPEG'ga o'tkaziladi (hajm kichik) va 180 kun saqlanadi
   let b = png; try { b = await (await env.IMAGES.input(new Blob([png]).stream()).output({ format: "image/jpeg", quality: 86 })).response().arrayBuffer(); } catch (e) {}
@@ -1760,7 +1768,7 @@ async function rasmRedo(env, chat, mid, quiet, ov) {
       if (!(ov && ov.credit) && face0) html1 = withCredit(html, await faceCredit(env, face0));
       if (ov && ov.credit && !/Wikimedia Commons|, Flickr[⟧<]/i.test(html)) { const cl = "<i>⟦" + ov.credit + "⟧</i>"; html1 = /\n\s*#[^\n]*\s*$/.test(html) ? html.replace(/\s*\n\s*(#[^\n]*\s*)$/, "\n\n" + cl + "\n\n$1") : html + "\n\n" + cl; }
       const id = "n" + Date.now().toString(36) + "r";
-      await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", leftLogo: await leftCrest(env, html, ci, idx), ...(await pairLogos(env, html, idx)), clubLogos, stat: /#Raqamlarda/i.test(html) ? statFromPost(html) : null, face: face0, wm: (ov && ov.wm) || "", sr: ov && ov.sr ? 1 : 0, po: own ? own.po : 0, legion: /#Legionerlar\b/i.test(html) ? await legionFromPost(env, html, idx) : null, scorers: /#Topurarlar\b/i.test(html) ? await scorersFromPost(env, html, idx) : null, chan: keepLatin(html1), rep: mid, kind: "news", story: 0 }, { expirationTtl: 7 * 3600 }); await repWatch(env, id, mid);
+      await kvPut(env, "cjob:" + id, { ...ci, home: "", away: "", score: "", league: newAlpha(ci.league || ""), leagueLogo: leagueLogo0 || espnLgLogo(ci.league) || "", leftLogo: await leftCrest(env, html, ci, idx), ...(await pairLogos(env, html, idx)), clubLogos, stat: /#Raqamlarda/i.test(html) ? statFromPost(html) : null, face: face0, wm: (ov && ov.wm) || "", sr: ov && ov.sr ? 1 : 0, po: own ? own.po : 0, legion: /#Legionerlar\b/i.test(html) ? await legionFromPost(env, html, idx) : null, scorers: /#Topurarlar\b/i.test(html) ? await scorersFromPost(env, html, idx) : null, chan: keepLatin(html1), rep: mid, aurl: await postArtUrl(env, mid).catch(() => ""), kind: "news", story: 0 }, { expirationTtl: 7 * 3600 }); await repWatch(env, id, mid);
       await ghDispatch(env, "card.yml", { job: id });
       if (!quiet) await tg(env, "sendMessage", { chat_id: chat, text: "🖼 " + mid + "-post uchun yangi kartochka chizilmoqda (liga: " + (ci.league || "—") + ", klublar: " + (ci.clubs || []).join(", ") + "). 2–3 daqiqada rasm almashtiriladi." });
       return true;
@@ -3259,6 +3267,7 @@ async function cardDone(env, id, png) {
   if (j.rep) {
     // kanaldagi eski natija postining rasmini yangi kartochkaga almashtirish (matn ham yangilanadi, logotiplar saqlanadi)
     await env.STATE.put("lgb:rc_" + id, png, { expirationTtl: 90 * 86400 });
+    if (j.aurl) { try { await tgphCardImg(env, j.aurl, png, id); } catch (e) {} } // maqoladagi rasm ham shu yangi rasmga almashadi (2026-11-23)
     const html2 = newAlpha(addLogos(j.chan));
     const uid = "e" + Date.now().toString(36) + j.rep;
     await kvPut(env, "ujob:" + uid, { html: html2, html2, edit: j.rep, editPhoto: WURL + "/lg/rc_" + id, photo: null, video: null, chat: null, raw: { text: j.chan, img: null, url: null, video: null }, t: Date.now(), tries: 0, repId: id }, { expirationTtl: 86400 });
@@ -3403,12 +3412,27 @@ async function ubRoute(env, req, url) {
     return J({ ok: true, f: ph.file_id, w: ph.width, h: ph.height, html: hashFix(CANON.reduce((a, [re, v]) => a.replace(re, v), entHtmlNoLogo(m.caption || "", m.caption_entities))) });
   }
   if (url.pathname === "/ub/html2" && req.method === "POST") { const b0 = await req.json().catch(() => ({})); return J({ ok: true, html2: newAlpha(addLogos(String(b0.html || ""))) }); }
+  // /ub/artimg {ids:[...]} — shu postlarning maqolasidagi rasmni postning HOZIRGI rasmiga tenglashtirish (qo'lda; maqolarasm.yml)
+  if (url.pathname === "/ub/artimg" && req.method === "POST") {
+    const b0 = await req.json().catch(() => ({})); const out = {};
+    for (const mid of (b0.ids || []).map(Number).filter((x) => x > 0).slice(0, 12)) {
+      try {
+        const au = await postArtUrl(env, mid); if (!au) { out[mid] = "maqola yo'q"; continue; }
+        const fw = await tg(env, "forwardMessage", { chat_id: admin, from_chat_id: env.CHANNEL, message_id: mid, disable_notification: true }); const m = fw && fw.result;
+        if (m) await tg(env, "deleteMessage", { chat_id: admin, message_id: m.message_id }).catch(() => null);
+        const ph = m && m.photo ? m.photo[m.photo.length - 1] : null; if (!ph) { out[mid] = "rasm yo'q"; continue; }
+        out[mid] = await tgphSetImg(env, au, WURL + "/ph/" + encodeURIComponent(ph.file_id), false);
+      } catch (e) { out[mid] = "xato " + String(e.message || e).slice(0, 60); }
+    }
+    return J({ ok: true, out });
+  }
   if (url.pathname === "/ub/repimg" && req.method === "POST") {
     const mid = +url.searchParams.get("id"); const buf = await req.arrayBuffer(); if (!mid || buf.byteLength < 5000) return J({ ok: false, why: "rasm yo'q" });
     // x-html2 — tayyor (logotipli, yangi alifbodagi) matn: og'ir ishlov alohida so'rovda (/ub/html2) bajariladi, shunda bu so'rov CPU chegarasidan oshmaydi (503 xatolari, 2026-11-17)
     const b64 = (v) => { try { return new TextDecoder().decode(Uint8Array.from(atob(v), (c) => c.charCodeAt(0))); } catch (e) { return ""; } };
     // x-keep: 1 — FAQAT RASM almashtiriladi, post matni umuman o'zgarmaydi (ub.py matnsiz edit_message; 2026-11-17: uzun matnli postlarda matn ishlovi 503 berardi)
     const keep = req.headers.get("x-keep") === "1";
+    try { const au = await postArtUrl(env, mid); if (au) await tgphCardImg(env, au, buf, "w" + mid + Date.now().toString(36)); } catch (e) {} // maqola rasmi ham (2026-11-23)
     const hx2 = req.headers.get("x-html2"); const ready = keep ? " " : hx2 ? b64(hx2) : "";
     let html = ready; const hx = ready ? "" : req.headers.get("x-html");
     if (hx) html = b64(hx);

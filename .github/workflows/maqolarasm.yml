@@ -1,0 +1,26 @@
+name: maqolarasm
+# "Batafsil o'qish" maqolasidagi rasmni postning hozirgi rasmiga tenglashtirish (2026-11-23). posts — post raqamlari (bo'sh joy bilan, 12 tagacha).
+# Odatda kerak emas: post rasmi almashtirilganda (/rasm, archpost, postrasm, rasmfile, wmfix) bot maqola rasmini o'zi almashtiradi.
+on:
+  workflow_dispatch:
+    inputs:
+      posts:
+        required: true
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          POSTS: ${{ inputs.posts }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, urllib.request
+          key = hashlib.sha256(("ub-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:40]
+          ids = [int(x) for x in os.environ["POSTS"].replace(",", " ").split() if x.isdigit()]
+          rq = urllib.request.Request("https://inter-futbol-bot.gcw808.workers.dev/ub/artimg", data=json.dumps({"ids": ids}).encode(), headers={"x-key": key, "content-type": "application/json", "user-agent": "InterFutbolRasm"})
+          print("::notice::" + urllib.request.urlopen(rq, timeout=120).read().decode()[:600])
+          PY
