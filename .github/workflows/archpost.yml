@@ -1,0 +1,51 @@
+name: archpost
+# Kanal posti rasmini "Inter Futbol — Rasm generatsiya Arxiv" kanalidagi suratga almashtirish (2026-11-23, 427-post):
+# m — arxiv xabari raqami (t.me/c/3533987068/<m>), post — kanal posti. Arxiv izohining 2-qatori Commons fayl nomi — rasm o'sha fayldan
+# rasmfile.py orqali qayta chiziladi (litsenziya tekshiriladi, muallif yozuvi post matniga qo'shiladi). dry=1 — faqat izohni ko'rsatadi.
+on:
+  workflow_dispatch:
+    inputs:
+      m:
+        required: true
+      post:
+        required: true
+      wm:
+        default: ""
+      sharp:
+        default: ""
+      dry:
+        default: ""
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install -q requests
+      - env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          M: ${{ inputs.m }}
+          POST: ${{ inputs.post }}
+          WM: ${{ inputs.wm }}
+          SHARP: ${{ inputs.sharp }}
+          DRY: ${{ inputs.dry }}
+        run: |
+          python3 - <<'PY'
+          import os, subprocess, sys, requests
+          ARCH = -1003533987068
+          api = "https://api.telegram.org/bot" + os.environ["BOT_TOKEN"] + "/"
+          fw = requests.post(api + "forwardMessage", data={"chat_id": ARCH, "from_chat_id": ARCH, "message_id": int(os.environ["M"]), "disable_notification": True}, timeout=60).json()
+          if not fw.get("ok"):
+              print("- arxiv xabari o'qilmadi:", fw.get("description")); sys.exit(1)
+          r = fw["result"]
+          requests.post(api + "deleteMessage", data={"chat_id": ARCH, "message_id": r["message_id"]}, timeout=60)
+          cap = (r.get("caption") or "").split("\n")
+          print("izoh:", " | ".join(cap)[:400])
+          if len(cap) < 2 or not cap[1].strip():
+              print("- izohda fayl nomi yo'q"); sys.exit(1)
+          if os.environ.get("DRY"):
+              sys.exit(0)
+          sys.exit(subprocess.run([sys.executable, "rasmfile.py"], env={**os.environ, "FILE": cap[1].strip()}).returncode)
+          PY
