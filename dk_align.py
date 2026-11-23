@@ -624,7 +624,14 @@ async def sweep():
         elif not st:
             why = "to'plam yo'q"
         elif st["st"] == "xato":
-            why = "xato bilan tugagan"
+            # 2026-11-23: matn 617 "ovozlar matnga to'g'ri kelmadi" xatosi bilan har ~10 daqiqada cheksiz qayta yuborilardi
+            # (har safar KV yozuvlari va Telegram seansi). Endi: xatodan keyin yangi ovoz/matn qo'shilgan bo'lsa darhol, aks holda 6 soatda bir marta.
+            fat = (st.get("at") or 0) / 1000
+            newer = any(m.date.timestamp() > fat for m in ms if m.id == d or m.id in auds)
+            if newer:
+                why = "xato bilan tugagan, keyin yangi fayl qo'shilgan"
+            elif time.time() - fat > 6 * 3600:
+                why = "xato bilan tugagan (6 soatdan keyin qayta urinish)"
         elif st["st"] == "moslanmoqda" and time.time() - (st.get("at") or 0) / 1000 > 4 * 60:  # ishlar navbat bilan (bitta guruh): nazoratchi ishlayotganda boshqa ish yo'q — demak bu ish navbatda bekor bo'lgan
             why = "osilib qolgan"
         elif st["st"] == "tayyor" and (st.get("files") != len(auds) or st.get("last") != max(auds)):
