@@ -6,7 +6,11 @@ on:
   workflow_dispatch:
     inputs:
       m:
-        required: true
+        default: ""
+      file:
+        default: ""   # ombordagi rasm fayli (masalan tmpimg/post435.png) — avval arxiv kanaliga fayl bo'lib tushadi, keyin postga qo'yiladi (m bo'sh)
+      cap:
+        default: ""   # file uchun arxivdagi izoh
       post:
         required: true
       wm:
@@ -27,6 +31,8 @@ jobs:
       - env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           M: ${{ inputs.m }}
+          FILE_IN: ${{ inputs.file }}
+          CAP: ${{ inputs.cap }}
           POST: ${{ inputs.post }}
           WM: ${{ inputs.wm }}
           SHARP: ${{ inputs.sharp }}
@@ -36,11 +42,19 @@ jobs:
           import os, subprocess, sys, requests
           ARCH = -1003533987068
           api = "https://api.telegram.org/bot" + os.environ["BOT_TOKEN"] + "/"
-          fw = requests.post(api + "forwardMessage", data={"chat_id": ARCH, "from_chat_id": ARCH, "message_id": int(os.environ["M"]), "disable_notification": True}, timeout=60).json()
-          if not fw.get("ok"):
-              print("- arxiv xabari o'qilmadi:", fw.get("description")); sys.exit(1)
-          r = fw["result"]
-          requests.post(api + "deleteMessage", data={"chat_id": ARCH, "message_id": r["message_id"]}, timeout=60)
+          if os.environ.get("FILE_IN"):
+              # chatda berilgan rasm (omborga qo'yilgan fayl): arxiv kanaliga fayl bo'lib saqlanadi va o'sha nusxa postga qo'yiladi
+              fp = os.environ["FILE_IN"]
+              up = requests.post(api + "sendDocument", data={"chat_id": ARCH, "caption": (os.environ.get("CAP") or os.path.basename(fp))[:900], "disable_notification": True, "disable_content_type_detection": True}, files={"document": (os.path.basename(fp), open(fp, "rb").read())}, timeout=180).json()
+              if not up.get("ok"):
+                  print("- arxivga yuborilmadi:", up.get("description")); sys.exit(1)
+              r = up["result"]; print("ARXIV", r["message_id"])
+          else:
+              fw = requests.post(api + "forwardMessage", data={"chat_id": ARCH, "from_chat_id": ARCH, "message_id": int(os.environ["M"]), "disable_notification": True}, timeout=60).json()
+              if not fw.get("ok"):
+                  print("- arxiv xabari o'qilmadi:", fw.get("description")); sys.exit(1)
+              r = fw["result"]
+              requests.post(api + "deleteMessage", data={"chat_id": ARCH, "message_id": r["message_id"]}, timeout=60)
           cap = (r.get("caption") or "").split("\n")
           print("izoh:", " | ".join(cap)[:400])
           d = r.get("document") or (r.get("photo") or [None])[-1]
