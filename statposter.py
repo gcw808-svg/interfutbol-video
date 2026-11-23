@@ -133,9 +133,10 @@ def compose(bg, j):
             x += d.textlength(t, font=f)
             if k < len(foot) - 1:
                 d.ellipse([x + gap - dot, y - dot, x + gap + dot, y + dot], fill=acc); x += 2 * gap + 2 * dot
-    card.NO_MARK = False
     out = im.convert("RGB")
-    card.paste_mark(out, "tr")
+    if j.get("mark", 1):  # "mark": 0 — iF belgisisiz (Bahtiyor aka, 2026-11-23: "burchakdagi iF logoni olib tashla")
+        card.NO_MARK = False
+        card.paste_mark(out, "tr")
     return out
 
 
@@ -148,7 +149,7 @@ if __name__ == "__main__":
         raw = None
         for g in (gen_gemini, gen_hf, gen_poll):
             try:
-                raw = g(j["prompt"] + NEG, 100 + v * 7); break
+                raw = g(j["prompt"] + NEG, int(j.get("seed") or 100) + v * 7); break
             except Exception as e:
                 print("  -", g.__name__, str(e)[:200])
         if not raw:
