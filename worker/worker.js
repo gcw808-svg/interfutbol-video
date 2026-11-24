@@ -1752,7 +1752,7 @@ Example: {"name":"","from":"","club":"","number":"","people":1,"main":[120,300,1
 async function tahrirDo(env, chat, mid, body) {
   const q = await qcCheck(env, body, true).catch(() => ({ fatal: [], warn: [] }));
   if (q.fatal.length) { await tg(env, "sendMessage", { chat_id: chat, text: "🛑 Tahrir to'xtatildi: " + q.fatal.join("; ") }); return { ok: false, why: q.fatal.join("; ") }; }
-  CLUB_RE = null; const html = newAlpha(addLogos(hashFix(canonFix(body))));
+  CLUB_RE = null; await mergeCemoji(env); /* 2026-11-25: /ub/tahrir sovuq ishga tushganda o'zbek klublari logotiplari tushib qolmasin */ const html = newAlpha(addLogos(hashFix(canonFix(body))));
   const uid = "T" + Date.now().toString(36);
   await kvPut(env, "ujob:" + uid, { html: "batch", html2: "batch", edit: "batch", edits: [{ id: mid, html }], chat, photo: null, video: null, raw: { text: "", img: null, url: null, video: null } }, { expirationTtl: 86400 });
   await ghDispatch(env, "ubpost.yml", { job: uid });
