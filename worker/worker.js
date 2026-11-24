@@ -1098,7 +1098,7 @@ async function pairMatches(slugs, A, B) {
 // Har kuni 18:00 da bitta navbatdagi yangilik shu shakllardan birida chiqadi (kunlik 15 ta ichida). 7 kun va kamida 5 post
 // o'lchangach: o'rtacha ko'rishi yangiliklardan past bo'lmasa — "doimiy", aks holda — "to'xtatildi". Adminga har bir g'oya
 // "❌ Kerak emas" tugmasi bilan keladi — bosilsa taqiqlar ro'yxatiga tushadi va boshqa taklif qilinmaydi.
-const IDEA_BAN0 = ["so'rovnoma / ovoz berish / bashorat (Bahtiyor aka rad etgan)", "o'yin davomida jonli gol xabarlari (rad etilgan)", "Hafta futbolchisi (hozircha qiziq emas)", "terma jamoa bo'limi (hozircha qiziq emas)", "Rossiya ichki futboli: RPL, Rossiya terma jamoasi, rus ekspertlari fikri", "stavka/bukmeker", "futbolchi reytinglari (baholar)"];
+const IDEA_BAN0 = ["so'rovnoma / ovoz berish / bashorat (Bahtiyor aka rad etgan)", "o'yin davomida jonli gol xabarlari (rad etilgan)", "Hafta futbolchisi (hozircha qiziq emas)", "terma jamoa bo'limi (hozircha qiziq emas)", "Rossiya ichki futboli: RPL, Rossiya terma jamoasi, rus ekspertlari fikri", "stavka/bukmeker", "futbolchi reytinglari (baholar)", "faktlar: tarixiy fakt, qiziqarli fakt, \"bugun tarixda\", o'zbek futboli fakti (Bahtiyor aka, 2026-11-24: faktlar kerak emas)"];
 async function ideaGen(env) {
   const ideas = await kvGet(env, "ideas", []); const live = ideas.filter((x) => x.st === "test");
   if (live.length >= 2) return "bor";
@@ -2801,7 +2801,12 @@ const CYR_MAP = { а: "a", б: "b", в: "v", г: "g", д: "d", ж: "j", з: "z",
 const cyrWord = (w) => w.replace(/[\u0400-\u04FF]/g, (ch, i) => { const lo = ch.toLowerCase(); let v = lo === "е" ? (i === 0 || /[aeiouаеёиоуэюяў'ʼ]/i.test(w[i - 1] || "") ? "ye" : "e") : (CYR_MAP[lo] ?? ""); if (ch !== lo && v) v = v[0].toUpperCase() + v.slice(1); return v; });
 const cyrFix = (t) => String(t || "").split(/(<[^>]*>|⟦[^⟧]*⟧|#[\p{L}\p{N}_]+|https?:\/\/\S+)/u).map((p, i) => (i % 2 ? p : p.replace(/[\p{L}'ʼ]*[\u0400-\u04FF][\p{L}'ʼ]*/gu, cyrWord))).join("");
 // null — post chiqaversin (matn tuzatilgan bo'lishi mumkin: r.text); obyekt — post to'xtatildi
+// FAKT POSTI KANALGA CHIQMAYDI (Bahtiyor aka, 2026-11-24: "tarixiy va qiziqarli faktlar kerak emas, bundan keyin faktlarni chiqarma"):
+// fakt rukni kodi olib tashlangan; bu esa oxirgi to'siq — qaysi yo'l bilan kelmasin (avtomatik yangilik, g'oya shakli, zaxira), #QiziqarliFakt heshtegli yoki
+// "23-noyabr, 1972-yil: ..." ko'rinishidagi tarixiy fakt posti chiqmaydi va adminga tasdiq so'ralmaydi. Afsona postlari (sarlavha "Ism: ...") bunga kirmaydi.
+const isFactPost = (t) => { const p = String(t || "").replace(/<[^>]+>|[⟦⟧]/g, ""); const h = (p.split("\n").find((l) => l.trim()) || "").replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}\u{E0000}-\u{E007F}\uFE0F]/gu, "").trim(); return /#QiziqarliFakt\b/i.test(p) || /^\d{1,2}-[\p{L}'‘’ʻʼ`]+,\s*\d{3,4}-yil\s*:/u.test(h); };
 async function qcGate(env, text, img, url, video) {
+  if (isFactPost(text)) { try { const L = await kvGet(env, "qcHeld", []); L.push({ t: Date.now(), h: String(text).replace(/<[^>]+>|[⟦⟧]/g, "").split("\n")[0].slice(0, 90), why: ["fakt posti — faktlar chiqmaydi (2026-11-24)"] }); await kvPut(env, "qcHeld", L.slice(-30), { expirationTtl: 14 * 86400 }); } catch (e) {} return { held: { ok: true, queued: true, held: true, fact: true } }; }
   let r; try { r = await qcCheck(env, text, !!(img || video)); } catch (e) { return { text }; }
   const admin = (await getAdmins(env))[0];
   const head = String(text).replace(/<[^>]+>|[⟦⟧]/g, "").split("\n").find((l) => l.trim()) || "";
