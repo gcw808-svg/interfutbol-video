@@ -1022,9 +1022,18 @@ async function dateCheck(env, post, item) {
     const FUT2 = new RegExp("(adigan|ydigan|moqda|kutil|rejalashtir|niyat|tayyor|moqchi|ochiladi|ochilad|bo" + AP + "ladi|ehtimol|mumkin|transfer(?:lar)? oyna)", "iu"); // 2026-11-19: 347-post "...egallasa, 2026-yil yanvar oyidagi transfer oynasi... ehtimoli mavjud"
     const PAST2 = new RegExp("(edi\\b|gan edi|bo" + AP + "ld|qildi|o" + AP + "tkazild|sotib olgan|qo" + AP + "shilgan|imzolagan|dan beri)", "iu");
     const MRE = new RegExp("(?<![\\p{L}\\d-])" + y0 + "-yil (" + UZ_MON.join("|") + ")(?![\\p{L}]*-)", "giu");
-    if (mNow >= 9 && !src.includes(String(y0))) { const parts = text.split(/(?<=[.!?])(\s+)/);
-      for (let i = 0; i < parts.length; i++) { const sn = parts[i]; if (!FUT2.test(sn) || PAST2.test(sn)) continue;
+    // 2026-11-24 (Pochettino posti "2026-yil yanvar oyida ... ma'lum bo'ldi"): manba matnida "2026" har doim bor (nashr sanasi) — faqat "yanvar–mart 2026" birikmasi tekshiriladi;
+    // sarlavha nuqtasiz bo'lgani uchun qatorlar ham alohida gap; "ma'lum bo'ldi / xabar berildi" — xabar fe'li, o'tgan voqea emas.
+    const QM = "(?:january|february|march|jan|feb|mar|enero|febrero|marzo|gennaio|febbraio|marzo|janvier|février|mars|januar|februar|märz|январ|феврал|март|yanvar|fevral|mart)[\\p{L}.]*";
+    const SRCY = new RegExp(QM + "\\s*(?:de\\s*|\\d{1,2},?\\s*)?" + y0 + "|" + y0 + "(?:-yil)?\\s*(?:\\d{1,2}[-\\s])?" + QM, "iu");
+    const REP = new RegExp("(ma" + AP + "lum bo" + AP + "ldi|xabar beril\\p{L}*|ta" + AP + "kidlandi|aytildi|qayd etildi)", "giu");
+    if (mNow >= 9 && !SRCY.test(src)) { const parts = text.split(/(?<=[.!?])(\s+)|(\n+)/).filter((x) => x !== undefined);
+      for (let i = 0; i < parts.length; i++) { const sn = parts[i]; const sp = sn.replace(REP, ""); if (!FUT2.test(sp) || PAST2.test(sp)) continue;
         parts[i] = sn.replace(MRE, (m, mo) => { const k = UZ_MON.indexOf(mo.toLowerCase()); if (k < 0 || k > 2) return m; fixes.push(m + " → " + (y0 + 1) + "-yil"); return (y0 + 1) + "-yil " + mo; }); }
+      // bir gapda tuzatilgan oy (masalan yanvar) — shu matndagi boshqa gaplarda (sarlavha) ham, o'tgan zamon bo'lmasa, bir xil yil bo'lsin
+      const fm = [...new Set(fixes.filter((f) => f.endsWith("→ " + (y0 + 1) + "-yil")).map((f) => f.split(" ")[1].toLowerCase()))];
+      if (fm.length) for (let i = 0; i < parts.length; i++) { if (PAST2.test(parts[i].replace(REP, ""))) continue;
+        parts[i] = parts[i].replace(MRE, (m, mo) => { if (!fm.includes(mo.toLowerCase())) return m; fixes.push(m + " → " + (y0 + 1) + "-yil (matn bilan bir xil)"); return (y0 + 1) + "-yil " + mo; }); }
       text = parts.join(""); } }
   // 2026-11-23 (424-post, Emegha): nazoratchi "shanba oqshomi"ni KELASI shanbaga (2026-yil 28-noyabr) aylantirgan, holbuki gap o'tgan zamonda ("qurboni bo'ldi").
   // O'tgan zamondagi gapda Toshkent bo'yicha bugundan 1–7 kun keyingi aniq sana — bir hafta oldingi sanaga tuzatiladi; kelasi zamon belgisi bo'lsa tegilmaydi.
