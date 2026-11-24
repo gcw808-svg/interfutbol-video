@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       chat:
-        description: "baza | arxiv"
+        description: "baza | arxiv | kanal"
         default: "baza"
       n:
         default: "25"
@@ -30,7 +30,7 @@ jobs:
           from telethon.sessions import StringSession
           key = hashlib.sha256(("ub-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:40]
           j = json.loads(urllib.request.urlopen(urllib.request.Request("https://inter-futbol-bot.gcw808.workers.dev/ub/dksweep", headers={"x-key": key, "user-agent": "kanalkor"}), timeout=120).read())
-          cid = {"baza": -1004498416461, "arxiv": -1003533987068}[os.environ["CHAT"]]
+          cid = {"baza": -1004498416461, "arxiv": -1003533987068, "kanal": "Inter_Futbol_TV"}[os.environ["CHAT"]]  # kanal — 2026-11-24: nazoratda post raqamini t.me/s siz topish
           async def main():
               c = TelegramClient(StringSession(j["session"]), int(os.environ["TG_API_ID"]), os.environ["TG_API_HASH"])
               await c.connect()
