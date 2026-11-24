@@ -167,7 +167,7 @@ const FEEDS = [
 
     // yangi o'zbek lotin alifbosi (2026): O' → Ö, G' → Ğ, Sh → Ş, Ch → Ç. HTML teglar, havolalar, @nomlar, heshteglar,
 // ⟦…⟧ ichidagi original nomlar (klub, futbolchi, murabbiy) va chet tilidagi so'zlar o'zgarmaydi
-const NA_KEEP = /^(Christian|Christopher|Chris|Christensen|Achraf|Sanchez|Schmeichel|Pochettino|Chivu|Marchisio|Echeverri|Ochoa|Shaqiri|Fischer|Bochum|Mönchengladbach|Gladbach|Manchester|Michael|Mitchell|Richarlison|Sancho|Chiesa|Shaw|Ashley|Charlton|Chalobah|Chilwell|Kimmich|Fletcher|Richards|Rashford|Champions|Chiellini|Sheffield|Shakhtar|Chicharito|Shearer|Schick|Sesko|Eintracht|Gregoritsch)$/;
+const NA_KEEP = /^(Neftchi|Christian|Christopher|Chris|Christensen|Achraf|Sanchez|Schmeichel|Pochettino|Chivu|Marchisio|Echeverri|Ochoa|Shaqiri|Fischer|Bochum|Mönchengladbach|Gladbach|Manchester|Michael|Mitchell|Richarlison|Sancho|Chiesa|Shaw|Ashley|Charlton|Chalobah|Chilwell|Kimmich|Fletcher|Richards|Rashford|Champions|Chiellini|Sheffield|Shakhtar|Chicharito|Shearer|Schick|Sesko|Eintracht|Gregoritsch)$/;
 // 2026-11-21 (378-post sarlavhasi "Samuel Etöo"): "o'" dan keyin yana "o" kelsa — o'zbekcha emas, xorijiy ism (Eto'o)
 const NA_FOREIGN = /^sch|c(?!h)|w|ea|ou|th|ph|ck|ee|oo|ae|o['‘’ʻʼ`]o|[àáâãäåæèéêëìíîïñòóôõøùúûüýÿœß]/i;
 const naWord = (w) => (NA_FOREIGN.test(w) || NA_KEEP.test(w) ? w : w
