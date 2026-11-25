@@ -1,0 +1,33 @@
+name: igpeer
+# Boshqa ochiq Instagram hisobini rasmiy API (Business Discovery) orqali ko'rish — raqobatchilar tahlili (2026-11-25). Natija jurnalda va artifact'da.
+on:
+  workflow_dispatch:
+    inputs:
+      u:
+        required: true
+      n:
+        default: "30"
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          U: ${{ inputs.u }}
+          N: ${{ inputs.n }}
+        run: |
+          mkdir -p out && python3 - <<'PY'
+          import hashlib, json, os, urllib.request, urllib.parse
+          key = hashlib.sha256(("ub-" + os.environ["BOT_TOKEN"]).encode()).hexdigest()[:40]
+          rq = urllib.request.Request("https://inter-futbol-bot.gcw808.workers.dev/ub/igpeer?" + urllib.parse.urlencode({"u": os.environ["U"], "n": os.environ["N"]}), headers={"x-key": key, "user-agent": "InterFutbolIg"})
+          r = urllib.request.urlopen(rq, timeout=60).read().decode()
+          open("out/igpeer.json", "w").write(r)
+          print(r[:60000])
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: igpeer
+          path: out

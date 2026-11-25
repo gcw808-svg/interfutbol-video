@@ -3412,6 +3412,17 @@ async function ubRoute(env, req, url) {
   }
   // O'Z INSTAGRAM VIDEOLARIMIZ (ownvids.py, 2026-11-19, Bahtiyor aka: "ha" — o'z videolarimizni arxivga ko'chirish): rasmiy Instagram API orqali FAQAT o'z hisobimiz
   // (@interfutbol_tv) postlari ro'yxati; kalit serverda qoladi, ishga faqat vaqtinchalik fayl manzillari beriladi.
+  // BOSHQA OCHIQ HISOBNI KO'RISH (2026-11-25, raqobatchilar tahlili — futbolaka.uz): Instagram'ning rasmiy Business Discovery usuli, faqat o'qish;
+  // faqat biznes/ijodkor hisoblarining ochiq ma'lumoti (obunachilar, postlar soni, tavsif, oxirgi postlar). Kalit serverda qoladi.
+  if (url.pathname === "/ub/igpeer") {
+    const g = await kvGet(env, "ig", null); if (!g || !g.k) return J({ ok: false, err: "Instagram ulanmagan" });
+    const u = String(url.searchParams.get("u") || "").replace(/[^A-Za-z0-9._]/g, "").slice(0, 30); if (!u) return J({ ok: false, err: "u yo'q" });
+    const n = Math.min(50, Number(url.searchParams.get("n")) || 25);
+    const f = `business_discovery.username(${u}){username,name,biography,website,followers_count,follows_count,media_count,media.limit(${n}){caption,media_type,media_product_type,like_count,comments_count,timestamp,permalink}}`;
+    const j = await (await fetch(g.h + "/" + g.id + "?" + new URLSearchParams({ fields: f, access_token: g.k }))).json().catch(() => ({}));
+    if (!j.business_discovery) return J({ ok: false, err: String((j.error && j.error.message) || "javob yo'q").slice(0, 300) });
+    return J({ ok: true, data: j.business_discovery });
+  }
   if (url.pathname === "/ub/igmedia") {
     const g = await kvGet(env, "ig", null); if (!g || !g.k) return J({ ok: false, err: "Instagram ulanmagan" });
     const q = new URLSearchParams({ fields: "id,media_type,media_product_type,media_url,caption,permalink,timestamp", limit: String(Math.min(50, Number(url.searchParams.get("limit")) || 25)), access_token: g.k });
