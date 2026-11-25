@@ -2785,7 +2785,8 @@ async function qcCheck(env, text, media) {
     }
   } catch (e) {}
   if (/#Natija\b/.test(raw) && !/\d+-tur|[oö]['ʻ‘’]?rtoqlik|final|guruh|pley-?off|saralash|1\/\d+|bosqich|raund/i.test(plain)) warn.push("natija postida tur ko'rsatilmagan");
-  for (const [re, why] of AUDIT_RULES) if (re.test(plain.replace(/⟦[^⟧]*⟧/g, (m) => m.replace(/ı/g, "i")))) warn.push(why);
+  /* 2026-11-25: Al-Nassr soxta ogohlantirishi — AUDIT qoidalari canonFix tuzatgan matnda tekshiriladi (ESPN nomi "Al Nassr" chiqishdan oldin o'zi tuzatiladi) */ const plainCF = (() => { try { return unHtml1(canonFix(raw).replace(/<[^>]+>/g, " ")).replace(/https?:\/\/\S+/g, " "); } catch (e) { return plain; } })();
+  for (const [re, why] of AUDIT_RULES) if (re.test(plainCF.replace(/⟦[^⟧]*⟧/g, (m) => m.replace(/ı/g, "i")))) warn.push(why);
   // logotipsiz klub: ESPN ro'yxatidagi klub matnda bor, lekin logotip to'plamida (CLUB_EMOJI) yo'q
   try {
     if (!QC_ALIAS) QC_ALIAS = CLUB_EMOJI.flatMap(([, , ns]) => ns.map(qcNorm));
