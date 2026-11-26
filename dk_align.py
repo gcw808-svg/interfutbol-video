@@ -50,6 +50,23 @@ def docx_text(path):
             stn = (p.style.name if p.style is not None else "") or ""
             for ln in ptext(p).split("\n"):
                 paras.append((ln, stn))
+        # 2026-11-27: bitta Word'dan 0 ta gap chiqqan (22 ta ovozli to'plam yiqilgan) — matn jadval/ramka ichida yoki hammasi "Sarlavha" uslubida bo'lgan.
+        # Shuning uchun: oddiy xatboshilardan o'qiladigan matn chiqmasa, hujjatdagi HAMMA xatboshilar (jadval, ramka, matn maydoni ichidagilari ham)
+        # uslubiga qaramay olinadi.
+        def usable(ps):
+            return sum(1 for t, st in ps if len((t or "").split()) > 8 and not re.match(r"(heading|title|subtitle|sarlavha|заголов)", st, re.I))
+        if usable(paras) < 3:
+            class _P:
+                def __init__(self, el):
+                    self._p = el
+            allp = []
+            for el in d.element.body.iter():
+                if el.tag.rsplit("}", 1)[-1] == "p":
+                    for ln in ptext(_P(el)).split("\n"):
+                        allp.append((ln, ""))
+            print(f"Word: oddiy xatboshilarda matn yo'q ({len(paras)} qator) — butun hujjatdan olindi ({len(allp)} qator)", flush=True)
+            if usable(allp) > usable(paras):
+                paras = allp
     out = []
     for t, st in paras:
         t = (t or "").strip()
