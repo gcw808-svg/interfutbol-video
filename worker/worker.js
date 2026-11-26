@@ -593,6 +593,7 @@ ${text}`;
     const errs = ((raw.match(/XATOLAR:\s*([^\n]*)/i) || [])[1] || "").split(";").map((x) => x.trim()).filter(Boolean).slice(0, 4);
     const m = (raw.split(/MATN:[ \t]*\n?/i)[1] || "").trim();
     if (m.length < text.length * 0.4) throw new Error("nazoratchi matni chala");
+    if (kind !== "article" && /#[\p{L}]/u.test(text.slice(-300)) && !/#[\p{L}]/u.test(m.slice(-300))) throw new Error("nazoratchi matni chala (heshteglar tushib qolgan)"); /* 2026-11-26: 505-post kesilgan matn bilan chiqdi */
     const out = protectNames(kind === "article" ? fixBr(m) : postClean(m, item.video), item);
     return { text: out, fixed: errs.length ? errs : ["kichik tuzatish"], bad: badScores(item, out) };
 }
@@ -2806,6 +2807,8 @@ async function qcCheck(env, text, media) {
   // Endi o'z matndagi (⟦ ⟧, heshteg, teg, havoladan tashqari) har qanday kirill harf yangi alifboga o'giriladi va adminga ogohlantirish.
   let fixed = canonFix(raw);
   if (cy && !fatal.some((f) => /kirill/.test(f))) { const c = cyrFix(fixed); if (c !== fixed) { fixed = c; warn.push("kirill harflar lotinga o'girildi — matnni ko'zdan kechiring"); } }
+  /* 2026-11-26: 505-post (Inter–Mosquera) "...markaziy himoya chiz" bilan, heshteglarsiz chiqdi — model javobi kesilgan. Oxirgi xatboshi heshteg bo'lmasa va gap tugamagan bo'lsa (3+ xatboshi), chala xatboshi olib tashlanadi */
+  if (!/#Natija\b/.test(raw)) { const P = fixed.split(/\n\s*\n/); const lp = (P[P.length - 1] || "").replace(/<[^>]+>|[⟦⟧]/g, "").trim(); if (P.length >= 3 && lp && !/^#/.test(lp) && !/[.!?…»"”)\]]$/.test(lp)) { P.pop(); fixed = P.join("\n\n"); warn.push("post oxiri kesilgan edi — chala xatboshi olib tashlandi"); } }
   return { text: fixed, fatal: [...new Set(fatal)], warn: [...new Set(warn)] };
 }
 const CYR_MAP = { а: "a", б: "b", в: "v", г: "g", д: "d", ж: "j", з: "z", и: "i", й: "y", к: "k", л: "l", м: "m", н: "n", о: "o", п: "p", р: "r", с: "s", т: "t", у: "u", ф: "f", х: "x", ц: "ts", ч: "ç", ш: "ş", щ: "şç", ъ: "'", ы: "i", ь: "", э: "e", ю: "yu", я: "ya", ё: "yo", ў: "ö", қ: "q", ғ: "ğ", ҳ: "h", і: "i", ї: "yi", є: "ye", ґ: "g" };
