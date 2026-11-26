@@ -298,7 +298,7 @@ def place(sents, heard, durs):
                         sm = sim(k, s0, e0)
                         if sm is not None:
                             c -= 2.5 * sm
-                            if sm < 0.3:
+                            if sm < 0.45:  # bog'liq bo'lmagan o'zbekcha matnlar ham harf darajasida 0.3–0.4 o'xshaydi; haqiqiy moslik 0.7+
                                 c += 5.0  # aniq eshitilgan, lekin matnning bu joyiga umuman o'xshamaydi — boshqa matn yozuvi; noto'g'ri matn yopishtirilmasin
                         v = D[k][pe] + skip + c
                         if v < D[k + 1][e0]:
