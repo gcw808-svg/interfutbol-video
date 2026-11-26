@@ -1267,6 +1267,7 @@ const ESPN_STOP = new Set(["real", "club", "city", "united", "sporting", "athlet
 /* 2026-11-24: "Al Ain" kabi faqat qisqa so'zli nomlarda token qolmasdi — ESPN o'yini topilmay, Al Ain 1:1 Esteghlal natijasi (Ashurmatov, Masharipov o'ynagan) chiqmay qoldi. Endi 4+ harfli so'z bo'lmasa 3 harflilar olinadi. */
 const espnTok = (s) => { const ws = String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().split(/[^a-z0-9]+/); const t = ws.filter((w) => w.length >= 4 && !ESPN_STOP.has(w)); return t.length ? t : ws.filter((w) => w.length === 3 && !["the", "afc", "sfk", "cfc"].includes(w)); };
 // ikkinchi manba — ESPN ochiq tablosi: o'yin tugaganini tez ko'rsatadi, hisobni tasdiqlaydi, gol urganlar va daqiqalarni beradi (football-data bepul tarifida yo'q)
+const espnCovers = (m) => !/^(espn|fm)/.test(String(m.id)) && !!(ESPN_LG[m.competition?.code] || (ESPN_FIX[m.competition?.code] || [])[0]);
 async function espnMatch(m, H, A) {
   const lg = ESPN_LG[m.competition?.code] || (ESPN_FIX[m.competition?.code] || [])[0]; if (!lg) return null;
   const t = Date.parse(m.utcDate);
@@ -1575,6 +1576,8 @@ async function autoResults(env) {
     let ft = m.score?.fullTime || {};
     if (ft.home == null || ft.away == null) continue;
     const pens = m.score?.duration === "PENALTY_SHOOTOUT";
+    /* 2026-11-26, 488-post: Sporting CP 2:3 Manchester United chiqdi (rasmiy 2:2) — ESPN hali "tugamadi" yoki topilmadi, football-data hisobi tasdiqsiz chiqib ketgan. Endi ikkinchi manba tasdig'isiz natija chiqmaydi. */
+    if (!pens && E && !E.done && (E.sh !== ft.home || E.sa !== ft.away)) { if (age < 170 * 60e3) continue; E = { ...E, done: true }; }
     if (!pens && E && E.done && (E.sh !== ft.home || E.sa !== ft.away)) {
       // ikki manba kelishmadi — uchinchisi (API-Football) hal qiladi: ko'pchilik to'g'ri
       await getF();
@@ -1587,6 +1590,7 @@ async function autoResults(env) {
     } else if (!pens && !E) {
       // ESPN'da topilmadi — API-Football bilan tasdiqlaymiz (u ham bo'lmasa football-data'ga tayanamiz)
       await getF();
+      if (!(F && F.done) && espnCovers(m)) { if (age < 170 * 60e3) continue; if (!warned.includes(m.id)) { warned.push(m.id); await tg(env, "sendMessage", { chat_id: (await getAdmins(env))[0], text: `⚠️ Natija chiqarilmadi: hisob ikkinchi manbada tasdiqlanmadi.\n${H} – ${A}\nfootball-data: ${ft.home}:${ft.away}\nESPN va API-Football javob bermadi. Tekshirib, kerak bo'lsa qo'lda chiqaring.` }); } continue; }
       if (F && F.done && (F.sh !== ft.home || F.sa !== ft.away)) { if (age < 170 * 60e3) continue; if (!warned.includes(m.id)) { warned.push(m.id); await tg(env, "sendMessage", { chat_id: (await getAdmins(env))[0], text: `⚠️ Natija chiqarilmadi: manbalar hisobda kelishmadi.\n${H} – ${A}\nfootball-data: ${ft.home}:${ft.away}\nAPI-Football: ${F.sh}:${F.sa}` }); } continue; }
     }
     if (E && !E.goalsOk && !pens && age < 170 * 60e3) continue; // gollar ma'lumoti hali to'liq emas
