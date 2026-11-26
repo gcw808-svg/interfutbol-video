@@ -279,7 +279,13 @@ def place(sents, heard, durs):
             for pe in range(N + 1):
                 if D[k][pe] >= INF:
                     continue
-                for s0 in range(pe, min(N, pe + (16 if k == 0 else 5)) ):
+                # FAYL MATNDA YO'Q BO'LISHI MUMKIN (2026-11-27: 22 ta ovozli to'plam "ovozlar matnga to'g'ri kelmadi" deb butunlay yiqilgan edi):
+                # boshqa matnning yozuvi aralashib qolgan, qayta o'qilgan dubl yoki matnda yo'q qo'shimcha gap. Bunday fayl jarima bilan tashlab o'tiladi —
+                # butun to'plam yiqilmaydi, fayl hisobotda "matnda topilmadi" bo'lib ko'rsatiladi.
+                if D[k][pe] + 3.5 < D[k + 1][pe]:
+                    D[k + 1][pe] = D[k][pe] + 3.5
+                    P[k + 1][pe] = (pe, None)
+                for s0 in range(pe, min(N, pe + (16 if k == 0 else 12)) ):
                     skip = (s0 - pe) * (0.05 if k == 0 else 0.35)
                     for e0 in range(s0 + 1, N + 1):
                         ch = cum[e0] - cum[s0]
@@ -292,6 +298,8 @@ def place(sents, heard, durs):
                         sm = sim(k, s0, e0)
                         if sm is not None:
                             c -= 2.5 * sm
+                            if sm < 0.3:
+                                c += 5.0  # aniq eshitilgan, lekin matnning bu joyiga umuman o'xshamaydi — boshqa matn yozuvi; noto'g'ri matn yopishtirilmasin
                         v = D[k][pe] + skip + c
                         if v < D[k + 1][e0]:
                             D[k + 1][e0] = v
@@ -302,14 +310,17 @@ def place(sents, heard, durs):
         asg, e0 = [], e_end
         for k in range(K, 0, -1):
             pe, s0 = P[k][e0]
-            asg.append((s0, e0))
+            asg.append((e0, e0) if s0 is None else (s0, e0))
             e0 = pe
         asg.reverse()
         best = asg
         tot = sum(cum[e] - cum[s0] for s0, e in asg)
-        rate = tot / max(1.0, sum(durs))
+        rate = tot / max(1.0, sum(d for d, (s0, e) in zip(durs, asg) if e > s0))
     out = []
     for k, (s0, e0) in enumerate(best):
+        if e0 == s0:
+            out.append({"s": s0, "e": e0, "fit": 0.0, "sim": None, "heard": heard[k], "skip": True})
+            continue
         want = durs[k] * rate
         fit = (cum[e0] - cum[s0]) / want
         sm = sim(k, s0, e0)
@@ -431,11 +442,18 @@ def process_set(wavs, doc, out_dir, model_name="medium", lang="uz", device=None,
     durs = [wav_dur(w) for w in wavs]
     heard = hear(wavs, lang, keys)
     pl = place(sents, heard, durs)
-    if pl is None:
+    print(f"matn: {len(sents)} gap, {sum(len(nkey(x)) for x in sents)} belgi; ovozlar: {len(wavs)} ta, {sum(durs):.0f} s; eshitilgan (25+ belgi): {sum(1 for h in heard if len(nkey(h)) >= 25)} ta", flush=True)
+    nomatch = [k for k, x in enumerate(pl or [], 1) if x.get("skip")]
+    if nomatch:
+        print("matnda topilmagan fayllar:", nomatch, flush=True)
+    if pl is None or len(nomatch) > len(wavs) / 2:
         raise Exception("ovozlar matnga to'g'ri kelmadi: matn bu ovozlar uchun juda qisqa yoki boshqa matn")
     os.makedirs(out_dir, exist_ok=True)
     rows, rep, n, used, fixed = [], [], 0, set(), []
     for k, (w, x) in enumerate(zip(wavs, pl), 1):
+        if x.get("skip"):
+            rep.append([f"{k:03d}", f"{durs[k-1]:.1f}", "", "0.00", "", "", "MATNDA TOPILMADI — bazaga qo'shilmadi", "", x["heard"][:300]])
+            continue
         sub0 = sents[x["s"]:x["e"]]
         used.update(range(x["s"], x["e"]))
         sub, dr, ad = reconcile(sub0, x["heard"])
@@ -467,8 +485,8 @@ def process_set(wavs, doc, out_dir, model_name="medium", lang="uz", device=None,
     with open(os.path.join(out_dir, "oqilmagan.txt"), "w", encoding="utf-8") as f:
         f.write("\n".join(skipped))
     dur = sum(float(r[5]) - float(r[4]) for r in rows)
-    weak = [[r[0], r[3]] for r in rep if abs(float(r[3]) - 1) > 0.22 or (r[4] and float(r[4]) < 0.45)]
-    return {"fixed": fixed, "n": len(rows), "sec": round(dur), "sents": len(sents), "files": len(wavs), "weak": weak, "miss": [], "skipped": len(skipped), "lown": len(weak), "lost": len(skipped)}
+    weak = [[r[0], r[3]] for r in rep if r[2] and (abs(float(r[3]) - 1) > 0.22 or (r[4] and float(r[4]) < 0.45))]
+    return {"nomatch": nomatch, "fixed": fixed, "n": len(rows), "sec": round(dur), "sents": len(sents), "files": len(wavs), "weak": weak, "miss": [], "skipped": len(skipped), "lown": len(weak), "lost": len(skipped)}
 
 
 def is_audio(m):
@@ -561,6 +579,8 @@ async def run(job_id):
         cap = f"✅ Moslandi ({j.get('v') or 'Kozim Komilov'}): {len(parts)} ta ovoz fayli → {r['n']} ta bo'lak, {r['sec'] // 60} daqiqa {r['sec'] % 60} soniya. Har bir ovoz matndagi o'z joyiga qo'yildi."
         if r["miss"]:
             cap += f"\n⚠️ Matnda joyi topilmagan ovozlar: {', '.join(r['miss'][:15])}-fayl."
+        if r.get("nomatch"):
+            cap += "\nMatnda topilmadi (bazaga qo'shilmadi): " + ", ".join(f"{a}-fayl" for a in r["nomatch"][:20]) + ". Bular boshqa matnning yozuvi bo'lishi mumkin."
         if r["weak"]:
             cap += "\nEshitib tekshirish kerak (matn uzunligi ovozga unchalik mos emas): " + ", ".join(f"{a}-fayl" for a, b in r["weak"][:14]) + "."
         if r["skipped"]:
