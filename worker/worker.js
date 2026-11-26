@@ -2794,7 +2794,7 @@ async function qcCheck(env, text, media) {
   // logotipsiz klub: ESPN ro'yxatidagi klub matnda bor, lekin logotip to'plamida (CLUB_EMOJI) yo'q
   try {
     if (!QC_ALIAS) QC_ALIAS = CLUB_EMOJI.flatMap(([, , ns]) => ns.map(qcNorm));
-    const nt = " " + qcNorm(plain).replace(/[^\p{L}\p{N}'.&/-]+/gu, " ") + " ";
+    const nt = " " + qcNorm(plain.replace(/(^|\n)[ \t⟦]*Foto:[^\n]*/g, " ")).replace(/[^\p{L}\p{N}'.&/-]+/gu, " ") + " "; /* 2026-11-26: "Foto: ... from Cincinnati" muallif qatori logotipsiz klub deb olinmasin (497-post) */
     const miss = new Set();
     for (const n of await qcTeams(env)) { const k = qcNorm(n); if (k.length < 4) continue; let at = nt.indexOf(" " + k), hit = false; while (at >= 0 && !hit) { hit = /^(?:'?(?:ning|ni|ga|ka|qa|dagi|dan|da|tan|ta|lik|chilar|chi|lar))? /.test(nt.slice(at + 1 + k.length)); at = nt.indexOf(" " + k, at + 1); } if (!hit) continue; if (!/\s/.test(n.trim())) { const pl0 = plain.replace(/#[\p{L}\p{N}_]+/gu, " "); const occ = [...pl0.matchAll(new RegExp("(^|[^\\p{L}])" + n.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?=(?:'?(?:ning|ni|ga|ka|qa|dagi|dan|da|tan|ta|lik|chilar|chi|lar))?(?![\\p{L}]))", "giu"))]; if (occ.length && occ.every((m) => /⟦\p{Lu}[\p{Ll}'’-]+⟧\s+$/u.test(pl0.slice(Math.max(0, m.index - 40), m.index + m[1].length)))) continue; } /* 2026-11-16: "Charlie Austin" — futbolchi familiyasi klub (Austin FC) deb olinmasin, LOGO ROBOTI navbatiga tushmasin */ if (QC_ALIAS.some((a) => a === k || (a.length > k.length && a.includes(k) && nt.includes(" " + a)) || (a.length >= 5 && k.includes(a) && nt.includes(" " + a)))) continue; miss.add(n); }
     if (miss.size) warn.push("logotipsiz klub: " + [...miss].slice(0, 6).join(", "));
