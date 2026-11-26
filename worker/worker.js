@@ -1507,7 +1507,7 @@ async function playerFocus(env, E, m, H, A, F) {
 // TUR (nechanchi tur) — har bir natija postida bo'lishi shart (Bahtiyor aka talabi, 2026-11-08: Göztepe – Başakşehir postida tur yo'q edi).
 // Manbalar: football-data matchday → API-Football round → ESPN turnir jadvali (ikkala jamoaning o'ynagan o'yinlari soni teng bo'lsa).
 const afRound = (r) => { r = String(r || ""); let k = r.match(/(?:Regular Season|League Stage|League Phase|Group Stage|Group [A-Z]|Matchday)\s*-\s*(\d+)/i); if (k) return k[1] + "-tur"; if (/Round of 16|8th Finals/i.test(r)) return "1/8 final"; if (/Round of 32|16th Finals/i.test(r)) return "1/16 final"; if (/Quarter/i.test(r)) return "chorak final"; if (/Semi/i.test(r)) return "yarim final"; if (/^Final$/i.test(r.trim())) return "final"; if (/Play-?offs?/i.test(r)) return "pley-off"; k = r.match(/-\s*(\d+)\s*$/); return k ? k[1] + "-tur" : ""; };
-async function espnRound(m, H, A) {
+async function espnRound(m, H, A, schedOnly) {
   const lg = (ESPN_FIX[m.competition?.code] || [])[0] || ESPN_LG[m.competition?.code]; if (!lg) return "";
   let j; try { j = await (await fetch(`https://site.api.espn.com/apis/v2/sports/soccer/${lg}/standings`, { cf: { cacheTtl: 600 } })).json(); } catch (e) { return ""; }
   const rows = []; const walk = (o) => { if (!o || typeof o !== "object") return; if (Array.isArray(o.entries)) for (const e of o.entries) rows.push(e); for (const v of Object.values(o)) if (v && typeof v === "object") walk(v); }; walk(j);
@@ -1515,6 +1515,22 @@ async function espnRound(m, H, A) {
   const ov = (tok, n) => espnTok(n).some((w) => [...tok].some((v) => v === w || (v.length >= 5 && w.length >= 5 && (v.startsWith(w) || w.startsWith(v)))));
   const gp = (tok) => { const e = rows.find((e) => ov(tok, (ESPN_NAME[e.team?.displayName] || e.team?.displayName || "") + " " + (e.team?.displayName || ""))); const s = e && (e.stats || []).find((s) => s.name === "gamesPlayed"); return s ? Number(s.value) : 0; };
   const a = gp(hT), b = gp(aT);
+  /* 2026-11-27, 509-post: Olympiacos 2:4 AC Milan "4-tur" bo'lib chiqdi (aslida 5-tur) — o'yin tugagan zahoti ESPN jadvali hali yangilanmagan edi (ikkalasida gamesPlayed 4).
+     Endi avval uy egasining ESPN taqvimidan shu o'yin topiladi va shu bosqichdagi o'yinlar sanaladi; taqvim to'liq bo'lmasa (jadvaldagidan kam) — eski usul. */
+  try {
+    const he = rows.find((e) => ov(hT, (ESPN_NAME[e.team?.displayName] || e.team?.displayName || "") + " " + (e.team?.displayName || "")));
+    if (he?.team?.id) {
+      const sj = await (await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/teams/${he.team.id}/schedule`, { cf: { cacheTtl: 300 } })).json();
+      const evs = sj.events || []; const t0 = Date.parse(m.utcDate);
+      const ev = evs.find((e) => Math.abs(Date.parse(e.date) - t0) < 3 * 3600e3);
+      const stn = ev?.seasonType?.name || "";
+      if (ev && /league|regular|group/i.test(stn)) {
+        const n = evs.filter((e) => (e.seasonType?.name || "") === stn && Date.parse(e.date) <= Date.parse(ev.date)).length;
+        if (n && (!a || n === a || n === a + 1)) return n + "-tur";
+      }
+    }
+  } catch (e) {}
+  if (schedOnly) return "";
   return a && a === b ? a + "-tur" : "";
 }
 // FOTMOB (2026-11-08): ESPN va football-data'da yo'q ligalardagi o'zbek legionerlari klublari uchun natija va jadval manbasi
@@ -1542,6 +1558,7 @@ async function fotmobMatches(days, want) {
 }
 async function matchRound(env, m, H, A, F) {
   if (m.matchday) return m.matchday + "-tur";
+  if (String(m.id || "").startsWith("espn")) { const r0 = await espnRound(m, H, A, true).catch(() => ""); if (r0) return r0; }
   const r1 = afRound((F || (await afMatch(env, m, H, A).catch(() => null)) || {}).round); if (r1) return r1;
   return await espnRound(m, H, A).catch(() => "");
 }
