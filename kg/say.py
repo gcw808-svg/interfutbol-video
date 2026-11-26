@@ -45,10 +45,9 @@ def sections(path):
     else:
         import docx
         d = docx.Document(path)
-        lines = []
-        for p in d.paragraphs:
+        def ptext(el0):
             o = []
-            for el in p._p.iter():
+            for el in el0.iter():
                 tg = el.tag.rsplit("}", 1)[-1]
                 if tg == "t":
                     o.append(el.text or "")
@@ -56,8 +55,22 @@ def sections(path):
                     o.append("\n")
                 elif tg == "tab":
                     o.append(" ")
+            return "".join(o)
+        lines = []
+        for p in d.paragraphs:
             stn = (p.style.name if p.style is not None else "") or ""
-            lines += [(ln, stn) for ln in "".join(o).split("\n")]
+            lines += [(ln, stn) for ln in ptext(p._p).split("\n")]
+        # 2026-11-27: matn jadval, ramka yoki matn maydoni ichida bo'lsa oddiy xatboshilardan hech narsa chiqmaydi — unda hujjatdagi HAMMA xatboshilar olinadi
+        def usable(ls):
+            return sum(1 for t, st in ls if len((t or "").split()) > 8)
+        if usable(lines) < 3:
+            allp = []
+            for el in d.element.body.iter():
+                if el.tag.rsplit("}", 1)[-1] == "p":
+                    allp += [(ln, "") for ln in ptext(el).split("\n")]
+            print(f"Word: oddiy xatboshilarda matn yo'q ({len(lines)} qator) — butun hujjatdan olindi ({len(allp)} qator)", flush=True)
+            if usable(allp) > usable(lines):
+                lines = allp
     out, cur = [], ["", []]
     for t, stn in lines:
         t = re.sub(r"[\(\[\{][^\)\]\}]*o['‘’ʻʼ`]?qima[^\)\]\}]*[\)\]\}]", " ", t or "", flags=re.I)
