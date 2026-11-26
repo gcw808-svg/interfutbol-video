@@ -62,9 +62,21 @@ def score(fw, wav, sr, text):
 
 
 def _say(k, job):
+    global REFT
+    REFT = T.REFS[MOOD]
     ref = requests.get(W + "/ub/ttsref", params={"m": MOOD}, headers=H, timeout=60)
     ref.raise_for_status()
     open("ref.wav", "wb").write(ref.content)
+    try:  # ovozning o'z (yangi, toza yozuvdan olingan) ohang namunasi bo'lsa — o'sha
+        vk = re.sub(r"[^a-z0-9]+", "_", (job.get("v") or "Kozim Komilov").lower()).strip("_")
+        r2 = requests.get(W + "/ub/ttsref", params={"m": vk}, headers=H, timeout=60)
+        t2 = requests.get(W + "/ub/ttsreft", params={"m": vk}, headers=H, timeout=60).json().get("t")
+        if r2.status_code == 200 and len(r2.content) > 20000 and t2:
+            open("ref.wav", "wb").write(r2.content)
+            REFT = t2
+            print("ohang namunasi:", vk, flush=True)
+    except Exception as e:
+        print("namuna olinmadi:", type(e).__name__, flush=True)
     from huggingface_hub import HfApi, hf_hub_download
     from f5_tts.api import F5TTS
     tok = os.environ["HF_TOKEN"]
@@ -97,7 +109,7 @@ def _say(k, job):
             short = len(c) < 45
             plan = [(0.8, 1000), (0.65, 1077), (0.95, 1154), (0.55, 1231)] if short else [(0.95, 1000 + n * 77) for n in range(TRIES)]
             for n, (spd, seed) in enumerate(plan if fw else plan[:1]):
-                wav, sr, _ = m.infer(ref_file="ref.wav", ref_text=T.REFS[MOOD], gen_text=c if re.search(r"[.!?…]$", c) else c + ".", nfe_step=NFE, remove_silence=False, speed=spd, seed=seed)
+                wav, sr, _ = m.infer(ref_file="ref.wav", ref_text=REFT, gen_text=c if re.search(r"[.!?…]$", c) else c + ".", nfe_step=NFE, remove_silence=False, speed=spd, seed=seed)
                 wav = np.asarray(wav, dtype=np.float32)
                 sc = score(fw, wav, sr, c) if fw else 1.0
                 print(f"  urinish {n + 1}: moslik {sc:.2f}", flush=True)

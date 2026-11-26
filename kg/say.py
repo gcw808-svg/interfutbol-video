@@ -126,6 +126,17 @@ def run(job):
         say(chat, "⚠️ Word faylda o'qiladigan matn topilmadi.")
         return
     open("ref.wav", "wb").write(get("/dkx/ttsref?k=" + K + "&m=oddiy", True))
+    reft = None
+    try:  # ovozning o'z (yangi, toza yozuvdan olingan) ohang namunasi bo'lsa — o'sha
+        vk = re.sub(r"[^a-z0-9]+", "_", voice.lower()).strip("_")
+        b2 = get("/dkx/ttsref?k=" + K + "&m=" + vk, True)
+        t2 = get("/dkx/ttsreft?k=" + K + "&m=" + vk).get("t")
+        if len(b2) > 20000 and t2:
+            open("ref.wav", "wb").write(b2)
+            reft = t2
+            print("ohang namunasi:", vk, flush=True)
+    except Exception as e:
+        print("namuna olinmadi:", type(e).__name__, flush=True)
     try:
         lex = get("/dkx/ttslex?k=" + K) or {}
     except Exception:
@@ -170,7 +181,7 @@ def run(job):
                 plan = [(0.8, 1000), (0.65, 1077), (0.95, 1154)] if short else [(0.95, 1000), (0.95, 1077), (0.9, 1154)]
                 best, bs = None, -1.0
                 for spd, seed in (plan if asr else plan[:1]):
-                    wav, sr, _ = m.infer(ref_file="ref.wav", ref_text=T.REFS["oddiy"], gen_text=c if re.search(r"[.!?…]$", c) else c + ".", nfe_step=32, remove_silence=False, speed=spd, seed=seed)
+                    wav, sr, _ = m.infer(ref_file="ref.wav", ref_text=reft or T.REFS["oddiy"], gen_text=c if re.search(r"[.!?…]$", c) else c + ".", nfe_step=32, remove_silence=False, speed=spd, seed=seed)
                     wav = np.asarray(wav, dtype=np.float32)
                     try:
                         sc = score(wav, sr, c) if asr else 1.0

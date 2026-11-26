@@ -1,0 +1,22 @@
+name: dkref
+# Ovozning ohang namunasini bazadagi toza bo'lakdan yangilash (matn jurnalga chiqmaydi)
+on:
+  workflow_dispatch:
+    inputs:
+      set:
+        default: "474"
+      pick:
+        default: "0"
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install -q requests huggingface_hub
+      - env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          SET: ${{ inputs.set }}
+          PICK: ${{ inputs.pick }}
+        run: python3 dk_ref.py
