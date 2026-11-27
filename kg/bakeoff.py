@@ -102,7 +102,7 @@ def main():
         for grp in ("numpy==1.26.4 transformers==4.51.3 huggingface_hub==0.36.2 setuptools wheel cython",
                     "HyperPyYAML==1.2.3 omegaconf==2.3.0 hydra-core==1.3.2 conformer==0.3.2 diffusers==0.29.0 inflect==7.3.1 librosa==0.10.2 lightning==2.2.4 x-transformers==2.11.24 rich soundfile==0.12.1 protobuf==4.25 pydantic==2.7.0",
                     "modelscope==1.20.0 onnx==1.16.0 onnxruntime==1.18.0 wetext==0.0.4 gdown wget networkx==3.1 matplotlib pyarrow",
-                    "openai-whisper==20231117", "pyworld==0.3.4"):
+                    "openai-whisper", "pyworld==0.3.4"):  # whisper: eski nusxa yangi setuptools bilan yig'ilmadi — yangisi
             r = sh(f"uv pip install -q --python {PY} {grp}")
             print("o'rnatish:", grp.split()[0], "…", "ok" if r.returncode == 0 else "XATO", flush=True)
         sh(f'{PY} -c "import hyperpyyaml, onnxruntime, modelscope, whisper, diffusers, lightning; print(\'kutubxonalar ok\')" 2>&1 | tail -4')
