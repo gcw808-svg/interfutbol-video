@@ -98,9 +98,14 @@ def main():
         sh("uv venv /kaggle/working/cv --python 3.10 2>&1 | tail -2", True)
         PY = "/kaggle/working/cv/bin/python"
         sh(f"uv pip install -q --python {PY} --extra-index-url https://download.pytorch.org/whl/cu121 torch==2.3.1 torchaudio==2.3.1 2>&1 | tail -3", True)
-        sh(f"uv pip install -q --python {PY} numpy==1.26.4 transformers==4.51.3 huggingface_hub==0.36.2 conformer==0.3.2 diffusers==0.29.0 hydra-core==1.3.2 HyperPyYAML==1.2.3 inflect==7.3.1 librosa==0.10.2 lightning==2.2.4 "
-           "modelscope==1.20.0 omegaconf==2.3.0 onnx==1.16.0 onnxruntime==1.18.0 openai-whisper==20231117 protobuf==4.25 pydantic==2.7.0 pyworld==0.3.4 rich soundfile==0.12.1 wetext==0.0.4 x-transformers==2.11.24 "
-           "gdown wget networkx==3.1 matplotlib pyarrow setuptools 2>&1 | tail -4", True)
+        # paketlar guruhlab o'rnatiladi: bittasi yig'ilmasa qolganlari qolib ketmasin ("| tail" xatoni yashirib, hammasi o'rnatilmay qolgan edi)
+        for grp in ("numpy==1.26.4 transformers==4.51.3 huggingface_hub==0.36.2 setuptools wheel cython",
+                    "HyperPyYAML==1.2.3 omegaconf==2.3.0 hydra-core==1.3.2 conformer==0.3.2 diffusers==0.29.0 inflect==7.3.1 librosa==0.10.2 lightning==2.2.4 x-transformers==2.11.24 rich soundfile==0.12.1 protobuf==4.25 pydantic==2.7.0",
+                    "modelscope==1.20.0 onnx==1.16.0 onnxruntime==1.18.0 wetext==0.0.4 gdown wget networkx==3.1 matplotlib pyarrow",
+                    "openai-whisper==20231117", "pyworld==0.3.4"):
+            r = sh(f"uv pip install -q --python {PY} {grp}")
+            print("o'rnatish:", grp.split()[0], "…", "ok" if r.returncode == 0 else "XATO", flush=True)
+        sh(f'{PY} -c "import hyperpyyaml, onnxruntime, modelscope, whisper, diffusers, lightning; print(\'kutubxonalar ok\')" 2>&1 | tail -4')
         if os.path.exists("navoiy-tts/requirements.txt"):
             sh(f"uv pip install -q --python {PY} -r navoiy-tts/requirements.txt 2>&1 | tail -3")
         sh(f'{PY} -c "from transformers import Qwen2ForCausalLM; import transformers, torch; print(transformers.__version__, torch.__version__, torch.cuda.is_available(), \'qwen2 ok\')" 2>&1 | tail -6')
