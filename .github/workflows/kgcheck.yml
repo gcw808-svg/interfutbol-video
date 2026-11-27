@@ -16,7 +16,9 @@ jobs:
           KERNEL: ${{ inputs.kernel }}
         run: |
           kaggle kernels status "$KERNEL" 2>&1 | cut -c1-200 | head -3 || true
-          mkdir -p out && (kaggle kernels output "$KERNEL" -p out > /dev/null 2>&1 || true)
+          # katta model fayllari bilan to'liq natijani yuklash uzoq cho'ziladi — avval faqat jurnal olinadi
+          mkdir -p out
+          (timeout 120 kaggle kernels logs "$KERNEL" > out/k.log 2>/dev/null) || (timeout 200 kaggle kernels output "$KERNEL" -p out --file-pattern '.*\.log$' > /dev/null 2>&1) || (timeout 600 kaggle kernels output "$KERNEL" -p out > /dev/null 2>&1) || true
           ls -la out | head -20
           for f in out/*.log; do [ -f "$f" ] && python3 -c "
           import json,sys,re
