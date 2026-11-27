@@ -5,6 +5,9 @@ on:
     inputs:
       kernel:
         default: "baxtiyoraxrarov/inter-diktor-bakeoff"
+      grep:
+        description: "jurnaldan shu ifodaga mos qatorlar atrofini ko'rsatish"
+        default: ""
 jobs:
   run:
     runs-on: ubuntu-latest
@@ -14,6 +17,7 @@ jobs:
       - env:
           KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
           KERNEL: ${{ inputs.kernel }}
+          GREP: ${{ inputs.grep }}
         run: |
           kaggle kernels status "$KERNEL" 2>&1 | cut -c1-200 | head -3 || true
           # katta model fayllari bilan to'liq natijani yuklash uzoq cho'ziladi — avval faqat jurnal olinadi
@@ -28,5 +32,12 @@ jobs:
           except Exception:
               txt=open(sys.argv[1],errors='ignore').read()
           txt=re.sub(r'[0-9a-f]{48}','[K]',txt); txt=re.sub(r'hf_[A-Za-z0-9]+','[HF]',txt)
+          import os
+          pat=os.environ.get('GREP','')
+          if pat:
+              L=txt.split('\n')
+              hit=[i for i,l in enumerate(L) if re.search(pat,l)]
+              for i in hit[:6]:
+                  print('--- GREP', i); print('\n'.join(x[:400] for x in L[max(0,i-2):i+22]))
           print(txt[-6000:])
           " "$f"; done; true
