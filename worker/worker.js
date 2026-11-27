@@ -2400,7 +2400,10 @@ ${item.text}`;
   // IZOH CHEGARASI (2026-11-23: 378, 403, 432-postlar oxiri kesilib chiqqan — "#Samu", "...sifatida e'"): rasm izohi 1024 belgidan oshsa Telegram kesadi.
   // Matn (surat muallifi qatori uchun joy bilan) 880 belgidan uzun bo'lsa, oxirgi xatboshilar olib tashlanadi; heshteglar saqlanadi.
   const fitCap = (h) => { const P = String(h).split(/\n\s*\n/); const tags = /^\s*#/.test(P[P.length - 1]) ? P.pop() : ""; const len = () => P.join("\n\n").replace(/<[^>]+>|[⟦⟧]/g, "").length + tags.length + 2; while (P.length > 2 && len() > 880) P.pop(); return P.join("\n\n") + (tags ? "\n\n" + tags : ""); };
-  return { post: fitCap(fc.text), name: s0.name, legend: { name: s0.name, sub: subOk ? sub : "", tiles } };
+  // HESHTEGLAR SHART (2026-11-27, 517-post Carles Puyol: model javobi kesilib, 3-xatboshi chala va heshteglarsiz qoldi; qcGate chala xatboshini olib tashlab, post heshteglarsiz chiqdi).
+  // Chala oxirgi xatboshi shu yerda olib tashlanadi, heshteg qatori bo'lmasa — #Ism #Klub #FutbolTarixi qo'shiladi.
+  const legTags = (h) => { const P = String(h).trim().split(/\n\s*\n/); if (/^\s*#/.test(P[P.length - 1] || "")) return P.join("\n\n"); const lp = (P[P.length - 1] || "").replace(/<[^>]+>|[⟦⟧]/g, "").trim(); if (P.length >= 3 && lp && !/[.!?…»"”)\]]$/.test(lp)) P.pop(); const tg = (x) => "#" + String(x).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9]/g, ""); const club = (sub.split("·")[0] || "").trim(); const T = [tg(s0.name)]; if (club && tg(club).length > 2) T.push(tg(club)); T.push("#FutbolTarixi"); return P.join("\n\n") + "\n\n" + [...new Set(T)].join(" "); };
+  return { post: fitCap(legTags(fc.text)), name: s0.name, legend: { name: s0.name, sub: subOk ? sub : "", tiles } };
 }
 async function afsonaRun(env, to, pick) {
   const f = await afsonaMake(env, Date.now() + 110000, pick); if (!f) return "none (bazada surati bor, ishlatilmagan afsona qolmadi yoki Vikipediya javob bermadi)"; if (f.bad) return "err " + f.why;
