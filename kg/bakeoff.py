@@ -92,17 +92,22 @@ def main():
         from huggingface_hub import snapshot_download
         nv = snapshot_download("aisha-org/navoiy-tts", local_dir="navoiy-tts")
         print("navoiy fayllari:", sorted(os.listdir(nv))[:30], flush=True)
-        sh("pip install -q hyperpyyaml conformer==0.3.2 diffusers lightning modelscope inflect omegaconf hydra-core wetext onnxruntime-gpu gdown wget x-transformers einops rich pyworld openai-whisper 2>&1 | tail -3")
+        # 2026-11-28: Kaggle muhiti (Python 3.13, numpy 2) CosyVoice talab qilgan eski kutubxonalar bilan urishdi (numpy 1.26 qo'yilgach transformers ochilmadi).
+        # Shuning uchun Navoiy ALOHIDA muhitda (Python 3.10, CosyVoice'ning o'z nusxalari) ishlatiladi — asosiy muhitga tegilmaydi.
+        sh("pip install -q uv 2>&1 | tail -1")
+        sh("uv venv /kaggle/working/cv --python 3.10 2>&1 | tail -2", True)
+        PY = "/kaggle/working/cv/bin/python"
+        sh(f"uv pip install -q --python {PY} --extra-index-url https://download.pytorch.org/whl/cu121 torch==2.3.1 torchaudio==2.3.1 2>&1 | tail -3", True)
+        sh(f"uv pip install -q --python {PY} numpy==1.26.4 transformers==4.51.3 huggingface_hub==0.36.2 conformer==0.3.2 diffusers==0.29.0 hydra-core==1.3.2 HyperPyYAML==1.2.3 inflect==7.3.1 librosa==0.10.2 lightning==2.2.4 "
+           "modelscope==1.20.0 omegaconf==2.3.0 onnx==1.16.0 onnxruntime==1.18.0 openai-whisper==20231117 protobuf==4.25 pydantic==2.7.0 pyworld==0.3.4 rich soundfile==0.12.1 wetext==0.0.4 x-transformers==2.11.24 "
+           "gdown wget networkx==3.1 matplotlib pyarrow setuptools 2>&1 | tail -4", True)
         if os.path.exists("navoiy-tts/requirements.txt"):
-            print(open("navoiy-tts/requirements.txt").read()[:600], flush=True)
-            sh("pip install -q -r navoiy-tts/requirements.txt 2>&1 | tail -3")
-        # 2026-11-28: Kaggle'dagi yangi transformers bilan Qwen2 yuklanmadi — CosyVoice o'zi talab qilgan nusxa qo'yiladi; sabab jurnalga to'liq chiqariladi
-        sh("pip install -q transformers==4.51.3 2>&1 | tail -2")
-        sh('python -c "from transformers import Qwen2ForCausalLM; import transformers; print(transformers.__version__, \'qwen2 ok\')" 2>&1 | tail -12')
+            sh(f"uv pip install -q --python {PY} -r navoiy-tts/requirements.txt 2>&1 | tail -3")
+        sh(f'{PY} -c "from transformers import Qwen2ForCausalLM; import transformers, torch; print(transformers.__version__, torch.__version__, torch.cuda.is_available(), \'qwen2 ok\')" 2>&1 | tail -6')
         base = snapshot_download("FunAudioLLM/CosyVoice2-0.5B", local_dir="CosyVoice/pretrained_models/CosyVoice2-0.5B")
-        sh("python navoiy-tts/inference.py --help | head -40")
+        sh(f"{PY} navoiy-tts/inference.py --help | head -8")
         for i, t in enumerate(TEXTS, 1):
-            r = sh(f'python navoiy-tts/inference.py --cosyvoice-dir CosyVoice --base-model-dir CosyVoice/pretrained_models/CosyVoice2-0.5B --checkpoint navoiy-tts/emotion_600h_joint.pt --reference ref24.wav --text "{t}" --emotion calm --output o/B{i}.wav')
+            r = sh(f'{PY} navoiy-tts/inference.py --cosyvoice-dir CosyVoice --base-model-dir CosyVoice/pretrained_models/CosyVoice2-0.5B --checkpoint navoiy-tts/emotion_600h_joint.pt --reference ref24.wav --text "{t}" --emotion calm --output o/B{i}.wav')
             if not os.path.exists(f"o/B{i}.wav"):
                 raise Exception("inference.py natija bermadi: " + (r.stderr or r.stdout or "")[-1200:])
         done.append("B")
