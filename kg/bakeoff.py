@@ -96,6 +96,9 @@ def main():
         if os.path.exists("navoiy-tts/requirements.txt"):
             print(open("navoiy-tts/requirements.txt").read()[:600], flush=True)
             sh("pip install -q -r navoiy-tts/requirements.txt 2>&1 | tail -3")
+        # 2026-11-28: Kaggle'dagi yangi transformers bilan Qwen2 yuklanmadi — CosyVoice o'zi talab qilgan nusxa qo'yiladi; sabab jurnalga to'liq chiqariladi
+        sh("pip install -q transformers==4.51.3 2>&1 | tail -2")
+        sh('python -c "from transformers import Qwen2ForCausalLM; import transformers; print(transformers.__version__, \'qwen2 ok\')" 2>&1 | tail -12')
         base = snapshot_download("FunAudioLLM/CosyVoice2-0.5B", local_dir="CosyVoice/pretrained_models/CosyVoice2-0.5B")
         sh("python navoiy-tts/inference.py --help | head -40")
         for i, t in enumerate(TEXTS, 1):
