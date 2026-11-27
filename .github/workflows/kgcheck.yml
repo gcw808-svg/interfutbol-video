@@ -27,4 +27,4 @@ jobs:
               txt=open(sys.argv[1],errors='ignore').read()
           txt=re.sub(r'[0-9a-f]{48}','[K]',txt); txt=re.sub(r'hf_[A-Za-z0-9]+','[HF]',txt)
           print(txt[-6000:])
-          " "$f"; done
+          " "$f"; done; true
